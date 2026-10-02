@@ -5,6 +5,7 @@ use syn::{Ident, LitStr, Token, Type};
 
 pub(crate) struct Args {
     pub dialect: Type,
+    pub sql: Option<LitStr>,
     pub name: Option<LitStr>,
     to_add: ToAdd,
 }
@@ -14,7 +15,8 @@ struct ToAdd(Vec<Option<&'static str>>, usize);
 impl ToAdd {
     fn record_set(&mut self, key: &str) {
         let slots: &[usize] = match key {
-            "name" => &[0],
+            "sql" => &[0],
+            "name" => &[1],
             _ => return,
         };
         for &idx in slots {
@@ -27,7 +29,7 @@ impl ToAdd {
 
 impl Default for ToAdd {
     fn default() -> Self {
-        ToAdd(vec![Some("name")], 1)
+        ToAdd(vec![Some("sql"), Some("name")], 2)
     }
 }
 
@@ -65,6 +67,7 @@ impl Parse for Args {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let mut args = Args {
             dialect: input.parse()?,
+            sql: None,
             name: None,
             to_add: ToAdd::default(),
         };
@@ -75,6 +78,13 @@ impl Parse for Args {
             }
             let key: Ident = input.fork().parse()?;
             match key.to_string().as_str() {
+                key_str @ "sql" => set(
+                    &mut args.sql,
+                    value(input)?,
+                    &key,
+                    &mut args.to_add,
+                    key_str,
+                )?,
                 key_str @ "name" => set(
                     &mut args.name,
                     value(input)?,

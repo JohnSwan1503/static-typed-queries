@@ -14,3 +14,9 @@ sqlite-unbundled = ["static-typed-queries-core/sqlite-unbundled"]
 [dependencies]
 static-typed-queries-core = { path = "../static-typed-queries-core" }
 static-typed-queries-macros = { path = "../static-typed-queries-macros" }
+
+[dev-dependencies]
+static-typed-queries = { path = ".", features = ["mysql", "postgres", "sqlite"] }
+sqlx = { workspace = true, features = ["runtime-tokio", "sqlite"] }
+tokio.workspace = true
+trybuild.workspace = true
