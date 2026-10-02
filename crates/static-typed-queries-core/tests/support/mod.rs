@@ -6,6 +6,7 @@ macro_rules! node {
             kind: static_typed_queries_core::node::kind::Kind::$kind,
             inject: $inject,
             parts: static_typed_queries_core::part::Parts(&[$($part),*]),
+            before: static_typed_queries_core::node::before::Before(&[]),
         }
     };
 }

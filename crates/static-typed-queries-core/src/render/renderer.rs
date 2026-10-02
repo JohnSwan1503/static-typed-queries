@@ -64,6 +64,13 @@ impl<'a, D: Dialect> Renderer<'a, D> {
         if let Kind::Table = root.kind {
             fail(&["`", root.name.as_str(), "` is a table, not a statement"]);
         }
+        if has_before(root) {
+            fail(&[
+                "`",
+                root.name.as_str(),
+                "` depends on `before` statements, which need a transaction (not supported yet)",
+            ]);
+        }
         self.collect(root, Path::ROOT);
         self.with_clause();
         self.body(root, Path::ROOT);
@@ -414,6 +421,26 @@ const fn first_reference(parts: &[Part], index: usize, node: &'static Node) -> b
 
 const fn instance_path(node: &'static Node, path: Path) -> Path {
     if has_params(node) { path } else { Path::ROOT }
+}
+
+const fn has_before(node: &'static Node) -> bool {
+    if !node.before.0.is_empty() {
+        return true;
+    }
+    let parts = node.parts.0;
+    let mut i = 0;
+    while i < parts.len() {
+        let nested = match parts[i] {
+            Part::Expr(expr) => has_before(expr.as_ref()),
+            Part::From(from) => has_before(from.node()),
+            Part::Lit(_) | Part::Ident(_) | Part::Param(_) => false,
+        };
+        if nested {
+            return true;
+        }
+        i += 1;
+    }
+    false
 }
 
 const fn has_params(node: &'static Node) -> bool {

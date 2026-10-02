@@ -1,0 +1,136 @@
+error[E0080]: evaluation panicked: `tenant_orders` depends on `before` statements, which need a transaction (not supported yet)
+  --> tests/ui/../support/mod.rs
+   |
+   |           static_typed_queries_core::impl_statement!($ty);
+   |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ evaluation of `<TenantOrders as static_typed_queries_core::render::Measure>::SIZE` failed inside this call
+   |
+  ::: tests/ui/before_needs_transaction.rs:40:1
+   |
+40 | / root!(TenantOrders: Postgres = node!(
+41 | |     "tenant_orders",
+42 | |     3,
+43 | |     Query,
+44 | |     Inject::Subquery,
+45 | |     [Lit::part("SELECT * FROM "), From::part(ORDERS, AliasRule::NodeName, None)]
+46 | | ));
+   | |__- in this macro invocation
+   |
+note: inside `measure::<Postgres>`
+  --> src/render.rs
+   |
+   |     renderer.statement(root);
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^
+note: inside `render::renderer::Renderer::<'_, Postgres>::statement`
+  --> src/render/renderer.rs
+   |
+   | /             fail(&[
+   | |                 "`",
+   | |                 root.name.as_str(),
+   | |                 "` depends on `before` statements, which need a transaction (not supported yet)",
+   | |             ]);
+   | |______________^
+note: inside `render::error::fail`
+  --> $RUST/core/src/panic.rs
+   |
+   |         $crate::panicking::panic_display(&$arg);
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the failure occurred here
+   |
+  ::: src/render/error.rs
+   |
+   |         Ok(message) => panic!("{}", message),
+   |                        --------------------- in this macro invocation
+
+note: erroneous constant encountered
+  --> tests/ui/../support/mod.rs
+   |
+   |           static_typed_queries_core::impl_statement!($ty);
+   |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+  ::: tests/ui/before_needs_transaction.rs:40:1
+   |
+40 | / root!(TenantOrders: Postgres = node!(
+41 | |     "tenant_orders",
+42 | |     3,
+43 | |     Query,
+44 | |     Inject::Subquery,
+45 | |     [Lit::part("SELECT * FROM "), From::part(ORDERS, AliasRule::NodeName, None)]
+46 | | ));
+   | |__- in this macro invocation
+   |
+   = note: this note originates in the macro `static_typed_queries_core::impl_statement` which comes from the expansion of the macro `root` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+note: erroneous constant encountered
+  --> tests/ui/../support/mod.rs
+   |
+   |           static_typed_queries_core::impl_statement!($ty);
+   |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+  ::: tests/ui/before_needs_transaction.rs:40:1
+   |
+40 | / root!(TenantOrders: Postgres = node!(
+41 | |     "tenant_orders",
+42 | |     3,
+43 | |     Query,
+44 | |     Inject::Subquery,
+45 | |     [Lit::part("SELECT * FROM "), From::part(ORDERS, AliasRule::NodeName, None)]
+46 | | ));
+   | |__- in this macro invocation
+   |
+   = note: this note originates in the macro `static_typed_queries_core::impl_statement` which comes from the expansion of the macro `root` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+note: erroneous constant encountered
+  --> tests/ui/../support/mod.rs
+   |
+   |           static_typed_queries_core::impl_statement!($ty);
+   |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+  ::: tests/ui/before_needs_transaction.rs:40:1
+   |
+40 | / root!(TenantOrders: Postgres = node!(
+41 | |     "tenant_orders",
+42 | |     3,
+43 | |     Query,
+44 | |     Inject::Subquery,
+45 | |     [Lit::part("SELECT * FROM "), From::part(ORDERS, AliasRule::NodeName, None)]
+46 | | ));
+   | |__- in this macro invocation
+   |
+   = note: this note originates in the macro `static_typed_queries_core::impl_statement` which comes from the expansion of the macro `root` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+note: erroneous constant encountered
+  --> tests/ui/../support/mod.rs
+   |
+   |           static_typed_queries_core::impl_statement!($ty);
+   |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+  ::: tests/ui/before_needs_transaction.rs:40:1
+   |
+40 | / root!(TenantOrders: Postgres = node!(
+41 | |     "tenant_orders",
+42 | |     3,
+43 | |     Query,
+44 | |     Inject::Subquery,
+45 | |     [Lit::part("SELECT * FROM "), From::part(ORDERS, AliasRule::NodeName, None)]
+46 | | ));
+   | |__- in this macro invocation
+   |
+   = note: this note originates in the macro `static_typed_queries_core::impl_statement` which comes from the expansion of the macro `root` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+note: erroneous constant encountered
+  --> tests/ui/../support/mod.rs
+   |
+   |           static_typed_queries_core::impl_statement!($ty);
+   |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+  ::: tests/ui/before_needs_transaction.rs:40:1
+   |
+40 | / root!(TenantOrders: Postgres = node!(
+41 | |     "tenant_orders",
+42 | |     3,
+43 | |     Query,
+44 | |     Inject::Subquery,
+45 | |     [Lit::part("SELECT * FROM "), From::part(ORDERS, AliasRule::NodeName, None)]
+46 | | ));
+   | |__- in this macro invocation
+   |
+   = note: this note originates in the macro `static_typed_queries_core::impl_statement` which comes from the expansion of the macro `root` (in Nightly builds, run with -Z macro-backtrace for more info)

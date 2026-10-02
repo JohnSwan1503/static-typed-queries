@@ -5,6 +5,7 @@ use core::marker::PhantomData;
 
 use static_typed_queries_core::dialect::postgres::Postgres;
 use static_typed_queries_core::node::Node;
+use static_typed_queries_core::node::before::Before;
 use static_typed_queries_core::node::fingerprint::Fingerprint;
 use static_typed_queries_core::node::inject::Inject;
 use static_typed_queries_core::node::kind::Kind;
@@ -48,6 +49,7 @@ impl<T: Sql> Sql for Recent<T> {
             From::part(T::NODE, AliasRule::NodeName, None),
             Lit::part(" WHERE created_at > now() - interval '1 day'"),
         ]),
+        before: Before(&[]),
     };
 }
 
