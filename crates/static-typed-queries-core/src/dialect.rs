@@ -1,3 +1,5 @@
+#[cfg(feature = "sqlx")]
+pub mod driver;
 pub mod name;
 pub mod params;
 pub mod quote;

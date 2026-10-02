@@ -12,3 +12,8 @@ impl Dialect for Postgres {
     const DML_IN_CTE: bool = true;
     const QUOTE: Quote = Quote::new(b'"', b'"');
 }
+
+#[cfg(feature = "postgres")]
+impl crate::dialect::driver::Driver for Postgres {
+    type Database = sqlx::Postgres;
+}

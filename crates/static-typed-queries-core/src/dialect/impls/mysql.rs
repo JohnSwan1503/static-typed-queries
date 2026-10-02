@@ -12,3 +12,8 @@ impl Dialect for MySql {
     const DML_IN_CTE: bool = false;
     const QUOTE: Quote = Quote::new(b'`', b'`');
 }
+
+#[cfg(feature = "mysql")]
+impl crate::dialect::driver::Driver for MySql {
+    type Database = sqlx::MySql;
+}

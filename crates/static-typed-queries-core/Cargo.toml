@@ -5,10 +5,13 @@ edition = "2024"
 
 [features]
 default = []
-mysql = []
-postgres = []
-sqlite = []
-sqlite-unbundled = []
+mysql = ["sqlx/mysql"]
+postgres = ["sqlx/postgres"]
+sqlite = ["sqlx/sqlite"]
+sqlite-unbundled = ["sqlx/sqlite-unbundled"]
+
+[dependencies]
+sqlx = { workspace = true, optional = true }
 
 [dev-dependencies]
 static-typed-queries-core = { path = ".", features = ["mysql", "postgres", "sqlite"] }

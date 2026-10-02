@@ -12,3 +12,8 @@ impl Dialect for Sqlite {
     const DML_IN_CTE: bool = false;
     const QUOTE: Quote = Quote::new(b'"', b'"');
 }
+
+#[cfg(any(feature = "sqlite", feature = "sqlite-unbundled"))]
+impl crate::dialect::driver::Driver for Sqlite {
+    type Database = sqlx::Sqlite;
+}
