@@ -18,4 +18,5 @@ pub trait Dialect: 'static {
     const NAME: name::Name;
     const PARAMS: params::ParamStyle;
     const QUOTE: quote::Quote;
+    const DML_IN_CTE: bool;
 }

@@ -9,5 +9,6 @@ pub struct Postgres;
 impl Dialect for Postgres {
     const NAME: Name = Name::POSTGRES;
     const PARAMS: ParamStyle = ParamStyle::dollar_sign(true);
+    const DML_IN_CTE: bool = true;
     const QUOTE: Quote = Quote::new(b'"', b'"');
 }

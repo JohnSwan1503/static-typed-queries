@@ -87,7 +87,7 @@ impl<'a, D: Dialect> Renderer<'a, D> {
                 Part::From(from) => {
                     let child = from.node();
                     let child_path = child_path(node, path, child);
-                    match placement(from) {
+                    match placement::<D>(from) {
                         Inject::Cte { recursive } => {
                             self.collect(child, child_path);
                             self.add_cte(child, child_path, recursive);
@@ -220,7 +220,7 @@ impl<'a, D: Dialect> Renderer<'a, D> {
     const fn from(&mut self, parent: &'static Node, path: Path, from: From) {
         let child = from.node();
         let child_path = child_path(parent, path, child);
-        match placement(from) {
+        match placement::<D>(from) {
             Inject::Ident => self.body(child, child_path),
             Inject::Cte { .. } => match self.cte_suffix(child, instance_path(child, child_path)) {
                 Some(suffix) => self.quoted(child.name.as_str(), suffix),
@@ -337,7 +337,7 @@ impl<'a, D: Dialect> Renderer<'a, D> {
     }
 }
 
-const fn placement(from: From) -> Inject {
+const fn placement<D: Dialect>(from: From) -> Inject {
     let inject = from.inject();
     let name = from.node().name.as_str();
     match (from.node().kind, inject) {
@@ -348,7 +348,19 @@ const fn placement(from: From) -> Inject {
             name,
             "` isn't a table, so it can't be referenced by name",
         ]),
-        (Kind::Dml, _) => fail(&["`", name, "` modifies data, so it can't be embedded"]),
+        (Kind::Dml, Inject::Cte { .. }) if D::DML_IN_CTE => {}
+        (Kind::Dml, Inject::Cte { .. }) => fail(&[
+            "`",
+            name,
+            "` modifies data, which ",
+            D::NAME.as_str(),
+            " doesn't allow in a CTE",
+        ]),
+        (Kind::Dml, _) => fail(&[
+            "`",
+            name,
+            "` modifies data, so it can only be embedded as a CTE",
+        ]),
         (Kind::Ddl, _) => fail(&["`", name, "` is DDL, so it can't be embedded"]),
     }
     inject

@@ -9,5 +9,6 @@ pub struct Sqlite;
 impl Dialect for Sqlite {
     const NAME: Name = Name::SQLITE;
     const PARAMS: ParamStyle = ParamStyle::dollar_sign(true);
+    const DML_IN_CTE: bool = false;
     const QUOTE: Quote = Quote::new(b'"', b'"');
 }

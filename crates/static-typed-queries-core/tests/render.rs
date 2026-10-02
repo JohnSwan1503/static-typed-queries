@@ -251,6 +251,34 @@ fn recursive_ctes_make_the_with_clause_recursive() {
     );
 }
 
+const ARCHIVED: &Node = node!(
+    "archived",
+    50,
+    Dml,
+    Inject::Cte { recursive: false },
+    [
+        Lit::part("DELETE FROM "),
+        From::part(Users::NODE, AliasRule::NodeName, None),
+        Lit::part(" WHERE deleted_at < now() RETURNING id"),
+    ]
+);
+
+root!(ArchiveCount: Postgres = node!(
+    "archive_count",
+    51,
+    Query,
+    Inject::Subquery,
+    [Lit::part("SELECT count(*) FROM "), From::part(ARCHIVED, AliasRule::NodeName, None)]
+));
+
+#[test]
+fn data_modifying_ctes_where_the_dialect_allows_them() {
+    assert_eq!(
+        ArchiveCount::SQL,
+        r#"WITH "archived" AS (DELETE FROM "users" WHERE deleted_at < now() RETURNING id) SELECT count(*) FROM "archived""#
+    );
+}
+
 root!(QuotedPostgres: Postgres = node!(
     "quoted",
     60,
