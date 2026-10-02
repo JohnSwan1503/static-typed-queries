@@ -1,11 +1,38 @@
 pub mod bind;
+#[cfg(feature = "sqlx")]
+pub mod params;
 
+#[cfg(feature = "sqlx")]
+use crate::dialect::driver::{Arguments, Database, Driver};
 use crate::sql::Sql;
 use bind::Bind;
+#[cfg(feature = "sqlx")]
+use params::BindParams;
 
 pub trait Statement: Sql {
     const SQL: &'static str;
     const BINDS: &'static [Bind];
+
+    #[cfg(feature = "sqlx")]
+    fn query<'q>(
+        params: &Self::Params,
+    ) -> Result<
+        sqlx::query::Query<'q, Database<Self::Dialect>, Arguments<Self::Dialect>>,
+        sqlx::Error,
+    >
+    where
+        Self::Dialect: Driver,
+        Self::Params: BindParams<Database<Self::Dialect>>,
+        Arguments<Self::Dialect>: sqlx::IntoArguments<Database<Self::Dialect>>,
+    {
+        let mut args = Arguments::<Self::Dialect>::default();
+        for bind in Self::BINDS {
+            params
+                .bind(bind.path().steps(), bind.slot().inner(), &mut args)
+                .map_err(sqlx::Error::Encode)?;
+        }
+        Ok(sqlx::query_with(sqlx::SqlStr::from_static(Self::SQL), args))
+    }
 }
 
 #[macro_export]
@@ -36,10 +63,34 @@ macro_rules! impl_statement {
             };
         }
 
+        $crate::__impl_sqlx!($ty);
+
         const _: $crate::render::Size = <$ty as $crate::render::Measure>::SIZE;
         const _: &str = <$ty as $crate::statement::Statement>::SQL;
         const _: &[$crate::statement::bind::Bind] = <$ty as $crate::statement::Statement>::BINDS;
     )+};
+}
+
+#[cfg(feature = "sqlx")]
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __impl_sqlx {
+    ($ty:ty) => {
+        impl $crate::__private::sqlx::SqlSafeStr for $ty {
+            fn into_sql_str(self) -> $crate::__private::sqlx::SqlStr {
+                $crate::__private::sqlx::SqlStr::from_static(
+                    <$ty as $crate::statement::Statement>::SQL,
+                )
+            }
+        }
+    };
+}
+
+#[cfg(not(feature = "sqlx"))]
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __impl_sqlx {
+    ($ty:ty) => {};
 }
 
 #[macro_export]

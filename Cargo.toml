@@ -12,3 +12,6 @@ sqlx = "0.9.0"
 
 # Compile-fail Tests
 trybuild = "1.0.121"
+
+# Test Runtime
+tokio = { version = "1.53.1", features = ["macros", "rt"] }
