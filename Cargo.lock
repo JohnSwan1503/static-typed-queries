@@ -1189,6 +1189,7 @@ name = "static-typed-queries"
 version = "0.0.0"
 dependencies = [
  "static-typed-queries-core",
+ "static-typed-queries-macros",
 ]
 
 [[package]]
@@ -1199,6 +1200,15 @@ dependencies = [
  "static-typed-queries-core",
  "tokio",
  "trybuild",
+]
+
+[[package]]
+name = "static-typed-queries-macros"
+version = "0.0.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 3.0.6",
 ]
 
 [[package]]

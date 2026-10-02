@@ -13,3 +13,4 @@ sqlite-unbundled = ["static-typed-queries-core/sqlite-unbundled"]
 
 [dependencies]
 static-typed-queries-core = { path = "../static-typed-queries-core" }
+static-typed-queries-macros = { path = "../static-typed-queries-macros" }
