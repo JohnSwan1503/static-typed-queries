@@ -1185,6 +1185,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6ce2be8dc25455e1f91df71bfa12ad37d7af1092ae736f3a6cd0e37bc7810596"
 
 [[package]]
+name = "static-typed-queries"
+version = "0.0.0"
+dependencies = [
+ "static-typed-queries-core",
+]
+
+[[package]]
 name = "static-typed-queries-core"
 version = "0.0.0"
 dependencies = [

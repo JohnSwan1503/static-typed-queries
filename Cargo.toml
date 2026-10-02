@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "crates/static-typed-queries",
     "crates/static-typed-queries-core",
 ]
 resolver = "3"

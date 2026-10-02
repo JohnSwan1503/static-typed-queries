@@ -1,0 +1,15 @@
+[package]
+name = "static-typed-queries"
+version = "0.0.0"
+edition = "2024"
+
+[features]
+default = []
+all = ["mysql", "postgres", "sqlite"]
+mysql = ["static-typed-queries-core/mysql"]
+postgres = ["static-typed-queries-core/postgres"]
+sqlite = ["static-typed-queries-core/sqlite"]
+sqlite-unbundled = ["static-typed-queries-core/sqlite-unbundled"]
+
+[dependencies]
+static-typed-queries-core = { path = "../static-typed-queries-core" }
