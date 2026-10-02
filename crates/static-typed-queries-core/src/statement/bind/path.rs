@@ -29,6 +29,16 @@ impl Path {
         self.steps.split_at(self.len as usize).0
     }
 
+    pub(crate) const fn child(self, step: u16) -> Option<Path> {
+        if self.len as usize == MAX_DEPTH {
+            return None;
+        }
+        let mut path = self;
+        path.steps[path.len as usize] = step;
+        path.len += 1;
+        Some(path)
+    }
+
     pub(crate) const fn same(&self, other: &Path) -> bool {
         if self.len != other.len {
             return false;

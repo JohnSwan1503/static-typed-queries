@@ -47,7 +47,29 @@ impl<'a, D: Dialect> Renderer<'a, D> {
         if let Kind::Table = root.kind {
             fail(&["`", root.name.as_str(), "` is a table, not a statement"]);
         }
+        self.collect(root, Path::ROOT);
         self.body(root, Path::ROOT);
+    }
+
+    const fn collect(&mut self, node: &'static Node, path: Path) {
+        let parts = node.parts.0;
+        let mut i = 0;
+        while i < parts.len() {
+            match parts[i] {
+                Part::Expr(expr) => {
+                    if !matches!(expr.kind(), Kind::Query) {
+                        fail(&[
+                            "`",
+                            expr.name().as_str(),
+                            "` isn't a query, so it can't be used as an expression",
+                        ]);
+                    }
+                    self.collect(expr.as_ref(), child_path(node, path, expr.as_ref()));
+                }
+                Part::Lit(_) | Part::Ident(_) | Part::Param(_) => {}
+            }
+            i += 1;
+        }
     }
 
     const fn body(&mut self, node: &'static Node, path: Path) {
@@ -58,6 +80,11 @@ impl<'a, D: Dialect> Renderer<'a, D> {
                 Part::Lit(lit) => self.push(lit.as_str()),
                 Part::Ident(ident) => self.quoted(ident.0),
                 Part::Param(param) => self.param(node, path, Slot::from_param(param)),
+                Part::Expr(expr) => {
+                    self.push("(");
+                    self.body(expr.as_ref(), child_path(node, path, expr.as_ref()));
+                    self.push(")");
+                }
             }
             i += 1;
         }
@@ -156,4 +183,103 @@ impl<'a, D: Dialect> Renderer<'a, D> {
         }
         self.size.sql += 1;
     }
+}
+
+const fn child_path(parent: &'static Node, path: Path, child: &'static Node) -> Path {
+    match path.child(child_index(parent, child)) {
+        Some(path) => path,
+        None => fail(&["items can't be nested more than 16 deep"]),
+    }
+}
+
+const fn child_index(parent: &'static Node, child: &'static Node) -> u16 {
+    let parts = parent.parts.0;
+    let mut index = 0;
+    let mut i = 0;
+    while i < parts.len() {
+        if let Some(node) = referenced(parts[i])
+            && first_reference(parts, i, node)
+        {
+            if same_node(node, child) {
+                return index;
+            }
+            index += 1;
+        }
+        i += 1;
+    }
+    panic!("child isn't referenced by its parent")
+}
+
+const fn referenced(part: Part) -> Option<&'static Node> {
+    match part {
+        Part::Expr(expr) => Some(expr.as_ref()),
+        Part::Lit(_) | Part::Ident(_) | Part::Param(_) => None,
+    }
+}
+
+const fn first_reference(parts: &[Part], index: usize, node: &'static Node) -> bool {
+    let mut i = 0;
+    while i < index {
+        if let Some(earlier) = referenced(parts[i])
+            && same_node(earlier, node)
+        {
+            return false;
+        }
+        i += 1;
+    }
+    true
+}
+
+const fn same_node(a: &'static Node, b: &'static Node) -> bool {
+    a.fingerprint.0 == b.fingerprint.0 && suffixed_eq(a.name.as_str(), 0, b.name.as_str(), 0)
+}
+
+const fn suffixed_eq(a: &str, a_suffix: u16, b: &str, b_suffix: u16) -> bool {
+    let len = suffixed_len(a, a_suffix);
+    if len != suffixed_len(b, b_suffix) {
+        return false;
+    }
+    let mut i = 0;
+    while i < len {
+        if suffixed_byte(a, a_suffix, i) != suffixed_byte(b, b_suffix, i) {
+            return false;
+        }
+        i += 1;
+    }
+    true
+}
+
+const fn suffixed_len(name: &str, suffix: u16) -> usize {
+    if suffix == 0 {
+        name.len()
+    } else {
+        name.len() + 1 + digit_count(suffix)
+    }
+}
+
+const fn suffixed_byte(name: &str, suffix: u16, i: usize) -> u8 {
+    let bytes = name.as_bytes();
+    if i < bytes.len() {
+        return bytes[i];
+    }
+    if i == bytes.len() {
+        return b'_';
+    }
+    let mut rest = suffix;
+    let mut skip = digit_count(suffix) - (i - bytes.len());
+    while skip > 0 {
+        rest /= 10;
+        skip -= 1;
+    }
+    b'0' + (rest % 10) as u8
+}
+
+const fn digit_count(n: u16) -> usize {
+    let mut count = 1;
+    let mut rest = n / 10;
+    while rest > 0 {
+        count += 1;
+        rest /= 10;
+    }
+    count
 }
