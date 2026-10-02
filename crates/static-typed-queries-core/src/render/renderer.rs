@@ -4,8 +4,11 @@ use super::Size;
 use super::error::fail;
 use crate::dialect::Dialect;
 use crate::node::Node;
+use crate::node::inject::Inject;
 use crate::node::kind::Kind;
 use crate::part::Part;
+use crate::part::from::From;
+use crate::part::from::rule::AliasRule;
 use crate::statement::bind::Bind;
 use crate::statement::bind::path::Path;
 use crate::statement::bind::slot::Slot;
@@ -66,6 +69,11 @@ impl<'a, D: Dialect> Renderer<'a, D> {
                     }
                     self.collect(expr.as_ref(), child_path(node, path, expr.as_ref()));
                 }
+                Part::From(from) => {
+                    let child = from.node();
+                    placement(from);
+                    self.collect(child, child_path(node, path, child));
+                }
                 Part::Lit(_) | Part::Ident(_) | Part::Param(_) => {}
             }
             i += 1;
@@ -85,8 +93,26 @@ impl<'a, D: Dialect> Renderer<'a, D> {
                     self.body(expr.as_ref(), child_path(node, path, expr.as_ref()));
                     self.push(")");
                 }
+                Part::From(from) => self.from(node, path, from),
             }
             i += 1;
+        }
+    }
+
+    const fn from(&mut self, parent: &'static Node, path: Path, from: From) {
+        let child = from.node();
+        let child_path = child_path(parent, path, child);
+        match placement(from) {
+            Inject::Ident => self.body(child, child_path),
+            Inject::Subquery => {
+                self.push("(");
+                self.body(child, child_path);
+                self.push(")");
+                if let AliasRule::NodeName = from.rule() {
+                    self.push(" AS ");
+                    self.quoted(child.name.as_str());
+                }
+            }
         }
     }
 
@@ -185,6 +211,23 @@ impl<'a, D: Dialect> Renderer<'a, D> {
     }
 }
 
+const fn placement(from: From) -> Inject {
+    let inject = from.inject();
+    let name = from.node().name.as_str();
+    match (from.node().kind, inject) {
+        (Kind::Table, Inject::Ident) | (Kind::Query, Inject::Subquery) => {}
+        (Kind::Table, _) => fail(&["table `", name, "` can only be referenced by name"]),
+        (_, Inject::Ident) => fail(&[
+            "`",
+            name,
+            "` isn't a table, so it can't be referenced by name",
+        ]),
+        (Kind::Dml, _) => fail(&["`", name, "` modifies data, so it can't be embedded"]),
+        (Kind::Ddl, _) => fail(&["`", name, "` is DDL, so it can't be embedded"]),
+    }
+    inject
+}
+
 const fn child_path(parent: &'static Node, path: Path, child: &'static Node) -> Path {
     match path.child(child_index(parent, child)) {
         Some(path) => path,
@@ -213,6 +256,7 @@ const fn child_index(parent: &'static Node, child: &'static Node) -> u16 {
 const fn referenced(part: Part) -> Option<&'static Node> {
     match part {
         Part::Expr(expr) => Some(expr.as_ref()),
+        Part::From(from) => Some(from.node()),
         Part::Lit(_) | Part::Ident(_) | Part::Param(_) => None,
     }
 }

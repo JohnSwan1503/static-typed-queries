@@ -1,4 +1,5 @@
 pub mod expr;
+pub mod from;
 pub mod ident;
 pub mod lit;
 pub mod param;
@@ -6,6 +7,7 @@ pub mod param;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Part {
     Expr(expr::Expr),
+    From(from::From),
     Ident(ident::Ident),
     Lit(lit::Lit),
     Param(param::Param),

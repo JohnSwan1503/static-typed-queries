@@ -3,3 +3,9 @@ members = [
     "crates/static-typed-queries-core",
 ]
 resolver = "3"
+
+
+[workspace.dependencies]
+
+# Compile-fail Tests
+trybuild = "1.0.121"
