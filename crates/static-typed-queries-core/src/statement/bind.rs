@@ -17,6 +17,13 @@ pub struct Bind {
 }
 
 impl Bind {
+    pub(crate) const EMPTY: Bind = Bind {
+        name: Name::EMPTY,
+        fingerprint: Fingerprint::EMPTY,
+        path: Path::ROOT,
+        slot: Slot::EMPTY,
+    };
+
     pub const fn new(name: Name, fingerprint: Fingerprint, path: Path, slot: Slot) -> Bind {
         Bind {
             name,

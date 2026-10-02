@@ -3,6 +3,8 @@
 pub struct Name(&'static str);
 
 impl Name {
+    pub(crate) const EMPTY: Name = Name("");
+
     pub const fn new(name: &'static str) -> Name {
         Name(name)
     }

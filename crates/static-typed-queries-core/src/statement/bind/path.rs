@@ -28,6 +28,20 @@ impl Path {
     pub const fn steps(&self) -> &[u16] {
         self.steps.split_at(self.len as usize).0
     }
+
+    pub(crate) const fn same(&self, other: &Path) -> bool {
+        if self.len != other.len {
+            return false;
+        }
+        let mut i = 0;
+        while i < self.len as usize {
+            if self.steps[i] != other.steps[i] {
+                return false;
+            }
+            i += 1;
+        }
+        true
+    }
 }
 
 impl core::fmt::Debug for Path {

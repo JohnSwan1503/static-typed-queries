@@ -5,6 +5,8 @@ use crate::part::param::Param;
 pub struct Slot(u16);
 
 impl Slot {
+    pub(crate) const EMPTY: Slot = Slot(0);
+
     pub const fn new(slot: u16) -> Slot {
         Slot(slot)
     }

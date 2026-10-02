@@ -3,6 +3,8 @@
 pub struct Fingerprint(pub u64);
 
 impl Fingerprint {
+    pub(crate) const EMPTY: Fingerprint = Fingerprint(0);
+
     pub const fn of(text: &str) -> Fingerprint {
         let bytes = text.as_bytes();
         let mut hash = 0xcbf2_9ce4_8422_2325_u64;
