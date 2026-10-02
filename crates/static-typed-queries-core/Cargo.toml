@@ -1,0 +1,4 @@
+[package]
+name = "static-typed-queries-core"
+version = "0.0.0"
+edition = "2024"
