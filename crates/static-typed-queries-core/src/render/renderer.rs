@@ -13,7 +13,15 @@ use crate::statement::bind::Bind;
 use crate::statement::bind::path::Path;
 use crate::statement::bind::slot::Slot;
 
+const MAX_CTES: usize = 64;
 const MAX_NUMBERED: usize = 1024;
+
+#[derive(Clone, Copy)]
+struct Cte {
+    node: &'static Node,
+    path: Path,
+    suffix: u16,
+}
 
 #[derive(Clone, Copy)]
 struct Numbered {
@@ -25,6 +33,8 @@ pub(super) struct Renderer<'a, D> {
     sql: &'a mut [u8],
     binds: &'a mut [Bind],
     size: Size,
+    ctes: [Option<Cte>; MAX_CTES],
+    cte_count: usize,
     numbered: [Option<Numbered>; MAX_NUMBERED],
     numbered_count: usize,
     dialect: PhantomData<D>,
@@ -36,6 +46,8 @@ impl<'a, D: Dialect> Renderer<'a, D> {
             sql,
             binds,
             size: Size { sql: 0, binds: 0 },
+            ctes: [None; MAX_CTES],
+            cte_count: 0,
             numbered: [None; MAX_NUMBERED],
             numbered_count: 0,
             dialect: PhantomData,
@@ -51,6 +63,7 @@ impl<'a, D: Dialect> Renderer<'a, D> {
             fail(&["`", root.name.as_str(), "` is a table, not a statement"]);
         }
         self.collect(root, Path::ROOT);
+        self.with_clause();
         self.body(root, Path::ROOT);
     }
 
@@ -71,13 +84,84 @@ impl<'a, D: Dialect> Renderer<'a, D> {
                 }
                 Part::From(from) => {
                     let child = from.node();
-                    placement(from);
-                    self.collect(child, child_path(node, path, child));
+                    let child_path = child_path(node, path, child);
+                    match placement(from) {
+                        Inject::Cte { .. } => {
+                            self.collect(child, child_path);
+                            self.add_cte(child, child_path);
+                        }
+                        Inject::Ident | Inject::Subquery => self.collect(child, child_path),
+                    }
                 }
                 Part::Lit(_) | Part::Ident(_) | Part::Param(_) => {}
             }
             i += 1;
         }
+    }
+
+    const fn add_cte(&mut self, node: &'static Node, path: Path) {
+        let path = instance_path(node, path);
+        if self.cte_suffix(node, path).is_some() {
+            return;
+        }
+        let name = node.name.as_str();
+        let mut suffix = 0;
+        while self.cte_name_taken(name, suffix) {
+            suffix = if suffix == 0 { 2 } else { suffix + 1 };
+        }
+        if self.cte_count == MAX_CTES {
+            fail(&["a statement can't have more than 64 CTEs"]);
+        }
+        self.ctes[self.cte_count] = Some(Cte { node, path, suffix });
+        self.cte_count += 1;
+    }
+
+    const fn cte_suffix(&self, node: &'static Node, path: Path) -> Option<u16> {
+        let mut i = 0;
+        while i < self.cte_count {
+            if let Some(cte) = self.ctes[i]
+                && same_node(cte.node, node)
+                && cte.path.same(&path)
+            {
+                return Some(cte.suffix);
+            }
+            i += 1;
+        }
+        None
+    }
+
+    const fn cte_name_taken(&self, name: &str, suffix: u16) -> bool {
+        let mut i = 0;
+        while i < self.cte_count {
+            if let Some(cte) = self.ctes[i]
+                && suffixed_eq(cte.node.name.as_str(), cte.suffix, name, suffix)
+            {
+                return true;
+            }
+            i += 1;
+        }
+        false
+    }
+
+    const fn with_clause(&mut self) {
+        if self.cte_count == 0 {
+            return;
+        }
+        self.push("WITH ");
+        let mut i = 0;
+        while i < self.cte_count {
+            if let Some(cte) = self.ctes[i] {
+                if i > 0 {
+                    self.push(", ");
+                }
+                self.quoted(cte.node.name.as_str(), cte.suffix);
+                self.push(" AS (");
+                self.body(cte.node, cte.path);
+                self.push(")");
+            }
+            i += 1;
+        }
+        self.push(" ");
     }
 
     const fn body(&mut self, node: &'static Node, path: Path) {
@@ -86,7 +170,7 @@ impl<'a, D: Dialect> Renderer<'a, D> {
         while i < parts.len() {
             match parts[i] {
                 Part::Lit(lit) => self.push(lit.as_str()),
-                Part::Ident(ident) => self.quoted(ident.0),
+                Part::Ident(ident) => self.quoted(ident.0, 0),
                 Part::Param(param) => self.param(node, path, Slot::from_param(param)),
                 Part::Expr(expr) => {
                     self.push("(");
@@ -104,13 +188,17 @@ impl<'a, D: Dialect> Renderer<'a, D> {
         let child_path = child_path(parent, path, child);
         match placement(from) {
             Inject::Ident => self.body(child, child_path),
+            Inject::Cte { .. } => match self.cte_suffix(child, instance_path(child, child_path)) {
+                Some(suffix) => self.quoted(child.name.as_str(), suffix),
+                None => panic!("CTE wasn't collected before rendering"),
+            },
             Inject::Subquery => {
                 self.push("(");
                 self.body(child, child_path);
                 self.push(")");
                 if let AliasRule::NodeName = from.rule() {
                     self.push(" AS ");
-                    self.quoted(child.name.as_str());
+                    self.quoted(child.name.as_str(), 0);
                 }
             }
         }
@@ -179,7 +267,7 @@ impl<'a, D: Dialect> Renderer<'a, D> {
         }
     }
 
-    const fn quoted(&mut self, ident: &str) {
+    const fn quoted(&mut self, ident: &str, suffix: u16) {
         let [open, close] = D::QUOTE.as_array();
         self.byte(open);
         let bytes = ident.as_bytes();
@@ -190,6 +278,10 @@ impl<'a, D: Dialect> Renderer<'a, D> {
             }
             self.byte(bytes[i]);
             i += 1;
+        }
+        if suffix != 0 {
+            self.byte(b'_');
+            self.number(suffix);
         }
         self.byte(close);
     }
@@ -215,7 +307,7 @@ const fn placement(from: From) -> Inject {
     let inject = from.inject();
     let name = from.node().name.as_str();
     match (from.node().kind, inject) {
-        (Kind::Table, Inject::Ident) | (Kind::Query, Inject::Subquery) => {}
+        (Kind::Table, Inject::Ident) | (Kind::Query, Inject::Cte { .. } | Inject::Subquery) => {}
         (Kind::Table, _) => fail(&["table `", name, "` can only be referenced by name"]),
         (_, Inject::Ident) => fail(&[
             "`",
@@ -272,6 +364,28 @@ const fn first_reference(parts: &[Part], index: usize, node: &'static Node) -> b
         i += 1;
     }
     true
+}
+
+const fn instance_path(node: &'static Node, path: Path) -> Path {
+    if has_params(node) { path } else { Path::ROOT }
+}
+
+const fn has_params(node: &'static Node) -> bool {
+    let parts = node.parts.0;
+    let mut i = 0;
+    while i < parts.len() {
+        let found = match parts[i] {
+            Part::Param(_) => true,
+            Part::Expr(expr) => has_params(expr.as_ref()),
+            Part::From(from) => has_params(from.node()),
+            Part::Lit(_) | Part::Ident(_) => false,
+        };
+        if found {
+            return true;
+        }
+        i += 1;
+    }
+    false
 }
 
 const fn same_node(a: &'static Node, b: &'static Node) -> bool {

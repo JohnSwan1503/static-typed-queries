@@ -3,6 +3,9 @@
 #[macro_use]
 mod support;
 
+use core::marker::PhantomData;
+
+use static_typed_queries_core::impl_statement;
 use static_typed_queries_core::node::Node;
 use static_typed_queries_core::node::inject::Inject;
 use static_typed_queries_core::part::expr::Expr;
@@ -33,13 +36,84 @@ impl Sql for ActiveUsers {
         "active_users",
         2,
         Query,
-        Inject::Subquery,
+        Inject::Cte { recursive: false },
         [
             Lit::part("SELECT id, email FROM "),
             From::part(Users::NODE, AliasRule::NodeName, None),
             Lit::part(" WHERE deleted_at IS NULL AND org_id = "),
             Param::part(0),
         ]
+    );
+}
+
+struct CountOf<T>(PhantomData<T>);
+
+impl<T: Sql> Sql for CountOf<T> {
+    type Dialect = T::Dialect;
+    type Params = ();
+    const NODE: &'static Node = node!(
+        "count_of",
+        3,
+        Query,
+        Inject::Subquery,
+        [
+            Lit::part("SELECT count(*) FROM "),
+            From::part(T::NODE, AliasRule::NodeName, None),
+        ]
+    );
+}
+
+struct UserReport;
+
+impl Sql for UserReport {
+    type Dialect = Postgres;
+    type Params = ();
+    const NODE: &'static Node = node!(
+        "user_report",
+        4,
+        Query,
+        Inject::Subquery,
+        [
+            Lit::part("SELECT u.email, "),
+            Expr::part(CountOf::<ActiveUsers>::NODE),
+            Lit::part(" AS total FROM "),
+            From::part(ActiveUsers::NODE, AliasRule::Given, None),
+            Lit::part(" u WHERE u.id = "),
+            Param::part(0),
+        ]
+    );
+}
+
+impl_statement!(UserReport, CountOf<ActiveUsers>);
+
+root!(UserReportMySql: MySql = UserReport::NODE);
+root!(UserReportSqlite: Sqlite = UserReport::NODE);
+
+#[test]
+fn composes_ctes_and_subqueries() {
+    assert_eq!(
+        UserReport::SQL,
+        r#"WITH "active_users" AS (SELECT id, email FROM "users" WHERE deleted_at IS NULL AND org_id = $1), "active_users_2" AS (SELECT id, email FROM "users" WHERE deleted_at IS NULL AND org_id = $2) SELECT u.email, (SELECT count(*) FROM "active_users") AS total FROM "active_users_2" u WHERE u.id = $3"#
+    );
+}
+
+#[test]
+fn renders_in_the_root_dialect() {
+    assert_eq!(
+        UserReportMySql::SQL,
+        "WITH `active_users` AS (SELECT id, email FROM `users` WHERE deleted_at IS NULL AND org_id = ?), `active_users_2` AS (SELECT id, email FROM `users` WHERE deleted_at IS NULL AND org_id = ?) SELECT u.email, (SELECT count(*) FROM `active_users`) AS total FROM `active_users_2` u WHERE u.id = ?"
+    );
+    assert_eq!(
+        UserReportSqlite::SQL,
+        r#"WITH "active_users" AS (SELECT id, email FROM "users" WHERE deleted_at IS NULL AND org_id = $1), "active_users_2" AS (SELECT id, email FROM "users" WHERE deleted_at IS NULL AND org_id = $2) SELECT u.email, (SELECT count(*) FROM "active_users") AS total FROM "active_users_2" u WHERE u.id = $3"#
+    );
+}
+
+#[test]
+fn generic_items_render_standalone() {
+    assert_eq!(
+        CountOf::<ActiveUsers>::SQL,
+        r#"WITH "active_users" AS (SELECT id, email FROM "users" WHERE deleted_at IS NULL AND org_id = $1) SELECT count(*) FROM "active_users""#
     );
 }
 
@@ -110,6 +184,40 @@ fn subquery_placement_and_alias_rules() {
     assert_eq!(
         Inlined::SQL,
         r#"SELECT * FROM (SELECT id, email FROM "users" WHERE deleted_at IS NULL AND org_id = $1) AS "active_users" JOIN (SELECT id, email FROM "users" WHERE deleted_at IS NULL AND org_id = $1) a USING (id)"#
+    );
+}
+
+const VIPS: &Node = node!(
+    "vips",
+    30,
+    Query,
+    Inject::Cte { recursive: false },
+    [
+        Lit::part("SELECT id FROM "),
+        From::part(ActiveUsers::NODE, AliasRule::NodeName, None),
+        Lit::part(" WHERE vip")
+    ]
+);
+
+root!(VipCount: Postgres = node!(
+    "vip_count",
+    31,
+    Query,
+    Inject::Subquery,
+    [
+        Lit::part("SELECT count(*) FROM "),
+        From::part(VIPS, AliasRule::NodeName, None),
+        Lit::part(" JOIN "),
+        From::part(ActiveUsers::NODE, AliasRule::Given, None),
+        Lit::part(" a USING (id)"),
+    ]
+));
+
+#[test]
+fn hoists_cte_dependencies_first() {
+    assert_eq!(
+        VipCount::SQL,
+        r#"WITH "active_users" AS (SELECT id, email FROM "users" WHERE deleted_at IS NULL AND org_id = $1), "vips" AS (SELECT id FROM "active_users" WHERE vip), "active_users_2" AS (SELECT id, email FROM "users" WHERE deleted_at IS NULL AND org_id = $2) SELECT count(*) FROM "vips" JOIN "active_users_2" a USING (id)"#
     );
 }
 
