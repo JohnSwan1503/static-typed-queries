@@ -5,3 +5,6 @@ version = 4
 [[package]]
 name = "static-typed-queries-core"
 version = "0.0.0"
+dependencies = [
+ "static-typed-queries-core",
+]

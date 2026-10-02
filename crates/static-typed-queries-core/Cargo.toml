@@ -9,3 +9,6 @@ mysql = []
 postgres = []
 sqlite = []
 sqlite-unbundled = []
+
+[dev-dependencies]
+static-typed-queries-core = { path = ".", features = ["mysql", "postgres", "sqlite"] }
