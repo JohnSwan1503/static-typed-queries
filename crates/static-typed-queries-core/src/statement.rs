@@ -41,3 +41,39 @@ macro_rules! impl_statement {
         const _: &[$crate::statement::bind::Bind] = <$ty as $crate::statement::Statement>::BINDS;
     )+};
 }
+
+#[macro_export]
+macro_rules! impl_display {
+    ($ty:ty => sql) => {
+        impl ::core::fmt::Display for $ty {
+            fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+                f.write_str(<$ty as $crate::statement::Statement>::SQL)
+            }
+        }
+    };
+    ($ty:ty => name) => {
+        impl ::core::fmt::Display for $ty {
+            fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+                f.write_str(<$ty as $crate::sql::Sql>::NODE.name.as_str())
+            }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! impl_debug {
+    ($ty:ty => sql) => {
+        impl ::core::fmt::Debug for $ty {
+            fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+                ::core::fmt::Debug::fmt(<$ty as $crate::statement::Statement>::SQL, f)
+            }
+        }
+    };
+    ($ty:ty => tree) => {
+        impl ::core::fmt::Debug for $ty {
+            fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+                ::core::fmt::Debug::fmt(<$ty as $crate::sql::Sql>::NODE, f)
+            }
+        }
+    };
+}
