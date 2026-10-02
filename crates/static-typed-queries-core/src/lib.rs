@@ -1,4 +1,5 @@
 pub mod dialect;
+pub mod embed;
 pub mod node;
 pub mod part;
 pub mod render;
