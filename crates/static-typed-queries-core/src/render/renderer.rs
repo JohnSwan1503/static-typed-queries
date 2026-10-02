@@ -35,6 +35,7 @@ pub(super) struct Renderer<'a, D> {
     size: Size,
     ctes: [Option<Cte>; MAX_CTES],
     cte_count: usize,
+    recursive: bool,
     numbered: [Option<Numbered>; MAX_NUMBERED],
     numbered_count: usize,
     dialect: PhantomData<D>,
@@ -48,6 +49,7 @@ impl<'a, D: Dialect> Renderer<'a, D> {
             size: Size { sql: 0, binds: 0 },
             ctes: [None; MAX_CTES],
             cte_count: 0,
+            recursive: false,
             numbered: [None; MAX_NUMBERED],
             numbered_count: 0,
             dialect: PhantomData,
@@ -86,9 +88,9 @@ impl<'a, D: Dialect> Renderer<'a, D> {
                     let child = from.node();
                     let child_path = child_path(node, path, child);
                     match placement(from) {
-                        Inject::Cte { .. } => {
+                        Inject::Cte { recursive } => {
                             self.collect(child, child_path);
-                            self.add_cte(child, child_path);
+                            self.add_cte(child, child_path, recursive);
                         }
                         Inject::Ident | Inject::Subquery => self.collect(child, child_path),
                     }
@@ -99,7 +101,8 @@ impl<'a, D: Dialect> Renderer<'a, D> {
         }
     }
 
-    const fn add_cte(&mut self, node: &'static Node, path: Path) {
+    const fn add_cte(&mut self, node: &'static Node, path: Path, recursive: bool) {
+        self.recursive |= recursive;
         let path = instance_path(node, path);
         if self.cte_suffix(node, path).is_some() {
             return;
@@ -109,11 +112,38 @@ impl<'a, D: Dialect> Renderer<'a, D> {
         while self.cte_name_taken(name, suffix) {
             suffix = if suffix == 0 { 2 } else { suffix + 1 };
         }
+        if suffix != 0 && recursive {
+            if self.has_cte(node) {
+                fail(&[
+                    "`",
+                    name,
+                    "` is recursive and has parameters, so it can only be reached through one path",
+                ]);
+            }
+            fail(&[
+                "two different CTEs are named `",
+                name,
+                "`, and the second one is recursive, so it can't be renamed",
+            ]);
+        }
         if self.cte_count == MAX_CTES {
             fail(&["a statement can't have more than 64 CTEs"]);
         }
         self.ctes[self.cte_count] = Some(Cte { node, path, suffix });
         self.cte_count += 1;
+    }
+
+    const fn has_cte(&self, node: &'static Node) -> bool {
+        let mut i = 0;
+        while i < self.cte_count {
+            if let Some(cte) = self.ctes[i]
+                && same_node(cte.node, node)
+            {
+                return true;
+            }
+            i += 1;
+        }
+        false
     }
 
     const fn cte_suffix(&self, node: &'static Node, path: Path) -> Option<u16> {
@@ -147,7 +177,11 @@ impl<'a, D: Dialect> Renderer<'a, D> {
         if self.cte_count == 0 {
             return;
         }
-        self.push("WITH ");
+        self.push(if self.recursive {
+            "WITH RECURSIVE "
+        } else {
+            "WITH "
+        });
         let mut i = 0;
         while i < self.cte_count {
             if let Some(cte) = self.ctes[i] {

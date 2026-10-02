@@ -1,0 +1,140 @@
+error[E0080]: evaluation panicked: `tree` is recursive and has parameters, so it can only be reached through one path
+  --> tests/ui/../support/mod.rs
+   |
+   |           static_typed_queries_core::impl_statement!($ty);
+   |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ evaluation of `<Both as static_typed_queries_core::render::Measure>::SIZE` failed inside this call
+   |
+  ::: tests/ui/recursive_cte_two_paths.rs:37:1
+   |
+37 | / root!(Both: Postgres = node!(
+38 | |     "both",
+39 | |     3,
+40 | |     Query,
+...  |
+48 | | ));
+   | |__- in this macro invocation
+   |
+note: inside `measure::<Postgres>`
+  --> src/render.rs
+   |
+   |     renderer.statement(root);
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^
+note: inside `render::renderer::Renderer::<'_, Postgres>::statement`
+  --> src/render/renderer.rs
+   |
+   |         self.collect(root, Path::ROOT);
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+note: inside `render::renderer::Renderer::<'_, Postgres>::collect`
+  --> src/render/renderer.rs
+   |
+   | ...                   self.add_cte(child, child_path, recursive);
+   |                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+note: inside `render::renderer::Renderer::<'_, Postgres>::add_cte`
+  --> src/render/renderer.rs
+   |
+   | /                 fail(&[
+   | |                     "`",
+   | |                     name,
+   | |                     "` is recursive and has parameters, so it can only be reached through one path",
+   | |                 ]);
+   | |__________________^
+note: inside `render::error::fail`
+  --> $RUST/core/src/panic.rs
+   |
+   |         $crate::panicking::panic_display(&$arg);
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the failure occurred here
+   |
+  ::: src/render/error.rs
+   |
+   |         Ok(message) => panic!("{}", message),
+   |                        --------------------- in this macro invocation
+
+note: erroneous constant encountered
+  --> tests/ui/../support/mod.rs
+   |
+   |           static_typed_queries_core::impl_statement!($ty);
+   |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+  ::: tests/ui/recursive_cte_two_paths.rs:37:1
+   |
+37 | / root!(Both: Postgres = node!(
+38 | |     "both",
+39 | |     3,
+40 | |     Query,
+...  |
+48 | | ));
+   | |__- in this macro invocation
+   |
+   = note: this note originates in the macro `static_typed_queries_core::impl_statement` which comes from the expansion of the macro `root` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+note: erroneous constant encountered
+  --> tests/ui/../support/mod.rs
+   |
+   |           static_typed_queries_core::impl_statement!($ty);
+   |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+  ::: tests/ui/recursive_cte_two_paths.rs:37:1
+   |
+37 | / root!(Both: Postgres = node!(
+38 | |     "both",
+39 | |     3,
+40 | |     Query,
+...  |
+48 | | ));
+   | |__- in this macro invocation
+   |
+   = note: this note originates in the macro `static_typed_queries_core::impl_statement` which comes from the expansion of the macro `root` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+note: erroneous constant encountered
+  --> tests/ui/../support/mod.rs
+   |
+   |           static_typed_queries_core::impl_statement!($ty);
+   |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+  ::: tests/ui/recursive_cte_two_paths.rs:37:1
+   |
+37 | / root!(Both: Postgres = node!(
+38 | |     "both",
+39 | |     3,
+40 | |     Query,
+...  |
+48 | | ));
+   | |__- in this macro invocation
+   |
+   = note: this note originates in the macro `static_typed_queries_core::impl_statement` which comes from the expansion of the macro `root` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+note: erroneous constant encountered
+  --> tests/ui/../support/mod.rs
+   |
+   |           static_typed_queries_core::impl_statement!($ty);
+   |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+  ::: tests/ui/recursive_cte_two_paths.rs:37:1
+   |
+37 | / root!(Both: Postgres = node!(
+38 | |     "both",
+39 | |     3,
+40 | |     Query,
+...  |
+48 | | ));
+   | |__- in this macro invocation
+   |
+   = note: this note originates in the macro `static_typed_queries_core::impl_statement` which comes from the expansion of the macro `root` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+note: erroneous constant encountered
+  --> tests/ui/../support/mod.rs
+   |
+   |           static_typed_queries_core::impl_statement!($ty);
+   |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+  ::: tests/ui/recursive_cte_two_paths.rs:37:1
+   |
+37 | / root!(Both: Postgres = node!(
+38 | |     "both",
+39 | |     3,
+40 | |     Query,
+...  |
+48 | | ));
+   | |__- in this macro invocation
+   |
+   = note: this note originates in the macro `static_typed_queries_core::impl_statement` which comes from the expansion of the macro `root` (in Nightly builds, run with -Z macro-backtrace for more info)

@@ -221,6 +221,36 @@ fn hoists_cte_dependencies_first() {
     );
 }
 
+const TREE: &Node = node!(
+    "tree",
+    40,
+    Query,
+    Inject::Cte { recursive: true },
+    [
+        Lit::part("SELECT id, parent_id FROM nodes WHERE id = "),
+        Param::part(0),
+        Lit::part(
+            " UNION ALL SELECT n.id, n.parent_id FROM nodes n JOIN tree t ON n.parent_id = t.id"
+        ),
+    ]
+);
+
+root!(Subtree: Postgres = node!(
+    "subtree",
+    41,
+    Query,
+    Inject::Subquery,
+    [Lit::part("SELECT id FROM "), From::part(TREE, AliasRule::NodeName, None)]
+));
+
+#[test]
+fn recursive_ctes_make_the_with_clause_recursive() {
+    assert_eq!(
+        Subtree::SQL,
+        r#"WITH RECURSIVE "tree" AS (SELECT id, parent_id FROM nodes WHERE id = $1 UNION ALL SELECT n.id, n.parent_id FROM nodes n JOIN tree t ON n.parent_id = t.id) SELECT id FROM "tree""#
+    );
+}
+
 root!(QuotedPostgres: Postgres = node!(
     "quoted",
     60,
