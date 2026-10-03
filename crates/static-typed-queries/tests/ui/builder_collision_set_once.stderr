@@ -1,0 +1,19 @@
+error[E0277]: `SearchBuilder<Unset<Set>, Set, NoParams>` still has parameters to set
+  --> tests/ui/builder_collision_set_once.rs:11:71
+   |
+11 |     let _ = Search::builder().status("paid".to_owned()).created_at(1).build();
+   |                                                                       ^^^^^ call every setter (as many times as its parameter appears) before building
+   |
+help: the trait `Finish<SearchParams>` is not implemented for `SearchBuilder<Unset<Set>, Set, NoParams>`
+      but it is implemented for `SearchBuilder<Set, Set, _>`
+  --> tests/ui/builder_collision_set_once.rs:7:1
+   |
+ 7 | #[query(Postgres, sql = "SELECT id FROM {Orders} WHERE created_at BETWEEN {_: i64} AND {_: i64} AND status = {_: String}")]
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   = help: for that trait implementation, expected `Set`, found `Unset<Set>`
+note: required by a bound in `SearchBuilder::<ParamCreatedAt, ParamStatus, ItemOrders>::build`
+  --> tests/ui/builder_collision_set_once.rs:7:1
+   |
+ 7 | #[query(Postgres, sql = "SELECT id FROM {Orders} WHERE created_at BETWEEN {_: i64} AND {_: i64} AND status = {_: String}")]
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `SearchBuilder::<ParamCreatedAt, ParamStatus, ItemOrders>::build`
+   = note: this error originates in the attribute macro `query` (in Nightly builds, run with -Z macro-backtrace for more info)

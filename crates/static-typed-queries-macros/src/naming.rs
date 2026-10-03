@@ -77,3 +77,18 @@ pub(crate) fn to_ident(name: &str) -> Ident {
     }
     Ident::new_raw(&name, Span::call_site())
 }
+
+pub(crate) fn camel(ident: &Ident) -> String {
+    let name = ident.to_string();
+    name.trim_start_matches("r#")
+        .split('_')
+        .filter(|part| !part.is_empty())
+        .map(|part| {
+            let mut chars = part.chars();
+            chars
+                .next()
+                .map(|first| first.to_uppercase().chain(chars).collect::<String>())
+                .unwrap_or_default()
+        })
+        .collect()
+}

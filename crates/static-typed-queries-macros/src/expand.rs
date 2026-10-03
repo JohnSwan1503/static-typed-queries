@@ -1,11 +1,13 @@
 use proc_macro2::{Literal, Span, TokenStream};
 use quote::{ToTokens, format_ident, quote};
-use syn::{GenericParam, Ident, ItemStruct, LitStr, Type, parse_quote};
+use syn::{GenericParam, Generics, Ident, ItemStruct, LitStr, Type, parse_quote};
 
 use crate::analyze::{self, Analysis, Engine, Kind};
 use crate::args::{Args, Placement};
-use crate::naming::{field_name, snake_case, to_ident, unique};
+use crate::naming::{camel, field_name, snake_case, to_ident, unique};
 use crate::template::{self, Segment, Template};
+
+const RESERVED: &[&str] = &["build", "builder", "finish"];
 
 fn krate() -> TokenStream {
     quote!(::static_typed_queries)
@@ -59,6 +61,14 @@ pub(crate) fn table(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
             type Params = ();
             const NODE: &'static #krate::node::Node = #node;
         }
+
+        impl #krate::builder::Build for #ident {
+            type Builder = #krate::builder::NoParams;
+
+            fn builder() -> Self::Builder {
+                #krate::builder::NoParams
+            }
+        }
     })
 }
 
@@ -107,6 +117,7 @@ pub(crate) fn query(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
     let params_ty = params.ty();
     let params_struct = params.definition();
     let bind_params = params.bind_impl();
+    let builder = params.builder();
     let statement = item.generics.params.is_empty().then(|| {
         quote! {
             #krate::impl_statement!(#ident);
@@ -129,6 +140,7 @@ pub(crate) fn query(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
         }
 
         #bind_params
+        #builder
         #statement
     })
 }
@@ -221,18 +233,23 @@ fn parts(template: &Template, analysis: &Analysis) -> Vec<TokenStream> {
 
 struct Group {
     name: Ident,
+    field: Ident,
     ty: Type,
     slots: Vec<u16>,
+    state: Ident,
 }
 
 struct Child {
     name: Ident,
+    field: Ident,
     ty: Type,
+    state: Ident,
 }
 
 struct Params<'a> {
     item: &'a ItemStruct,
     ident: Ident,
+    builder: Ident,
     groups: Vec<Group>,
     children: Vec<Child>,
 }
@@ -251,6 +268,11 @@ impl<'a> Params<'a> {
                 (None, Some(inferred)) => to_ident(inferred),
                 (None, None) => format_ident!("bind{}", slot + 1),
             };
+            let name = if RESERVED.contains(&name.to_string().as_str()) {
+                format_ident!("{name}_")
+            } else {
+                name
+            };
             match groups.iter_mut().find(|group| group.name == name) {
                 Some(group) => {
                     if type_key(&group.ty) != type_key(&param.ty) {
@@ -266,6 +288,8 @@ impl<'a> Params<'a> {
                     group.slots.push(slot as u16);
                 }
                 None => groups.push(Group {
+                    state: format_ident!("Param{}", camel(&name)),
+                    field: builder_field(&name),
                     name,
                     ty: param.ty.clone(),
                     slots: vec![slot as u16],
@@ -273,15 +297,22 @@ impl<'a> Params<'a> {
             }
         }
 
-        let mut taken: Vec<String> = groups.iter().map(|group| group.name.to_string()).collect();
+        let mut taken: Vec<String> = groups
+            .iter()
+            .map(|group| group.name.to_string())
+            .chain(RESERVED.iter().map(|name| (*name).to_owned()))
+            .collect();
         let children = template
             .children
             .iter()
             .map(|ty| {
                 let name = unique(field_name(ty), &taken);
                 taken.push(name.clone());
+                let name = format_ident!("{name}");
                 Child {
-                    name: format_ident!("{name}"),
+                    state: format_ident!("Item{}", camel(&name)),
+                    field: builder_field(&name),
+                    name,
                     ty: ty.clone(),
                 }
             })
@@ -289,6 +320,7 @@ impl<'a> Params<'a> {
         Ok(Params {
             item,
             ident: format_ident!("{}Params", item.ident),
+            builder: format_ident!("{}Builder", item.ident),
             groups,
             children,
         })
@@ -419,6 +451,266 @@ impl<'a> Params<'a> {
             }
         })
     }
+
+    fn states(&self) -> Vec<TokenStream> {
+        self.groups
+            .iter()
+            .map(|group| group.state.to_token_stream())
+            .chain(
+                self.children
+                    .iter()
+                    .map(|child| child.state.to_token_stream()),
+            )
+            .collect()
+    }
+
+    fn builder_ty(&self, states: &[TokenStream]) -> TokenStream {
+        let builder = &self.builder;
+        let args = self.item_args();
+        quote!(#builder<#(#args,)* #(#states),*>)
+    }
+
+    fn generics(&self, extra: &[TokenStream]) -> Generics {
+        let mut generics = self.item.generics.clone();
+        for param in extra {
+            generics
+                .params
+                .push(syn::parse2(param.clone()).expect("a generic parameter"));
+        }
+        generics
+    }
+
+    fn fields(&self) -> Vec<&Ident> {
+        self.groups
+            .iter()
+            .map(|group| &group.field)
+            .chain(self.children.iter().map(|child| &child.field))
+            .collect()
+    }
+
+    fn builder(&self) -> TokenStream {
+        let krate = krate();
+        let ident = &self.item.ident;
+        let (impl_generics, ty_generics, where_clause) = self.item.generics.split_for_impl();
+        if self.is_empty() {
+            return quote! {
+                impl #impl_generics #krate::builder::Build for #ident #ty_generics #where_clause {
+                    type Builder = #krate::builder::NoParams;
+
+                    fn builder() -> Self::Builder {
+                        #krate::builder::NoParams
+                    }
+                }
+            };
+        }
+
+        let builder = &self.builder;
+        let vis = &self.item.vis;
+        let states = self.states();
+        let params_ty = self.ty();
+        let args = self.item_args();
+        let fields = self.fields();
+        let mut out = TokenStream::new();
+
+        let generics = self.generics(&states);
+        let where_clause = &generics.where_clause;
+        let group_fields = self.groups.iter().map(|group| {
+            let (field, ty) = (&group.field, &group.ty);
+            let len = Literal::usize_unsuffixed(group.slots.len());
+            quote!(#field: [::core::option::Option<#ty>; #len])
+        });
+        let child_fields = self.children.iter().map(|child| {
+            let (field, state) = (&child.field, &child.state);
+            quote!(#field: #state)
+        });
+        let group_states = self.groups.iter().map(|group| &group.state);
+        out.extend(quote! {
+            #vis struct #builder #generics #where_clause {
+                #(#group_fields,)*
+                #(#child_fields,)*
+                __state: ::core::marker::PhantomData<fn() -> (#(#group_states,)* #(#args,)*)>,
+            }
+        });
+
+        for (index, group) in self.groups.iter().enumerate() {
+            let name = &group.name;
+            let field = &group.field;
+            let ty = &group.ty;
+            let len = Literal::usize_unsuffixed(group.slots.len());
+            let mut current = states.clone();
+            current[index] = quote!(#krate::builder::Unset<__Rest>);
+            let mut next = states.clone();
+            next[index] = quote!(__Rest);
+            let mut free: Vec<TokenStream> = states
+                .iter()
+                .enumerate()
+                .filter(|(other, _)| *other != index)
+                .map(|(_, state)| state.clone())
+                .collect();
+            free.push(quote!(__Rest: #krate::builder::Remaining));
+            let generics = self.generics(&free);
+            let (impl_generics, _, where_clause) = generics.split_for_impl();
+            let current = self.builder_ty(&current);
+            let next = self.builder_ty(&next);
+            let others = fields.iter().filter(|other| **other != field);
+            out.extend(quote! {
+                impl #impl_generics #current #where_clause {
+                    pub fn #name(self, value: #ty) -> #next {
+                        let mut #field = self.#field;
+                        #field[#len - 1 - <__Rest as #krate::builder::Remaining>::N] =
+                            ::core::option::Option::Some(value);
+                        #builder {
+                            #field,
+                            #(#others: self.#others,)*
+                            __state: ::core::marker::PhantomData,
+                        }
+                    }
+                }
+            });
+        }
+
+        for (index, child) in self.children.iter().enumerate() {
+            let name = &child.name;
+            let field = &child.field;
+            let ty = &child.ty;
+            let mut next = states.clone();
+            next[self.groups.len() + index] = quote!(__Next);
+            let mut generics = self.generics(&states);
+            generics
+                .make_where_clause()
+                .predicates
+                .push(parse_quote!(#ty: #krate::builder::Build));
+            let (impl_generics, _, where_clause) = generics.split_for_impl();
+            let current = self.builder_ty(&states);
+            let next = self.builder_ty(&next);
+            let others = fields.iter().filter(|other| **other != field);
+            out.extend(quote! {
+                impl #impl_generics #current #where_clause {
+                    pub fn #name<__Next>(
+                        self,
+                        build: impl ::core::ops::FnOnce(<#ty as #krate::builder::Build>::Builder) -> __Next,
+                    ) -> #next {
+                        #builder {
+                            #field: build(<#ty as #krate::builder::Build>::builder()),
+                            #(#others: self.#others,)*
+                            __state: ::core::marker::PhantomData,
+                        }
+                    }
+                }
+            });
+        }
+
+        let child_states: Vec<TokenStream> = self
+            .children
+            .iter()
+            .map(|child| child.state.to_token_stream())
+            .collect();
+        let mut generics = self.generics(&child_states);
+        for child in &self.children {
+            let (state, ty) = (&child.state, &child.ty);
+            generics.make_where_clause().predicates.push(parse_quote!(
+                #state: #krate::builder::Finish<<#ty as #krate::sql::Sql>::Params>
+            ));
+        }
+        let (impl_generics, _, where_clause) = generics.split_for_impl();
+        let complete: Vec<TokenStream> = self
+            .groups
+            .iter()
+            .map(|_| quote!(#krate::builder::Set))
+            .chain(child_states.iter().cloned())
+            .collect();
+        let complete = self.builder_ty(&complete);
+        let params_ident = &self.ident;
+        let extract_groups = self.groups.iter().map(|group| {
+            let (name, field) = (&group.name, &group.field);
+            let expect = quote!(.expect("the builder's type guarantees every parameter is set"));
+            if group.slots.len() == 1 {
+                quote!(#name: { let [value] = self.#field; value #expect })
+            } else {
+                quote!(#name: self.#field.map(|value| value #expect))
+            }
+        });
+        let extract_children = self.children.iter().map(|child| {
+            let (name, field) = (&child.name, &child.field);
+            quote!(#name: #krate::builder::Finish::finish(self.#field))
+        });
+        out.extend(quote! {
+            impl #impl_generics #krate::builder::Finish<#params_ty> for #complete #where_clause {
+                fn finish(self) -> #params_ty {
+                    #params_ident {
+                        #(#extract_groups,)*
+                        #(#extract_children,)*
+                    }
+                }
+            }
+        });
+
+        let generics = self.generics(&states);
+        let (impl_generics, _, where_clause) = generics.split_for_impl();
+        let any = self.builder_ty(&states);
+        out.extend(quote! {
+            impl #impl_generics #any #where_clause {
+                pub fn build(self) -> #params_ty
+                where
+                    Self: #krate::builder::Finish<#params_ty>,
+                {
+                    #krate::builder::Finish::finish(self)
+                }
+            }
+        });
+
+        let initial: Vec<TokenStream> = self
+            .groups
+            .iter()
+            .map(|group| {
+                (0..group.slots.len()).fold(
+                    quote!(#krate::builder::Set),
+                    |rest, _| quote!(#krate::builder::Unset<#rest>),
+                )
+            })
+            .chain(self.children.iter().map(|child| {
+                let ty = &child.ty;
+                quote!(<#ty as #krate::builder::Build>::Builder)
+            }))
+            .collect();
+        let initial = self.builder_ty(&initial);
+        let mut generics = self.item.generics.clone();
+        for child in &self.children {
+            let ty = &child.ty;
+            generics
+                .make_where_clause()
+                .predicates
+                .push(parse_quote!(#ty: #krate::builder::Build));
+        }
+        let (impl_generics, _, where_clause) = generics.split_for_impl();
+        let empty_groups = self.groups.iter().map(|group| {
+            let field = &group.field;
+            let len = Literal::usize_unsuffixed(group.slots.len());
+            quote!(#field: [const { ::core::option::Option::None }; #len])
+        });
+        let start_children = self.children.iter().map(|child| {
+            let (field, ty) = (&child.field, &child.ty);
+            quote!(#field: <#ty as #krate::builder::Build>::builder())
+        });
+        out.extend(quote! {
+            impl #impl_generics #krate::builder::Build for #ident #ty_generics #where_clause {
+                type Builder = #initial;
+
+                fn builder() -> Self::Builder {
+                    #builder {
+                        #(#empty_groups,)*
+                        #(#start_children,)*
+                        __state: ::core::marker::PhantomData,
+                    }
+                }
+            }
+        });
+        out
+    }
+}
+
+fn builder_field(name: &Ident) -> Ident {
+    format_ident!("__{}", name.to_string().trim_start_matches("r#"))
 }
 
 fn type_key(ty: &Type) -> String {
