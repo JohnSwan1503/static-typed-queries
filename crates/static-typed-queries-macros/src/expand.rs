@@ -1,6 +1,9 @@
 use proc_macro2::{Literal, Span, TokenStream};
 use quote::{ToTokens, format_ident, quote};
-use syn::{GenericParam, Generics, Ident, ItemStruct, LitStr, Type, parse_quote};
+use syn::{
+    GenericArgument, GenericParam, Generics, Ident, ItemStruct, LitStr, PathArguments, Type,
+    parse_quote,
+};
 
 use crate::analyze::{self, Analysis, Engine, Kind};
 use crate::args::{Args, Placement};
@@ -114,14 +117,15 @@ pub(crate) fn query(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
         .as_ref()
         .map_or_else(|| snake_case(&ident.to_string()), LitStr::value);
     let inject = placement(args.placement.unwrap_or(Placement::Subquery));
-    let params = Params::new(&template, &analysis, &item, sql)?;
+    let items = items(&template, &item.generics);
+    let params = Params::new(&template, &analysis, &items, &item, sql)?;
     let node = node(
         &node_name,
         fingerprint(ident, &item),
         kind,
         inject,
         parts(&template, &analysis, &params),
-        &template.children,
+        &items,
     );
 
     let dialect = &args.dialect;
@@ -175,6 +179,33 @@ pub(crate) fn query(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
         #statement
         #fmt
     })
+}
+
+fn items(template: &Template, generics: &Generics) -> Vec<Type> {
+    fn add(ty: &Type, generics: &Generics, items: &mut Vec<Type>) {
+        let open = generics
+            .type_params()
+            .any(|param| matches!(ty, Type::Path(path) if path.qself.is_none() && path.path.is_ident(&param.ident)));
+        if open || items.iter().any(|item| type_key(item) == type_key(ty)) {
+            return;
+        }
+        items.push(ty.clone());
+        if let Type::Path(path) = ty
+            && let Some(last) = path.path.segments.last()
+            && let PathArguments::AngleBracketed(args) = &last.arguments
+        {
+            for arg in &args.args {
+                if let GenericArgument::Type(arg) = arg {
+                    add(arg, generics, items);
+                }
+            }
+        }
+    }
+    let mut items = Vec::new();
+    for ty in &template.children {
+        add(ty, generics, &mut items);
+    }
+    items
 }
 
 fn node(
@@ -294,6 +325,7 @@ impl<'a> Params<'a> {
     fn new(
         template: &Template,
         analysis: &Analysis,
+        items: &[Type],
         item: &'a ItemStruct,
         sql: &LitStr,
     ) -> syn::Result<Params<'a>> {
@@ -364,8 +396,7 @@ impl<'a> Params<'a> {
                 aliases.push((type_key(ty), alias));
             }
         }
-        let preferred: Vec<String> = template
-            .children
+        let preferred: Vec<String> = items
             .iter()
             .map(
                 |ty| match aliases.iter().find(|(key, _)| *key == type_key(ty)) {
@@ -374,8 +405,7 @@ impl<'a> Params<'a> {
                 },
             )
             .collect();
-        let children = template
-            .children
+        let children = items
             .iter()
             .zip(&preferred)
             .map(|(ty, name)| {

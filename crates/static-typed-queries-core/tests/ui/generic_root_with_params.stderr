@@ -1,0 +1,110 @@
+error[E0080]: evaluation panicked: `active_users` has parameters, but no query it's used in lists it among its items
+  --> tests/ui/../support/mod.rs
+   |
+   |         static_typed_queries_core::impl_statement!($ty);
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ evaluation of `<CountActive as static_typed_queries_core::render::Measure>::SIZE` failed inside this call
+   |
+  ::: tests/ui/generic_root_with_params.rs:44:1
+   |
+44 | root!(CountActive: Postgres = CountOf::<ActiveUsers>::NODE);
+   | ----------------------------------------------------------- in this macro invocation
+   |
+note: inside `measure::<Postgres>`
+  --> src/render.rs
+   |
+   |     renderer.statement(root);
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^
+note: inside `render::renderer::Renderer::<'_, Postgres>::statement`
+  --> src/render/renderer.rs
+   |
+   |         self.collect(root, Path::ROOT);
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+note: inside `render::renderer::Renderer::<'_, Postgres>::collect`
+  --> src/render/renderer.rs
+   |
+   |                     let child_path = self.child_path(path, child);
+   |                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+note: inside `render::renderer::Renderer::<'_, Postgres>::child_path`
+  --> src/render/renderer.rs
+   |
+   | /             fail(&[
+   | |                 "`",
+   | |                 child.name.as_str(),
+   | |                 "` has parameters, but no query it's used in lists it among its items",
+   | |             ]);
+   | |______________^
+note: inside `render::error::fail`
+  --> $RUST/core/src/panic.rs
+   |
+   |         $crate::panicking::panic_display(&$arg);
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the failure occurred here
+   |
+  ::: src/render/error.rs
+   |
+   |         Ok(message) => panic!("{}", message),
+   |                        --------------------- in this macro invocation
+
+note: erroneous constant encountered
+  --> tests/ui/../support/mod.rs
+   |
+   |         static_typed_queries_core::impl_statement!($ty);
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+  ::: tests/ui/generic_root_with_params.rs:44:1
+   |
+44 | root!(CountActive: Postgres = CountOf::<ActiveUsers>::NODE);
+   | ----------------------------------------------------------- in this macro invocation
+   |
+   = note: this note originates in the macro `static_typed_queries_core::impl_statement` which comes from the expansion of the macro `root` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+note: erroneous constant encountered
+  --> tests/ui/../support/mod.rs
+   |
+   |         static_typed_queries_core::impl_statement!($ty);
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+  ::: tests/ui/generic_root_with_params.rs:44:1
+   |
+44 | root!(CountActive: Postgres = CountOf::<ActiveUsers>::NODE);
+   | ----------------------------------------------------------- in this macro invocation
+   |
+   = note: this note originates in the macro `static_typed_queries_core::impl_statement` which comes from the expansion of the macro `root` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+note: erroneous constant encountered
+  --> tests/ui/../support/mod.rs
+   |
+   |         static_typed_queries_core::impl_statement!($ty);
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+  ::: tests/ui/generic_root_with_params.rs:44:1
+   |
+44 | root!(CountActive: Postgres = CountOf::<ActiveUsers>::NODE);
+   | ----------------------------------------------------------- in this macro invocation
+   |
+   = note: this note originates in the macro `static_typed_queries_core::impl_statement` which comes from the expansion of the macro `root` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+note: erroneous constant encountered
+  --> tests/ui/../support/mod.rs
+   |
+   |         static_typed_queries_core::impl_statement!($ty);
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+  ::: tests/ui/generic_root_with_params.rs:44:1
+   |
+44 | root!(CountActive: Postgres = CountOf::<ActiveUsers>::NODE);
+   | ----------------------------------------------------------- in this macro invocation
+   |
+   = note: this note originates in the macro `static_typed_queries_core::impl_statement` which comes from the expansion of the macro `root` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+note: erroneous constant encountered
+  --> tests/ui/../support/mod.rs
+   |
+   |         static_typed_queries_core::impl_statement!($ty);
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+  ::: tests/ui/generic_root_with_params.rs:44:1
+   |
+44 | root!(CountActive: Postgres = CountOf::<ActiveUsers>::NODE);
+   | ----------------------------------------------------------- in this macro invocation
+   |
+   = note: this note originates in the macro `static_typed_queries_core::impl_statement` which comes from the expansion of the macro `root` (in Nightly builds, run with -Z macro-backtrace for more info)

@@ -51,7 +51,7 @@ impl<T: Sql> Sql for Recent<T> {
             Lit::part(" WHERE created_at > now() - interval '1 day'"),
         ]),
         before: Before(&[]),
-        items: Items(&[T::NODE]),
+        items: Items(&[]),
     };
 }
 

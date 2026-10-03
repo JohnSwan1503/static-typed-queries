@@ -141,14 +141,7 @@ fn binds_name_the_field_and_type_they_come_from() {
         ]
     );
     let binds: Vec<String> = Report::BINDS.iter().map(ToString::to_string).collect();
-    assert_eq!(
-        binds,
-        [
-            "active_users.org_id: i64",
-            "active_users.org_id: i64",
-            "report.email: String",
-        ]
-    );
+    assert_eq!(binds, ["active_users.org_id: i64", "report.email: String"]);
 }
 
 #[test]
@@ -184,17 +177,18 @@ fn insert_columns_update_targets_and_aliases_name_params() {
 }
 
 #[test]
-fn nested_items_take_closures_and_tables_need_no_call() {
+fn items_are_set_once_per_query_and_tables_need_no_call() {
     let params = Report::builder()
         .email("%@example.com".to_owned())
-        .org_size()
-        .t()
-        .org_id(1)
         .active_users()
         .org_id(2)
         .build();
-    assert_eq!(params.org_size.t.org_id, 1);
+    let () = params.org_size;
     assert_eq!(params.active_users.org_id, 2);
+    assert_eq!(
+        Report::SQL,
+        r#"WITH "active_users" AS (SELECT id, email FROM "users" WHERE org_id = $1) SELECT u.email, (SELECT count(*) FROM "active_users") AS org_size FROM "active_users" u WHERE u.email LIKE $2"#
+    );
 
     let join = CommaJoin::builder()
         .matching()
@@ -206,14 +200,17 @@ fn nested_items_take_closures_and_tables_need_no_call() {
 #[test]
 fn items_are_named_by_alias_then_type_then_full_type() {
     let params = ItemNames::builder()
-        .count_of_matching()
-        .t()
+        .matching()
         .status("paid".to_owned())
         .au()
         .org_id(3)
         .build();
-    let ((), ()) = (params.users_total.t, params.count_of_orders.t);
-    assert_eq!(params.count_of_matching.t.status, "paid");
+    let ((), (), ()) = (
+        params.users_total,
+        params.count_of_orders,
+        params.count_of_matching,
+    );
+    assert_eq!(params.matching.status, "paid");
     assert_eq!(params.au.org_id, 3);
 }
 

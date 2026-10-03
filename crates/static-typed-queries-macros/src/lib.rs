@@ -177,8 +177,10 @@ pub fn table(args: TokenStream, item: TokenStream) -> TokenStream {
 /// For `struct Name`, the macro implements `Sql` and generates:
 ///
 /// - `NameParams`, with a public field for every parameter and, for every
-///   distinct item the template references, a field holding that item's own
-///   params. An item field takes the item's alias in the template if it has
+///   item the query uses, a field holding that item's own params. Each item
+///   is listed once, so all its references share one set of values, and a
+///   CTE is rendered once. The types inside generic arguments are items too:
+///   `{CountOf<Users>}` lists `CountOf<Users>` and `Users`. An item field takes the item's alias in the template if it has
 ///   one of at least two characters (`{CountOf<Users>} AS total` becomes
 ///   `total`), and otherwise the type's name in snake case (`count_of`).
 ///   Items whose names would clash use the full type in snake case, generic
@@ -215,6 +217,10 @@ pub fn table(args: TokenStream, item: TokenStream) -> TokenStream {
 /// like any other item. A generic query isn't a `Statement` on its own; it
 /// is rendered as part of the queries that embed it. It also can't take
 /// `display` or `debug`.
+///
+/// A generic query holds no values for its type parameters. In
+/// `{CountOf<ActiveUsers>}`, `ActiveUsers` is an item of the query that wrote
+/// it, so its parameters are set there, once, and `CountOf` has nothing to set.
 ///
 /// ```
 /// # use static_typed_queries::dialect::postgres::Postgres;

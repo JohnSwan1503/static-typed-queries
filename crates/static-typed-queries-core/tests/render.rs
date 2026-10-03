@@ -60,8 +60,7 @@ impl<T: Sql> Sql for CountOf<T> {
         [
             Lit::part("SELECT count(*) FROM "),
             From::part(T::NODE, AliasRule::NodeName, None),
-        ],
-        items = [T::NODE]
+        ]
     );
 }
 
@@ -87,16 +86,16 @@ impl Sql for UserReport {
     );
 }
 
-impl_statement!(UserReport, CountOf<ActiveUsers>);
+impl_statement!(UserReport, CountOf<Users>);
 
 root!(UserReportMySql: MySql = UserReport::NODE);
 root!(UserReportSqlite: Sqlite = UserReport::NODE);
 
 #[test]
-fn composes_ctes_and_subqueries() {
+fn type_parameters_share_the_values_of_the_query_that_names_them() {
     assert_eq!(
         UserReport::SQL,
-        r#"WITH "active_users" AS (SELECT id, email FROM "users" WHERE deleted_at IS NULL AND org_id = $1), "active_users_2" AS (SELECT id, email FROM "users" WHERE deleted_at IS NULL AND org_id = $2) SELECT u.email, (SELECT count(*) FROM "active_users") AS total FROM "active_users_2" u WHERE u.id = $3"#
+        r#"WITH "active_users" AS (SELECT id, email FROM "users" WHERE deleted_at IS NULL AND org_id = $1) SELECT u.email, (SELECT count(*) FROM "active_users") AS total FROM "active_users" u WHERE u.id = $2"#
     );
 }
 
@@ -104,20 +103,17 @@ fn composes_ctes_and_subqueries() {
 fn renders_in_the_root_dialect() {
     assert_eq!(
         UserReportMySql::SQL,
-        "WITH `active_users` AS (SELECT id, email FROM `users` WHERE deleted_at IS NULL AND org_id = ?), `active_users_2` AS (SELECT id, email FROM `users` WHERE deleted_at IS NULL AND org_id = ?) SELECT u.email, (SELECT count(*) FROM `active_users`) AS total FROM `active_users_2` u WHERE u.id = ?"
+        "WITH `active_users` AS (SELECT id, email FROM `users` WHERE deleted_at IS NULL AND org_id = ?) SELECT u.email, (SELECT count(*) FROM `active_users`) AS total FROM `active_users` u WHERE u.id = ?"
     );
     assert_eq!(
         UserReportSqlite::SQL,
-        r#"WITH "active_users" AS (SELECT id, email FROM "users" WHERE deleted_at IS NULL AND org_id = $1), "active_users_2" AS (SELECT id, email FROM "users" WHERE deleted_at IS NULL AND org_id = $2) SELECT u.email, (SELECT count(*) FROM "active_users") AS total FROM "active_users_2" u WHERE u.id = $3"#
+        r#"WITH "active_users" AS (SELECT id, email FROM "users" WHERE deleted_at IS NULL AND org_id = $1) SELECT u.email, (SELECT count(*) FROM "active_users") AS total FROM "active_users" u WHERE u.id = $2"#
     );
 }
 
 #[test]
 fn generic_items_render_standalone() {
-    assert_eq!(
-        CountOf::<ActiveUsers>::SQL,
-        r#"WITH "active_users" AS (SELECT id, email FROM "users" WHERE deleted_at IS NULL AND org_id = $1) SELECT count(*) FROM "active_users""#
-    );
+    assert_eq!(CountOf::<Users>::SQL, r#"SELECT count(*) FROM "users""#);
 }
 
 const BETWEEN: &Node = node!(
