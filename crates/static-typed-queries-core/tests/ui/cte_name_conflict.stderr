@@ -11,7 +11,8 @@ error[E0080]: evaluation panicked: two different CTEs are named `recent`, and th
 29 | |     3,
 30 | |     Query,
 ...  |
-38 | | ));
+38 | |     items = [FIRST, SECOND]
+39 | | ));
    | |__- in this macro invocation
    |
 note: inside `measure::<Postgres>`
@@ -62,7 +63,8 @@ note: erroneous constant encountered
 29 | |     3,
 30 | |     Query,
 ...  |
-38 | | ));
+38 | |     items = [FIRST, SECOND]
+39 | | ));
    | |__- in this macro invocation
    |
    = note: this note originates in the macro `static_typed_queries_core::impl_statement` which comes from the expansion of the macro `root` (in Nightly builds, run with -Z macro-backtrace for more info)
@@ -80,7 +82,8 @@ note: erroneous constant encountered
 29 | |     3,
 30 | |     Query,
 ...  |
-38 | | ));
+38 | |     items = [FIRST, SECOND]
+39 | | ));
    | |__- in this macro invocation
    |
    = note: this note originates in the macro `static_typed_queries_core::impl_statement` which comes from the expansion of the macro `root` (in Nightly builds, run with -Z macro-backtrace for more info)
@@ -98,7 +101,8 @@ note: erroneous constant encountered
 29 | |     3,
 30 | |     Query,
 ...  |
-38 | | ));
+38 | |     items = [FIRST, SECOND]
+39 | | ));
    | |__- in this macro invocation
    |
    = note: this note originates in the macro `static_typed_queries_core::impl_statement` which comes from the expansion of the macro `root` (in Nightly builds, run with -Z macro-backtrace for more info)
@@ -116,7 +120,8 @@ note: erroneous constant encountered
 29 | |     3,
 30 | |     Query,
 ...  |
-38 | | ));
+38 | |     items = [FIRST, SECOND]
+39 | | ));
    | |__- in this macro invocation
    |
    = note: this note originates in the macro `static_typed_queries_core::impl_statement` which comes from the expansion of the macro `root` (in Nightly builds, run with -Z macro-backtrace for more info)
@@ -134,7 +139,8 @@ note: erroneous constant encountered
 29 | |     3,
 30 | |     Query,
 ...  |
-38 | | ));
+38 | |     items = [FIRST, SECOND]
+39 | | ));
    | |__- in this macro invocation
    |
    = note: this note originates in the macro `static_typed_queries_core::impl_statement` which comes from the expansion of the macro `root` (in Nightly builds, run with -Z macro-backtrace for more info)

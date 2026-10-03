@@ -1,5 +1,13 @@
 macro_rules! node {
-    ($name:literal, $fingerprint:literal, $kind:ident, $inject:expr, [$($part:expr),* $(,)?]) => {
+    (
+        $name:literal,
+        $fingerprint:literal,
+        $kind:ident,
+        $inject:expr,
+        [$($part:expr),* $(,)?]
+        $(, items = [$($item:expr),* $(,)?])?
+        $(,)?
+    ) => {
         &static_typed_queries_core::node::Node {
             name: static_typed_queries_core::node::name::Name::new($name),
             fingerprint: static_typed_queries_core::node::fingerprint::Fingerprint($fingerprint),
@@ -7,6 +15,7 @@ macro_rules! node {
             inject: $inject,
             parts: static_typed_queries_core::part::Parts(&[$($part),*]),
             before: static_typed_queries_core::node::before::Before(&[]),
+            items: static_typed_queries_core::node::items::Items(&[$($($item),*)?]),
         }
     };
 }

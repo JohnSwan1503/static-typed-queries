@@ -17,7 +17,8 @@ root!(Derived: Postgres = node!(
     2,
     Query,
     Inject::Subquery,
-    [Lit::part("SELECT * FROM "), From::part(USERS, AliasRule::NodeName, Some(Inject::Subquery))]
+    [Lit::part("SELECT * FROM "), From::part(USERS, AliasRule::NodeName, Some(Inject::Subquery))],
+    items = [USERS]
 ));
 
 fn main() {}

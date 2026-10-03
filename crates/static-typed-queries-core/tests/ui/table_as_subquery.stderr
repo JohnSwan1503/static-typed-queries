@@ -10,9 +10,9 @@ error[E0080]: evaluation panicked: table `users` can only be referenced by name
 16 | |     "derived",
 17 | |     2,
 18 | |     Query,
-19 | |     Inject::Subquery,
-20 | |     [Lit::part("SELECT * FROM "), From::part(USERS, AliasRule::NodeName, Some(Inject::Subquery))]
-21 | | ));
+...  |
+21 | |     items = [USERS]
+22 | | ));
    | |__- in this macro invocation
    |
 note: inside `measure::<Postgres>`
@@ -58,9 +58,9 @@ note: erroneous constant encountered
 16 | |     "derived",
 17 | |     2,
 18 | |     Query,
-19 | |     Inject::Subquery,
-20 | |     [Lit::part("SELECT * FROM "), From::part(USERS, AliasRule::NodeName, Some(Inject::Subquery))]
-21 | | ));
+...  |
+21 | |     items = [USERS]
+22 | | ));
    | |__- in this macro invocation
    |
    = note: this note originates in the macro `static_typed_queries_core::impl_statement` which comes from the expansion of the macro `root` (in Nightly builds, run with -Z macro-backtrace for more info)
@@ -77,9 +77,9 @@ note: erroneous constant encountered
 16 | |     "derived",
 17 | |     2,
 18 | |     Query,
-19 | |     Inject::Subquery,
-20 | |     [Lit::part("SELECT * FROM "), From::part(USERS, AliasRule::NodeName, Some(Inject::Subquery))]
-21 | | ));
+...  |
+21 | |     items = [USERS]
+22 | | ));
    | |__- in this macro invocation
    |
    = note: this note originates in the macro `static_typed_queries_core::impl_statement` which comes from the expansion of the macro `root` (in Nightly builds, run with -Z macro-backtrace for more info)
@@ -96,9 +96,9 @@ note: erroneous constant encountered
 16 | |     "derived",
 17 | |     2,
 18 | |     Query,
-19 | |     Inject::Subquery,
-20 | |     [Lit::part("SELECT * FROM "), From::part(USERS, AliasRule::NodeName, Some(Inject::Subquery))]
-21 | | ));
+...  |
+21 | |     items = [USERS]
+22 | | ));
    | |__- in this macro invocation
    |
    = note: this note originates in the macro `static_typed_queries_core::impl_statement` which comes from the expansion of the macro `root` (in Nightly builds, run with -Z macro-backtrace for more info)
@@ -115,9 +115,9 @@ note: erroneous constant encountered
 16 | |     "derived",
 17 | |     2,
 18 | |     Query,
-19 | |     Inject::Subquery,
-20 | |     [Lit::part("SELECT * FROM "), From::part(USERS, AliasRule::NodeName, Some(Inject::Subquery))]
-21 | | ));
+...  |
+21 | |     items = [USERS]
+22 | | ));
    | |__- in this macro invocation
    |
    = note: this note originates in the macro `static_typed_queries_core::impl_statement` which comes from the expansion of the macro `root` (in Nightly builds, run with -Z macro-backtrace for more info)
@@ -134,9 +134,9 @@ note: erroneous constant encountered
 16 | |     "derived",
 17 | |     2,
 18 | |     Query,
-19 | |     Inject::Subquery,
-20 | |     [Lit::part("SELECT * FROM "), From::part(USERS, AliasRule::NodeName, Some(Inject::Subquery))]
-21 | | ));
+...  |
+21 | |     items = [USERS]
+22 | | ));
    | |__- in this macro invocation
    |
    = note: this note originates in the macro `static_typed_queries_core::impl_statement` which comes from the expansion of the macro `root` (in Nightly builds, run with -Z macro-backtrace for more info)

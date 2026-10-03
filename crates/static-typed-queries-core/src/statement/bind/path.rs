@@ -29,6 +29,12 @@ impl Path {
         self.steps.split_at(self.len as usize).0
     }
 
+    pub(crate) const fn prefix(self, len: usize) -> Path {
+        let mut path = self;
+        path.len = len as u8;
+        path
+    }
+
     pub(crate) const fn child(self, step: u16) -> Option<Path> {
         if self.len as usize == MAX_DEPTH {
             return None;

@@ -8,6 +8,7 @@ use static_typed_queries_core::node::Node;
 use static_typed_queries_core::node::before::Before;
 use static_typed_queries_core::node::fingerprint::Fingerprint;
 use static_typed_queries_core::node::inject::Inject;
+use static_typed_queries_core::node::items::Items;
 use static_typed_queries_core::node::kind::Kind;
 use static_typed_queries_core::node::name::Name;
 use static_typed_queries_core::part::Parts;
@@ -50,6 +51,7 @@ impl<T: Sql> Sql for Recent<T> {
             Lit::part(" WHERE created_at > now() - interval '1 day'"),
         ]),
         before: Before(&[]),
+        items: Items(&[T::NODE]),
     };
 }
 
@@ -76,7 +78,8 @@ root!(Activity: Postgres = node!(
         Lit::part(" r USING (id) WHERE u.id IN (SELECT id FROM "),
         From::part(Recent::<Users>::NODE, AliasRule::NodeName, None),
         Lit::part(")"),
-    ]
+    ],
+    items = [Recent::<Users>::NODE, Recent::<Orders>::NODE, RECENT_2]
 ));
 
 #[test]

@@ -41,7 +41,8 @@ const RECENT_COUNT: &Node = node!(
         From::part(RECENT, AliasRule::NodeName, None),
         Lit::part(" WHERE id > "),
         Param::part(0, "min_id", "i64"),
-    ]
+    ],
+    items = [RECENT]
 );
 
 #[cfg(feature = "mysql")]

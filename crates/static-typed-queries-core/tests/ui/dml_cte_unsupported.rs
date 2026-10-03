@@ -22,7 +22,8 @@ root!(ArchiveCount: MySql = node!(
     2,
     Query,
     Inject::Subquery,
-    [Lit::part("SELECT count(*) FROM "), From::part(ARCHIVED, AliasRule::NodeName, None)]
+    [Lit::part("SELECT count(*) FROM "), From::part(ARCHIVED, AliasRule::NodeName, None)],
+    items = [ARCHIVED]
 ));
 
 fn main() {}

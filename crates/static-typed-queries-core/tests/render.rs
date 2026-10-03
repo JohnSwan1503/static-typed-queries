@@ -42,7 +42,8 @@ impl Sql for ActiveUsers {
             From::part(Users::NODE, AliasRule::NodeName, None),
             Lit::part(" WHERE deleted_at IS NULL AND org_id = "),
             Param::part(0, "org_id", "i64"),
-        ]
+        ],
+        items = [Users::NODE]
     );
 }
 
@@ -59,7 +60,8 @@ impl<T: Sql> Sql for CountOf<T> {
         [
             Lit::part("SELECT count(*) FROM "),
             From::part(T::NODE, AliasRule::NodeName, None),
-        ]
+        ],
+        items = [T::NODE]
     );
 }
 
@@ -80,7 +82,8 @@ impl Sql for UserReport {
             From::part(ActiveUsers::NODE, AliasRule::Given, None),
             Lit::part(" u WHERE u.id = "),
             Param::part(0, "id", "i64"),
-        ]
+        ],
+        items = [CountOf::<ActiveUsers>::NODE, ActiveUsers::NODE]
     );
 }
 
@@ -142,7 +145,8 @@ const TWICE: &Node = node!(
         Expr::part(BETWEEN),
         Lit::part(" LIMIT "),
         Param::part(0, "limit", "i64"),
-    ]
+    ],
+    items = [BETWEEN]
 );
 
 root!(TwicePostgres: Postgres = TWICE);
@@ -176,7 +180,8 @@ root!(Inlined: Postgres = node!(
         Lit::part(" JOIN "),
         From::part(ActiveUsers::NODE, AliasRule::Given, Some(Inject::Subquery)),
         Lit::part(" a USING (id)"),
-    ]
+    ],
+    items = [ActiveUsers::NODE]
 ));
 
 #[test]
@@ -196,7 +201,8 @@ const VIPS: &Node = node!(
         Lit::part("SELECT id FROM "),
         From::part(ActiveUsers::NODE, AliasRule::NodeName, None),
         Lit::part(" WHERE vip")
-    ]
+    ],
+    items = [ActiveUsers::NODE]
 );
 
 root!(VipCount: Postgres = node!(
@@ -210,7 +216,8 @@ root!(VipCount: Postgres = node!(
         Lit::part(" JOIN "),
         From::part(ActiveUsers::NODE, AliasRule::Given, None),
         Lit::part(" a USING (id)"),
-    ]
+    ],
+    items = [VIPS, ActiveUsers::NODE]
 ));
 
 #[test]
@@ -240,7 +247,8 @@ root!(Subtree: Postgres = node!(
     41,
     Query,
     Inject::Subquery,
-    [Lit::part("SELECT id FROM "), From::part(TREE, AliasRule::NodeName, None)]
+    [Lit::part("SELECT id FROM "), From::part(TREE, AliasRule::NodeName, None)],
+    items = [TREE]
 ));
 
 #[test]
@@ -260,7 +268,8 @@ const ARCHIVED: &Node = node!(
         Lit::part("DELETE FROM "),
         From::part(Users::NODE, AliasRule::NodeName, None),
         Lit::part(" WHERE deleted_at < now() RETURNING id"),
-    ]
+    ],
+    items = [Users::NODE]
 );
 
 root!(ArchiveCount: Postgres = node!(
@@ -268,7 +277,8 @@ root!(ArchiveCount: Postgres = node!(
     51,
     Query,
     Inject::Subquery,
-    [Lit::part("SELECT count(*) FROM "), From::part(ARCHIVED, AliasRule::NodeName, None)]
+    [Lit::part("SELECT count(*) FROM "), From::part(ARCHIVED, AliasRule::NodeName, None)],
+    items = [ARCHIVED]
 ));
 
 #[test]

@@ -1,6 +1,7 @@
 pub mod before;
 pub mod fingerprint;
 pub mod inject;
+pub mod items;
 pub mod kind;
 pub mod name;
 
@@ -20,6 +21,7 @@ pub struct Node {
     pub inject: inject::Inject,
     pub parts: parts::Parts,
     pub before: before::Before,
+    pub items: items::Items,
 }
 
 impl Node {}

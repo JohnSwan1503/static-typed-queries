@@ -31,6 +31,7 @@ struct Numbered {
 }
 
 pub(super) struct Renderer<'a, D> {
+    root: Option<&'static Node>,
     sql: &'a mut [u8],
     binds: &'a mut [Bind],
     size: Size,
@@ -45,6 +46,7 @@ pub(super) struct Renderer<'a, D> {
 impl<'a, D: Dialect> Renderer<'a, D> {
     pub(super) const fn new(sql: &'a mut [u8], binds: &'a mut [Bind]) -> Self {
         Self {
+            root: None,
             sql,
             binds,
             size: Size { sql: 0, binds: 0 },
@@ -62,6 +64,7 @@ impl<'a, D: Dialect> Renderer<'a, D> {
     }
 
     pub(super) const fn statement(&mut self, root: &'static Node) {
+        self.root = Some(root);
         if let Kind::Table = root.kind {
             fail(&["`", root.name.as_str(), "` is a table, not a statement"]);
         }
@@ -90,11 +93,11 @@ impl<'a, D: Dialect> Renderer<'a, D> {
                             "` isn't a query, so it can't be used as an expression",
                         ]);
                     }
-                    self.collect(expr.as_ref(), child_path(node, path, expr.as_ref()));
+                    self.collect(expr.as_ref(), self.child_path(path, expr.as_ref()));
                 }
                 Part::From(from) => {
                     let child = from.node();
-                    let child_path = child_path(node, path, child);
+                    let child_path = self.child_path(path, child);
                     match placement::<D>(from) {
                         Inject::Cte { recursive } => {
                             self.collect(child, child_path);
@@ -216,18 +219,18 @@ impl<'a, D: Dialect> Renderer<'a, D> {
                 Part::Param(param) => self.param(node, path, param),
                 Part::Expr(expr) => {
                     self.push("(");
-                    self.body(expr.as_ref(), child_path(node, path, expr.as_ref()));
+                    self.body(expr.as_ref(), self.child_path(path, expr.as_ref()));
                     self.push(")");
                 }
-                Part::From(from) => self.from(node, path, from),
+                Part::From(from) => self.from(path, from),
             }
             i += 1;
         }
     }
 
-    const fn from(&mut self, parent: &'static Node, path: Path, from: From) {
+    const fn from(&mut self, path: Path, from: From) {
         let child = from.node();
-        let child_path = child_path(parent, path, child);
+        let child_path = self.child_path(path, child);
         match placement::<D>(from) {
             Inject::Ident => self.body(child, child_path),
             Inject::Cte { .. } => match self.cte_suffix(child, instance_path(child, child_path)) {
@@ -290,6 +293,34 @@ impl<'a, D: Dialect> Renderer<'a, D> {
             self.binds[self.size.binds] = Bind::from_param(node, path, param);
         }
         self.size.binds += 1;
+    }
+
+    const fn child_path(&self, path: Path, child: &'static Node) -> Path {
+        let root = match self.root {
+            Some(root) => root,
+            None => panic!("rendering started without a root"),
+        };
+        let mut depth = path.steps().len();
+        loop {
+            if let Some(index) = item_index(frame(root, path, depth), child) {
+                return match path.prefix(depth).child(index) {
+                    Some(path) => path,
+                    None => fail(&["items can't be nested more than 16 deep"]),
+                };
+            }
+            if depth == 0 {
+                break;
+            }
+            depth -= 1;
+        }
+        if has_params(child) {
+            fail(&[
+                "`",
+                child.name.as_str(),
+                "` has parameters, but no query it's used in lists it among its items",
+            ]);
+        }
+        path
     }
 
     const fn number(&mut self, n: u16) {
@@ -375,50 +406,27 @@ const fn placement<D: Dialect>(from: From) -> Inject {
     inject
 }
 
-const fn child_path(parent: &'static Node, path: Path, child: &'static Node) -> Path {
-    match path.child(child_index(parent, child)) {
-        Some(path) => path,
-        None => fail(&["items can't be nested more than 16 deep"]),
+const fn frame(root: &'static Node, path: Path, depth: usize) -> &'static Node {
+    let steps = path.steps();
+    let mut node = root;
+    let mut i = 0;
+    while i < depth {
+        node = node.items.0[steps[i] as usize];
+        i += 1;
     }
+    node
 }
 
-const fn child_index(parent: &'static Node, child: &'static Node) -> u16 {
-    let parts = parent.parts.0;
-    let mut index = 0;
+const fn item_index(frame: &'static Node, child: &'static Node) -> Option<u16> {
+    let items = frame.items.0;
     let mut i = 0;
-    while i < parts.len() {
-        if let Some(node) = referenced(parts[i])
-            && first_reference(parts, i, node)
-        {
-            if same_node(node, child) {
-                return index;
-            }
-            index += 1;
+    while i < items.len() {
+        if same_node(items[i], child) {
+            return Some(i as u16);
         }
         i += 1;
     }
-    panic!("child isn't referenced by its parent")
-}
-
-const fn referenced(part: Part) -> Option<&'static Node> {
-    match part {
-        Part::Expr(expr) => Some(expr.as_ref()),
-        Part::From(from) => Some(from.node()),
-        Part::Lit(_) | Part::Ident(_) | Part::Param(_) => None,
-    }
-}
-
-const fn first_reference(parts: &[Part], index: usize, node: &'static Node) -> bool {
-    let mut i = 0;
-    while i < index {
-        if let Some(earlier) = referenced(parts[i])
-            && same_node(earlier, node)
-        {
-            return false;
-        }
-        i += 1;
-    }
-    true
+    None
 }
 
 const fn instance_path(node: &'static Node, path: Path) -> Path {

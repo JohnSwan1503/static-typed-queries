@@ -41,7 +41,8 @@ const KIND_COUNT: &Node = node!(
         From::part(ORG_EVENTS, AliasRule::NodeName, None),
         Lit::part(" WHERE kind = "),
         Param::part(0, "kind", "&'static str"),
-    ]
+    ],
+    items = [ORG_EVENTS]
 );
 
 const REPORT: &Node = node!(
@@ -59,7 +60,8 @@ const REPORT: &Node = node!(
         Lit::part(" AND id <> "),
         Param::part(0, "below", "i64"),
         Lit::part(") AS below"),
-    ]
+    ],
+    items = [KIND_COUNT, ORG_EVENTS]
 );
 
 pub struct OrgEventsParams {
@@ -146,7 +148,8 @@ const USES_SHARED: &Node = node!(
     [
         Lit::part("SELECT id FROM "),
         From::part(SHARED, AliasRule::NodeName, None),
-    ]
+    ],
+    items = [SHARED]
 );
 
 root!(SharedTwice: Postgres = node!(
@@ -159,7 +162,8 @@ root!(SharedTwice: Postgres = node!(
         From::part(SHARED, AliasRule::Given, None),
         Lit::part(" s WHERE s.id IN "),
         Expr::part(USES_SHARED),
-    ]
+    ],
+    items = [SHARED, USES_SHARED]
 ));
 
 #[test]

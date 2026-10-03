@@ -31,7 +31,8 @@ const SUBTREE_SIZE: &Node = node!(
     [
         Lit::part("SELECT count(*) FROM "),
         From::part(TREE, AliasRule::NodeName, None),
-    ]
+    ],
+    items = [TREE]
 );
 
 root!(Both: Postgres = node!(
@@ -44,7 +45,8 @@ root!(Both: Postgres = node!(
         Expr::part(SUBTREE_SIZE),
         Lit::part(", id FROM "),
         From::part(TREE, AliasRule::NodeName, None),
-    ]
+    ],
+    items = [SUBTREE_SIZE, TREE]
 ));
 
 fn main() {}

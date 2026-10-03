@@ -4,15 +4,15 @@ error[E0080]: evaluation panicked: `tenant_orders` depends on `before` statement
    |           static_typed_queries_core::impl_statement!($ty);
    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ evaluation of `<TenantOrders as static_typed_queries_core::render::Measure>::SIZE` failed inside this call
    |
-  ::: tests/ui/before_needs_transaction.rs:40:1
+  ::: tests/ui/before_needs_transaction.rs:42:1
    |
-40 | / root!(TenantOrders: Postgres = node!(
-41 | |     "tenant_orders",
-42 | |     3,
-43 | |     Query,
-44 | |     Inject::Subquery,
-45 | |     [Lit::part("SELECT * FROM "), From::part(ORDERS, AliasRule::NodeName, None)]
-46 | | ));
+42 | / root!(TenantOrders: Postgres = node!(
+43 | |     "tenant_orders",
+44 | |     3,
+45 | |     Query,
+...  |
+48 | |     items = [ORDERS]
+49 | | ));
    | |__- in this macro invocation
    |
 note: inside `measure::<Postgres>`
@@ -46,15 +46,15 @@ note: erroneous constant encountered
    |           static_typed_queries_core::impl_statement!($ty);
    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    |
-  ::: tests/ui/before_needs_transaction.rs:40:1
+  ::: tests/ui/before_needs_transaction.rs:42:1
    |
-40 | / root!(TenantOrders: Postgres = node!(
-41 | |     "tenant_orders",
-42 | |     3,
-43 | |     Query,
-44 | |     Inject::Subquery,
-45 | |     [Lit::part("SELECT * FROM "), From::part(ORDERS, AliasRule::NodeName, None)]
-46 | | ));
+42 | / root!(TenantOrders: Postgres = node!(
+43 | |     "tenant_orders",
+44 | |     3,
+45 | |     Query,
+...  |
+48 | |     items = [ORDERS]
+49 | | ));
    | |__- in this macro invocation
    |
    = note: this note originates in the macro `static_typed_queries_core::impl_statement` which comes from the expansion of the macro `root` (in Nightly builds, run with -Z macro-backtrace for more info)
@@ -65,15 +65,15 @@ note: erroneous constant encountered
    |           static_typed_queries_core::impl_statement!($ty);
    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    |
-  ::: tests/ui/before_needs_transaction.rs:40:1
+  ::: tests/ui/before_needs_transaction.rs:42:1
    |
-40 | / root!(TenantOrders: Postgres = node!(
-41 | |     "tenant_orders",
-42 | |     3,
-43 | |     Query,
-44 | |     Inject::Subquery,
-45 | |     [Lit::part("SELECT * FROM "), From::part(ORDERS, AliasRule::NodeName, None)]
-46 | | ));
+42 | / root!(TenantOrders: Postgres = node!(
+43 | |     "tenant_orders",
+44 | |     3,
+45 | |     Query,
+...  |
+48 | |     items = [ORDERS]
+49 | | ));
    | |__- in this macro invocation
    |
    = note: this note originates in the macro `static_typed_queries_core::impl_statement` which comes from the expansion of the macro `root` (in Nightly builds, run with -Z macro-backtrace for more info)
@@ -84,15 +84,15 @@ note: erroneous constant encountered
    |           static_typed_queries_core::impl_statement!($ty);
    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    |
-  ::: tests/ui/before_needs_transaction.rs:40:1
+  ::: tests/ui/before_needs_transaction.rs:42:1
    |
-40 | / root!(TenantOrders: Postgres = node!(
-41 | |     "tenant_orders",
-42 | |     3,
-43 | |     Query,
-44 | |     Inject::Subquery,
-45 | |     [Lit::part("SELECT * FROM "), From::part(ORDERS, AliasRule::NodeName, None)]
-46 | | ));
+42 | / root!(TenantOrders: Postgres = node!(
+43 | |     "tenant_orders",
+44 | |     3,
+45 | |     Query,
+...  |
+48 | |     items = [ORDERS]
+49 | | ));
    | |__- in this macro invocation
    |
    = note: this note originates in the macro `static_typed_queries_core::impl_statement` which comes from the expansion of the macro `root` (in Nightly builds, run with -Z macro-backtrace for more info)
@@ -103,15 +103,15 @@ note: erroneous constant encountered
    |           static_typed_queries_core::impl_statement!($ty);
    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    |
-  ::: tests/ui/before_needs_transaction.rs:40:1
+  ::: tests/ui/before_needs_transaction.rs:42:1
    |
-40 | / root!(TenantOrders: Postgres = node!(
-41 | |     "tenant_orders",
-42 | |     3,
-43 | |     Query,
-44 | |     Inject::Subquery,
-45 | |     [Lit::part("SELECT * FROM "), From::part(ORDERS, AliasRule::NodeName, None)]
-46 | | ));
+42 | / root!(TenantOrders: Postgres = node!(
+43 | |     "tenant_orders",
+44 | |     3,
+45 | |     Query,
+...  |
+48 | |     items = [ORDERS]
+49 | | ));
    | |__- in this macro invocation
    |
    = note: this note originates in the macro `static_typed_queries_core::impl_statement` which comes from the expansion of the macro `root` (in Nightly builds, run with -Z macro-backtrace for more info)
@@ -122,15 +122,15 @@ note: erroneous constant encountered
    |           static_typed_queries_core::impl_statement!($ty);
    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    |
-  ::: tests/ui/before_needs_transaction.rs:40:1
+  ::: tests/ui/before_needs_transaction.rs:42:1
    |
-40 | / root!(TenantOrders: Postgres = node!(
-41 | |     "tenant_orders",
-42 | |     3,
-43 | |     Query,
-44 | |     Inject::Subquery,
-45 | |     [Lit::part("SELECT * FROM "), From::part(ORDERS, AliasRule::NodeName, None)]
-46 | | ));
+42 | / root!(TenantOrders: Postgres = node!(
+43 | |     "tenant_orders",
+44 | |     3,
+45 | |     Query,
+...  |
+48 | |     items = [ORDERS]
+49 | | ));
    | |__- in this macro invocation
    |
    = note: this note originates in the macro `static_typed_queries_core::impl_statement` which comes from the expansion of the macro `root` (in Nightly builds, run with -Z macro-backtrace for more info)

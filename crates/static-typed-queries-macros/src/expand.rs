@@ -58,6 +58,7 @@ pub(crate) fn table(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
         quote!(Table),
         quote!(#krate::node::inject::Inject::Ident),
         parts,
+        &[],
     );
     let fmt = fmt(&args, &item, false)?;
 
@@ -120,6 +121,7 @@ pub(crate) fn query(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
         kind,
         inject,
         parts(&template, &analysis, &params),
+        &template.children,
     );
 
     let dialect = &args.dialect;
@@ -181,6 +183,7 @@ fn node(
     kind: TokenStream,
     inject: TokenStream,
     parts: Vec<TokenStream>,
+    items: &[Type],
 ) -> TokenStream {
     let krate = krate();
     quote! {
@@ -191,6 +194,7 @@ fn node(
             inject: #inject,
             parts: #krate::part::Parts(&[#(#parts),*]),
             before: #krate::node::before::Before(&[]),
+            items: #krate::node::items::Items(&[#(<#items as #krate::sql::Sql>::NODE),*]),
         }
     }
 }

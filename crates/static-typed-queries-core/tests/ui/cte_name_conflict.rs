@@ -34,7 +34,8 @@ root!(Both: Postgres = node!(
         From::part(FIRST, AliasRule::NodeName, None),
         Lit::part(", "),
         From::part(SECOND, AliasRule::NodeName, None),
-    ]
+    ],
+    items = [FIRST, SECOND]
 ));
 
 fn main() {}
