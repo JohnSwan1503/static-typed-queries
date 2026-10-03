@@ -7,7 +7,7 @@ use crate::args::{Args, Placement};
 use crate::naming::{camel, field_name, snake_case, to_ident, unique};
 use crate::template::{self, Segment, Template};
 
-const RESERVED: &[&str] = &["build", "builder", "finish"];
+const RESERVED: &[&str] = &["build", "builder", "finish", "query"];
 
 fn krate() -> TokenStream {
     quote!(::static_typed_queries)
@@ -117,7 +117,7 @@ pub(crate) fn query(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
     let params_ty = params.ty();
     let params_struct = params.definition();
     let bind_params = params.bind_impl();
-    let builder = params.builder();
+    let builder = params.builder(dialect);
     let statement = item.generics.params.is_empty().then(|| {
         quote! {
             #krate::impl_statement!(#ident);
@@ -488,7 +488,7 @@ impl<'a> Params<'a> {
             .collect()
     }
 
-    fn builder(&self) -> TokenStream {
+    fn builder(&self, dialect: &Type) -> TokenStream {
         let krate = krate();
         let ident = &self.item.ident;
         let (impl_generics, ty_generics, where_clause) = self.item.generics.split_for_impl();
@@ -658,6 +658,27 @@ impl<'a> Params<'a> {
                 }
             }
         });
+        if self.item.generics.params.is_empty() {
+            out.extend(quote! {
+                #krate::__if_sqlx! {
+                    impl #impl_generics #any #where_clause {
+                        pub fn query<'q>(
+                            self,
+                        ) -> ::core::result::Result<
+                            #krate::dialect::driver::Query<'q, #dialect>,
+                            #krate::__private::sqlx::Error,
+                        >
+                        where
+                            Self: #krate::builder::Finish<#params_ty>,
+                        {
+                            <#ident as #krate::statement::Statement>::query(
+                                &#krate::builder::Finish::finish(self),
+                            )
+                        }
+                    }
+                }
+            });
+        }
 
         let initial: Vec<TokenStream> = self
             .groups

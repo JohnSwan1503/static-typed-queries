@@ -1,6 +1,8 @@
 use std::marker::PhantomData;
 
+use sqlx::{Connection, Row, SqliteConnection};
 use static_typed_queries::dialect::postgres::Postgres;
+use static_typed_queries::dialect::sqlite::Sqlite;
 use static_typed_queries::prelude::*;
 
 #[table(Postgres, name = "orders")]
@@ -172,4 +174,35 @@ fn comma_joins_and_dollar_strings() {
         Dollars::SQL,
         "SELECT $${not a placeholder}$$ AS a, $tag$ {neither} $tag$ AS b"
     );
+}
+
+#[table(Sqlite, name = "events")]
+pub struct Events;
+
+#[query(
+    Sqlite,
+    sql = "
+    SELECT count(*) AS n FROM {Events}
+    WHERE kind = {_: String} AND at BETWEEN {_: i64} AND {_: i64}"
+)]
+pub struct CountEvents;
+
+#[tokio::test]
+async fn builder_queries_run_against_sqlite() -> sqlx::Result<()> {
+    let mut conn = SqliteConnection::connect("sqlite::memory:").await?;
+    sqlx::raw_sql(
+        "CREATE TABLE events (kind TEXT, at INTEGER);
+         INSERT INTO events VALUES ('a', 1), ('a', 5), ('b', 5), ('a', 9);",
+    )
+    .execute(&mut conn)
+    .await?;
+    let row = CountEvents::builder()
+        .kind("a".to_owned())
+        .at(2)
+        .at(9)
+        .query()?
+        .fetch_one(&mut conn)
+        .await?;
+    assert_eq!(row.get::<i64, _>("n"), 2);
+    Ok(())
 }
