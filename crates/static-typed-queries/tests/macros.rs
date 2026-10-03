@@ -100,3 +100,21 @@ fn queries_inside_functions_can_skip_the_parse_check() {
     assert_eq!(Local::SQL, r#"SELECT id FROM "users" WHERE id = $1"#);
     assert_eq!(Local::builder().id(7).build().id, 7);
 }
+
+#[query(Postgres, sql = "SELECT id FROM {Users} WHERE score > {score: f64}")]
+pub struct AboveScore;
+
+#[test]
+fn params_derive_what_their_fields_allow() {
+    let built = Members::builder().org_id(7).build();
+    let copy = built.clone();
+    assert_eq!(built, copy);
+    assert_eq!(
+        format!("{copy:?}"),
+        "MembersParams { org_id: 7, users: () }"
+    );
+    assert_ne!(built, Members::builder().org_id(8).build());
+
+    let score = AboveScore::builder().score(0.5).build();
+    assert_eq!(score.clone(), score);
+}

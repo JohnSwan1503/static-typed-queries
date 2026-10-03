@@ -145,6 +145,7 @@ pub(crate) fn query(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
     let (impl_generics, ty_generics, where_clause) = item.generics.split_for_impl();
     let params_ty = params.ty();
     let params_struct = params.definition();
+    let derives = params.derives();
     let bind_params = params.bind_impl();
     let builder = params.builder(dialect);
     let parse_check = args.parse_check.as_ref().is_none_or(|check| check.value);
@@ -180,6 +181,7 @@ pub(crate) fn query(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
         #documented
 
         #params_struct
+        #derives
 
         impl #impl_generics #krate::sql::Sql for #ident #ty_generics #where_clause {
             type Dialect = #dialect;
@@ -335,12 +337,14 @@ fn wrapper(
     );
     let params_ty = params.ty();
     let params_struct = params.definition();
+    let derives = params.derives();
     let bind_params = params.bind_impl();
     let builder = params.builder(dialect);
     Ok(quote! {
         #item
 
         #params_struct
+        #derives
 
         impl #krate::sql::Sql for #ident {
             type Dialect = #dialect;
@@ -740,6 +744,87 @@ impl<'a> Params<'a> {
                 #(#children,)*
             }
         })
+    }
+
+    fn derives(&self) -> Option<TokenStream> {
+        if self.is_empty() {
+            return None;
+        }
+        let ident = &self.ident;
+        let name = ident.to_string();
+        let krate = krate();
+        let fields: Vec<(&Ident, TokenStream)> = self
+            .groups
+            .iter()
+            .map(|group| {
+                let ty = &group.ty;
+                let ty = match group.slots.len() {
+                    1 => quote!(#ty),
+                    len => {
+                        let len = Literal::usize_unsuffixed(len);
+                        quote!([#ty; #len])
+                    }
+                };
+                (&group.name, ty)
+            })
+            .chain(self.children.iter().map(|child| {
+                let ty = &child.ty;
+                (&child.name, quote!(<#ty as #krate::sql::Sql>::Params))
+            }))
+            .collect();
+        let names: Vec<&Ident> = fields.iter().map(|(name, _)| *name).collect();
+        let labels: Vec<String> = names
+            .iter()
+            .map(|name| name.to_string().trim_start_matches("r#").to_owned())
+            .collect();
+        let bounded = |bound: TokenStream| {
+            let mut generics = self.item.generics.clone();
+            let where_clause = generics.make_where_clause();
+            for (_, ty) in &fields {
+                where_clause
+                    .predicates
+                    .push(parse_quote!(for<'__a> #ty: #bound));
+            }
+            generics
+        };
+        let (_, ty_generics, _) = self.item.generics.split_for_impl();
+        let generics = bounded(quote!(::core::clone::Clone));
+        let (impl_generics, _, where_clause) = generics.split_for_impl();
+        let mut out = quote! {
+            impl #impl_generics ::core::clone::Clone for #ident #ty_generics #where_clause {
+                fn clone(&self) -> Self {
+                    Self {
+                        #(#names: ::core::clone::Clone::clone(&self.#names),)*
+                    }
+                }
+            }
+        };
+        let generics = bounded(quote!(::core::fmt::Debug));
+        let (impl_generics, _, where_clause) = generics.split_for_impl();
+        out.extend(quote! {
+            impl #impl_generics ::core::fmt::Debug for #ident #ty_generics #where_clause {
+                fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+                    f.debug_struct(#name)
+                        #(.field(#labels, &self.#names))*
+                        .finish()
+                }
+            }
+        });
+        let generics = bounded(quote!(::core::cmp::PartialEq));
+        let (impl_generics, _, where_clause) = generics.split_for_impl();
+        out.extend(quote! {
+            impl #impl_generics ::core::cmp::PartialEq for #ident #ty_generics #where_clause {
+                fn eq(&self, other: &Self) -> bool {
+                    true #(&& self.#names == other.#names)*
+                }
+            }
+        });
+        let generics = bounded(quote!(::core::cmp::Eq));
+        let (impl_generics, _, where_clause) = generics.split_for_impl();
+        out.extend(quote! {
+            impl #impl_generics ::core::cmp::Eq for #ident #ty_generics #where_clause {}
+        });
+        Some(out)
     }
 
     fn bind_impl(&self) -> Option<TokenStream> {
