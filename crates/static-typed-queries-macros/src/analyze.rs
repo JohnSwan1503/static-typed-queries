@@ -1,9 +1,17 @@
-use sqlparser::ast::Statement;
+use std::fmt::Write as _;
+use std::ops::ControlFlow;
+
+use sqlparser::ast::{
+    Expr, ObjectName, ObjectNamePart, Query, SelectItem, SetExpr, Statement, TableFactor, Visit,
+    Visitor,
+};
 use sqlparser::dialect::{Dialect, GenericDialect, MySqlDialect, PostgreSqlDialect, SQLiteDialect};
 use sqlparser::parser::Parser;
 use syn::{LitStr, Type};
 
 use crate::template::{Segment, Template};
+
+const REF: &str = "__stq_r";
 
 pub(crate) enum Kind {
     Query,
@@ -11,8 +19,15 @@ pub(crate) enum Kind {
     Ddl,
 }
 
+#[derive(Clone, Copy)]
+pub(crate) struct Position {
+    pub from: bool,
+    pub given_alias: bool,
+}
+
 pub(crate) struct Analysis {
     pub kind: Kind,
+    pub refs: Vec<Position>,
 }
 
 #[derive(Clone, Copy)]
@@ -70,9 +85,24 @@ pub(crate) fn analyze(template: &Template, engine: Engine, sql: &LitStr) -> syn:
     }
 
     let mut text = String::new();
+    let mut refs = Vec::new();
     for segment in &template.segments {
         match segment {
             Segment::Lit(lit) => text.push_str(lit),
+            Segment::Ref(item) if item.target => {
+                write!(text, "{REF}{}", refs.len()).unwrap();
+                refs.push(Position {
+                    from: true,
+                    given_alias: false,
+                });
+            }
+            Segment::Ref(_) => {
+                write!(text, "(SELECT {REF}{})", refs.len()).unwrap();
+                refs.push(Position {
+                    from: false,
+                    given_alias: false,
+                });
+            }
         }
     }
 
@@ -97,5 +127,59 @@ pub(crate) fn analyze(template: &Template, engine: Engine, sql: &LitStr) -> syn:
         _ => Kind::Ddl,
     };
 
-    Ok(Analysis { kind })
+    let mut analyzer = Analyzer { refs };
+    let _ = statement.visit(&mut analyzer);
+    Ok(Analysis {
+        kind,
+        refs: analyzer.refs,
+    })
+}
+
+struct Analyzer {
+    refs: Vec<Position>,
+}
+
+impl Analyzer {
+    fn place(&mut self, index: Option<usize>, given_alias: bool) {
+        if let Some(position) = index.and_then(|index| self.refs.get_mut(index)) {
+            *position = Position {
+                from: true,
+                given_alias,
+            };
+        }
+    }
+}
+
+impl Visitor for Analyzer {
+    type Break = ();
+
+    fn pre_visit_table_factor(&mut self, factor: &TableFactor) -> ControlFlow<()> {
+        match factor {
+            TableFactor::Derived {
+                subquery, alias, ..
+            } => self.place(ref_marker(subquery), alias.is_some()),
+            TableFactor::Table { name, alias, .. } => self.place(ref_name(name), alias.is_some()),
+            _ => {}
+        }
+        ControlFlow::Continue(())
+    }
+}
+
+fn ref_marker(query: &Query) -> Option<usize> {
+    let SetExpr::Select(select) = &*query.body else {
+        return None;
+    };
+    match select.projection.as_slice() {
+        [SelectItem::UnnamedExpr(Expr::Identifier(ident))] => {
+            ident.value.strip_prefix(REF)?.parse().ok()
+        }
+        _ => None,
+    }
+}
+
+fn ref_name(name: &ObjectName) -> Option<usize> {
+    match name.0.as_slice() {
+        [ObjectNamePart::Identifier(ident)] => ident.value.strip_prefix(REF)?.parse().ok(),
+        _ => None,
+    }
 }

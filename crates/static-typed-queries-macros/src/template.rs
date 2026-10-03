@@ -1,23 +1,54 @@
-use syn::LitStr;
+use syn::{LitStr, Type};
 
 pub(crate) enum Segment {
     Lit(String),
+    Ref(Box<Ref>),
+}
+
+pub(crate) struct Ref {
+    pub ty: Type,
+    pub target: bool,
 }
 
 pub(crate) struct Template {
     pub segments: Vec<Segment>,
 }
 
-pub(crate) fn parse(sql: &LitStr) -> syn::Result<Template> {
-    let error = |message: String| syn::Error::new(sql.span(), message);
-    let text = scan(&sql.value()).map_err(error)?;
-    Ok(Template {
-        segments: vec![Segment::Lit(text)],
-    })
+enum Raw {
+    Lit(String),
+    Ref(Type),
 }
 
-fn scan(text: &str) -> Result<String, String> {
+pub(crate) fn parse(sql: &LitStr) -> syn::Result<Template> {
+    let error = |message: String| syn::Error::new(sql.span(), message);
+    let raw = scan(&sql.value()).map_err(error)?;
+
+    let mut segments = Vec::new();
+    for (i, item) in raw.iter().enumerate() {
+        match item {
+            Raw::Lit(text) => segments.push(Segment::Lit(text.clone())),
+            Raw::Ref(ty) => {
+                let previous = match i.checked_sub(1).map(|j| &raw[j]) {
+                    Some(Raw::Lit(text)) => last_words(text),
+                    _ => Vec::new(),
+                };
+                let target = matches!(
+                    previous.as_slice(),
+                    [.., "INTO" | "UPDATE" | "TABLE" | "TRUNCATE"] | [.., "DELETE", "FROM"]
+                );
+                segments.push(Segment::Ref(Box::new(Ref {
+                    ty: ty.clone(),
+                    target,
+                })));
+            }
+        }
+    }
+    Ok(Template { segments })
+}
+
+fn scan(text: &str) -> Result<Vec<Raw>, String> {
     let chars: Vec<char> = text.chars().collect();
+    let mut raw = Vec::new();
     let mut lit = String::new();
     let mut i = 0;
     while i < chars.len() {
@@ -52,7 +83,7 @@ fn scan(text: &str) -> Result<String, String> {
                     .unwrap_or(chars.len());
             }
             (c, _) if c.is_whitespace() => {
-                if !lit.is_empty() && !lit.ends_with(' ') {
+                if !(lit.is_empty() && raw.is_empty()) && !lit.ends_with(' ') {
                     lit.push(' ');
                 }
                 i += 1;
@@ -64,6 +95,26 @@ fn scan(text: &str) -> Result<String, String> {
                 lit.extend(&chars[i..=end]);
                 i = end + 1;
             }
+            ('{', Some('{')) | ('}', Some('}')) => {
+                lit.push(c);
+                i += 2;
+            }
+            ('{', _) => {
+                let end = (i + 1..chars.len())
+                    .find(|&j| chars[j] == '}')
+                    .ok_or("unclosed `{` in the SQL template; write `{{` for a literal brace")?;
+                let content: String = chars[i + 1..end].iter().collect();
+                if !lit.is_empty() {
+                    raw.push(Raw::Lit(std::mem::take(&mut lit)));
+                }
+                raw.push(placeholder(content.trim())?);
+                i = end + 1;
+            }
+            ('}', _) => {
+                return Err(
+                    "unmatched `}` in the SQL template; write `}}` for a literal brace".into(),
+                );
+            }
             _ => {
                 lit.push(c);
                 i += 1;
@@ -71,7 +122,10 @@ fn scan(text: &str) -> Result<String, String> {
         }
     }
     lit.truncate(lit.trim_end().len());
-    Ok(lit)
+    if !lit.is_empty() {
+        raw.push(Raw::Lit(lit));
+    }
+    Ok(raw)
 }
 
 fn dollar_tag(chars: &[char], start: usize) -> Option<Vec<char>> {
@@ -87,4 +141,36 @@ fn dollar_tag(chars: &[char], start: usize) -> Option<Vec<char>> {
         end += 1;
     }
     None
+}
+
+fn placeholder(content: &str) -> Result<Raw, String> {
+    let ty = syn::parse_str::<Type>(content)
+        .map_err(|_| format!("can't read placeholder `{{{content}}}`; expected `{{Item}}`"))?;
+    Ok(Raw::Ref(ty))
+}
+
+fn last_words(text: &str) -> Vec<&'static str> {
+    let words: Vec<String> = text
+        .split(|c: char| !(c.is_alphanumeric() || c == '_'))
+        .filter(|word| !word.is_empty())
+        .map(str::to_uppercase)
+        .collect();
+    let trailing = text
+        .trim_end()
+        .ends_with(|c: char| c.is_alphanumeric() || c == '_');
+    if !trailing {
+        return Vec::new();
+    }
+    words[words.len().saturating_sub(2)..]
+        .iter()
+        .map(|word| match word.as_str() {
+            "INTO" => "INTO",
+            "UPDATE" => "UPDATE",
+            "TABLE" => "TABLE",
+            "TRUNCATE" => "TRUNCATE",
+            "DELETE" => "DELETE",
+            "FROM" => "FROM",
+            _ => "",
+        })
+        .collect()
 }

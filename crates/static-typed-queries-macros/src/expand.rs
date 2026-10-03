@@ -2,7 +2,7 @@ use proc_macro2::{Span, TokenStream};
 use quote::quote;
 use syn::{GenericParam, Ident, ItemStruct, LitStr};
 
-use crate::analyze::{self, Engine, Kind};
+use crate::analyze::{self, Analysis, Engine, Kind};
 use crate::args::Args;
 use crate::naming::snake_case;
 use crate::template::{self, Segment, Template};
@@ -91,7 +91,7 @@ pub(crate) fn query(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
         fingerprint(ident, &item),
         kind,
         quote!(#krate::node::inject::Inject::Subquery),
-        parts(&template),
+        parts(&template, &analysis),
     );
 
     let dialect = &args.dialect;
@@ -154,13 +154,34 @@ fn fingerprint(ident: &Ident, item: &ItemStruct) -> TokenStream {
     fingerprint
 }
 
-fn parts(template: &Template) -> Vec<TokenStream> {
+fn parts(template: &Template, analysis: &Analysis) -> Vec<TokenStream> {
     let krate = krate();
+    let mut positions = analysis.refs.iter();
     template
         .segments
         .iter()
         .map(|segment| match segment {
             Segment::Lit(text) => quote!(#krate::part::lit::Lit::part(#text)),
+            Segment::Ref(item) => {
+                let position = positions.next().expect("a position for every reference");
+                let ty = &item.ty;
+                let node = quote!(<#ty as #krate::sql::Sql>::NODE);
+                if !position.from {
+                    return quote!(#krate::part::expr::Expr::part(#node));
+                }
+                let rule = if position.given_alias {
+                    quote!(Given)
+                } else {
+                    quote!(NodeName)
+                };
+                quote! {
+                    #krate::part::from::From::part(
+                        #node,
+                        #krate::part::from::rule::AliasRule::#rule,
+                        ::core::option::Option::None,
+                    )
+                }
+            }
         })
         .collect()
 }
