@@ -52,6 +52,7 @@ pub(crate) fn table(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
         quote!(#krate::node::inject::Inject::Ident),
         parts,
     );
+    let fmt = fmt(&args, &item, false)?;
 
     Ok(quote! {
         #item
@@ -69,6 +70,8 @@ pub(crate) fn table(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
                 #krate::builder::NoParams
             }
         }
+
+        #fmt
     })
 }
 
@@ -127,6 +130,7 @@ pub(crate) fn query(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
             }
         }
     });
+    let fmt = fmt(&args, &item, true)?;
 
     Ok(quote! {
         #item
@@ -142,6 +146,7 @@ pub(crate) fn query(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
         #bind_params
         #builder
         #statement
+        #fmt
     })
 }
 
@@ -736,4 +741,36 @@ fn builder_field(name: &Ident) -> Ident {
 
 fn type_key(ty: &Type) -> String {
     ty.to_token_stream().to_string()
+}
+
+fn fmt(args: &Args, item: &ItemStruct, statement: bool) -> syn::Result<TokenStream> {
+    let krate = krate();
+    let ident = &item.ident;
+    let mut out = TokenStream::new();
+    for (option, allowed, macro_name) in [
+        (&args.display, ["sql", "name"], quote!(impl_display)),
+        (&args.debug, ["sql", "tree"], quote!(impl_debug)),
+    ] {
+        let Some(value) = option else { continue };
+        if !allowed.iter().any(|allowed| value == allowed) {
+            return Err(syn::Error::new(
+                value.span(),
+                format!("expected `{}` or `{}`", allowed[0], allowed[1]),
+            ));
+        }
+        if !item.generics.params.is_empty() {
+            return Err(syn::Error::new(
+                value.span(),
+                "generic items can't take `display`/`debug`; use the core macros on an instantiation",
+            ));
+        }
+        if value == "sql" && !statement {
+            return Err(syn::Error::new(
+                value.span(),
+                "tables have no SQL of their own",
+            ));
+        }
+        out.extend(quote!(#krate::#macro_name!(#ident => #value);));
+    }
+    Ok(out)
 }

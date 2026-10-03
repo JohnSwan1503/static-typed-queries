@@ -39,6 +39,8 @@ pub(crate) struct Args {
     pub sql: Option<LitStr>,
     pub name: Option<LitStr>,
     pub placement: Option<Placement>,
+    pub display: Option<Ident>,
+    pub debug: Option<Ident>,
     to_add: ToAdd,
 }
 
@@ -50,6 +52,8 @@ impl ToAdd {
             "cte" | "subquery" => &[0, 1],
             "sql" => &[2],
             "name" => &[3],
+            "display" => &[4],
+            "debug" => &[5],
             _ => return,
         };
         for &idx in slots {
@@ -63,8 +67,15 @@ impl ToAdd {
 impl Default for ToAdd {
     fn default() -> Self {
         ToAdd(
-            vec![Some("cte"), Some("subquery"), Some("sql"), Some("name")],
-            4,
+            vec![
+                Some("cte"),
+                Some("subquery"),
+                Some("sql"),
+                Some("name"),
+                Some("display"),
+                Some("debug"),
+            ],
+            6,
         )
     }
 }
@@ -106,6 +117,8 @@ impl Parse for Args {
             sql: None,
             name: None,
             placement: None,
+            display: None,
+            debug: None,
             to_add: ToAdd::default(),
         };
         while !input.is_empty() {
@@ -131,6 +144,20 @@ impl Parse for Args {
                 )?,
                 key_str @ "name" => set(
                     &mut args.name,
+                    value(input)?,
+                    &key,
+                    &mut args.to_add,
+                    key_str,
+                )?,
+                key_str @ "display" => set(
+                    &mut args.display,
+                    value(input)?,
+                    &key,
+                    &mut args.to_add,
+                    key_str,
+                )?,
+                key_str @ "debug" => set(
+                    &mut args.debug,
                     value(input)?,
                     &key,
                     &mut args.to_add,

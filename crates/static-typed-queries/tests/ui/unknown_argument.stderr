@@ -1,0 +1,13 @@
+error: expected one of `cte`, `subquery`, `sql`, `name`, `display` or `debug`
+ --> tests/ui/unknown_argument.rs:4:19
+  |
+4 | #[query(Postgres, sqll = "SELECT 1")]
+  |                   ^^^^
+
+warning: unused import: `static_typed_queries::dialect::postgres::Postgres`
+ --> tests/ui/unknown_argument.rs:1:5
+  |
+1 | use static_typed_queries::dialect::postgres::Postgres;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
