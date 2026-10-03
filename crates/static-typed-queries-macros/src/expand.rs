@@ -1,10 +1,10 @@
 use proc_macro2::{Literal, Span, TokenStream};
-use quote::{format_ident, quote};
+use quote::{ToTokens, format_ident, quote};
 use syn::{GenericParam, Ident, ItemStruct, LitStr, Type, parse_quote};
 
 use crate::analyze::{self, Analysis, Engine, Kind};
 use crate::args::{Args, Placement};
-use crate::naming::{field_name, snake_case, unique};
+use crate::naming::{field_name, snake_case, to_ident, unique};
 use crate::template::{self, Segment, Template};
 
 fn krate() -> TokenStream {
@@ -103,7 +103,7 @@ pub(crate) fn query(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
 
     let dialect = &args.dialect;
     let (impl_generics, ty_generics, where_clause) = item.generics.split_for_impl();
-    let params = Params::new(&template, &item);
+    let params = Params::new(&template, &analysis, &item, sql)?;
     let params_ty = params.ty();
     let params_struct = params.definition();
     let bind_params = params.bind_impl();
@@ -219,9 +219,10 @@ fn parts(template: &Template, analysis: &Analysis) -> Vec<TokenStream> {
         .collect()
 }
 
-struct Field {
+struct Group {
     name: Ident,
     ty: Type,
+    slots: Vec<u16>,
 }
 
 struct Child {
@@ -232,26 +233,47 @@ struct Child {
 struct Params<'a> {
     item: &'a ItemStruct,
     ident: Ident,
-    fields: Vec<Field>,
+    groups: Vec<Group>,
     children: Vec<Child>,
 }
 
 impl<'a> Params<'a> {
-    fn new(template: &Template, item: &'a ItemStruct) -> Params<'a> {
-        let fields: Vec<Field> = template
-            .params
-            .iter()
-            .enumerate()
-            .map(|(slot, param)| Field {
-                name: param
-                    .name
-                    .clone()
-                    .unwrap_or_else(|| format_ident!("bind{}", slot + 1)),
-                ty: param.ty.clone(),
-            })
-            .collect();
+    fn new(
+        template: &Template,
+        analysis: &Analysis,
+        item: &'a ItemStruct,
+        sql: &LitStr,
+    ) -> syn::Result<Params<'a>> {
+        let mut groups: Vec<Group> = Vec::new();
+        for (slot, param) in template.params.iter().enumerate() {
+            let name = match (&param.name, &analysis.names[slot]) {
+                (Some(name), _) => name.clone(),
+                (None, Some(inferred)) => to_ident(inferred),
+                (None, None) => format_ident!("bind{}", slot + 1),
+            };
+            match groups.iter_mut().find(|group| group.name == name) {
+                Some(group) => {
+                    if type_key(&group.ty) != type_key(&param.ty) {
+                        return Err(syn::Error::new(
+                            sql.span(),
+                            format!(
+                                "parameters named `{name}` have different types (`{}` and `{}`); name them with `{{name: Type}}`",
+                                type_key(&group.ty),
+                                type_key(&param.ty)
+                            ),
+                        ));
+                    }
+                    group.slots.push(slot as u16);
+                }
+                None => groups.push(Group {
+                    name,
+                    ty: param.ty.clone(),
+                    slots: vec![slot as u16],
+                }),
+            }
+        }
 
-        let mut taken: Vec<String> = fields.iter().map(|field| field.name.to_string()).collect();
+        let mut taken: Vec<String> = groups.iter().map(|group| group.name.to_string()).collect();
         let children = template
             .children
             .iter()
@@ -264,16 +286,16 @@ impl<'a> Params<'a> {
                 }
             })
             .collect();
-        Params {
+        Ok(Params {
             item,
             ident: format_ident!("{}Params", item.ident),
-            fields,
+            groups,
             children,
-        }
+        })
     }
 
     fn is_empty(&self) -> bool {
-        self.fields.is_empty() && self.children.is_empty()
+        self.groups.is_empty() && self.children.is_empty()
     }
 
     fn item_args(&self) -> Vec<&Ident> {
@@ -306,9 +328,15 @@ impl<'a> Params<'a> {
         let ident = &self.ident;
         let generics = &self.item.generics;
         let where_clause = &generics.where_clause;
-        let fields = self.fields.iter().map(|field| {
-            let (name, ty) = (&field.name, &field.ty);
-            quote!(pub #name: #ty)
+        let groups = self.groups.iter().map(|group| {
+            let (name, ty) = (&group.name, &group.ty);
+            match group.slots.len() {
+                1 => quote!(pub #name: #ty),
+                len => {
+                    let len = Literal::usize_unsuffixed(len);
+                    quote!(pub #name: [#ty; #len])
+                }
+            }
         });
         let children = self.children.iter().map(|child| {
             let (name, ty) = (&child.name, &child.ty);
@@ -316,7 +344,7 @@ impl<'a> Params<'a> {
         });
         Some(quote! {
             #vis struct #ident #generics #where_clause {
-                #(#fields,)*
+                #(#groups,)*
                 #(#children,)*
             }
         })
@@ -335,8 +363,8 @@ impl<'a> Params<'a> {
             .params
             .insert(0, GenericParam::Type(parse_quote!(__DB: #sqlx::Database)));
         let where_clause = generics.make_where_clause();
-        for field in &self.fields {
-            let ty = &field.ty;
+        for group in &self.groups {
+            let ty = &group.ty;
             where_clause
                 .predicates
                 .push(parse_quote!(for<'__t> #ty: #sqlx::Encode<'__t, __DB> + #sqlx::Type<__DB>));
@@ -349,10 +377,18 @@ impl<'a> Params<'a> {
         }
         let (impl_generics, _, where_clause) = generics.split_for_impl();
 
-        let own = self.fields.iter().enumerate().map(|(slot, field)| {
-            let name = &field.name;
-            let slot = Literal::u16_unsuffixed(slot as u16);
-            quote!(([], #slot) => args.add(&self.#name),)
+        let own = self.groups.iter().flat_map(|group| {
+            let name = &group.name;
+            let single = group.slots.len() == 1;
+            group.slots.iter().enumerate().map(move |(index, slot)| {
+                let slot = Literal::u16_unsuffixed(*slot);
+                let index = Literal::usize_unsuffixed(index);
+                if single {
+                    quote!(([], #slot) => args.add(&self.#name),)
+                } else {
+                    quote!(([], #slot) => args.add(&self.#name[#index]),)
+                }
+            })
         });
         let children = self.children.iter().enumerate().map(|(step, child)| {
             let name = &child.name;
@@ -383,4 +419,8 @@ impl<'a> Params<'a> {
             }
         })
     }
+}
+
+fn type_key(ty: &Type) -> String {
+    ty.to_token_stream().to_string()
 }

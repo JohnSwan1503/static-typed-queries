@@ -1,4 +1,6 @@
-use syn::{GenericArgument, PathArguments, Type};
+use proc_macro2::Span;
+use quote::format_ident;
+use syn::{GenericArgument, Ident, PathArguments, Type};
 
 pub(crate) fn snake_case(name: &str) -> String {
     let chars: Vec<char> = name.chars().collect();
@@ -48,4 +50,30 @@ pub(crate) fn unique(name: String, taken: &[String]) -> String {
         .map(|n| format!("{name}_{n}"))
         .find(|candidate| !taken.contains(candidate))
         .expect("an unused name")
+}
+
+pub(crate) fn to_ident(name: &str) -> Ident {
+    let mut name: String = snake_case(name)
+        .chars()
+        .map(|c| {
+            if c.is_alphanumeric() || c == '_' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect();
+    if name.is_empty() {
+        name.push_str("param");
+    }
+    if name.starts_with(|c: char| c.is_ascii_digit()) {
+        name.insert(0, '_');
+    }
+    if syn::parse_str::<Ident>(&name).is_ok() {
+        return format_ident!("{name}");
+    }
+    if matches!(name.as_str(), "self" | "super" | "crate" | "Self" | "_") {
+        return format_ident!("{name}_");
+    }
+    Ident::new_raw(&name, Span::call_site())
 }
