@@ -95,6 +95,14 @@ pub struct CountOf<T: Sql>(PhantomData<T>);
 )]
 pub struct Report;
 
+#[query(
+    Postgres,
+    sql = "
+    SELECT {CountOf<Users>} AS users_total, {CountOf<Orders>}, {CountOf<Matching>}
+    FROM {ActiveUsers} au"
+)]
+pub struct ItemNames;
+
 #[test]
 fn names_come_from_the_sql_and_collisions_need_repeated_calls() {
     let params = Search::builder()
@@ -179,16 +187,27 @@ fn insert_columns_update_targets_and_aliases_name_params() {
 fn nested_items_take_closures_and_tables_need_no_call() {
     let params = Report::builder()
         .email("%@example.com".to_owned())
-        .count_of_active_users(|b| b.t(|b| b.org_id(1)))
+        .org_size(|b| b.t(|b| b.org_id(1)))
         .active_users(|b| b.org_id(2))
         .build();
-    assert_eq!(params.count_of_active_users.t.org_id, 1);
+    assert_eq!(params.org_size.t.org_id, 1);
     assert_eq!(params.active_users.org_id, 2);
 
     let join = CommaJoin::builder()
         .matching(|b| b.status("paid".to_owned()))
         .build();
     assert_eq!(join.matching.status, "paid");
+}
+
+#[test]
+fn items_are_named_by_alias_then_type_then_full_type() {
+    let params = ItemNames::builder()
+        .count_of_matching(|b| b.t(|b| b.status("paid".to_owned())))
+        .au(|b| b.org_id(3))
+        .build();
+    let ((), ()) = (params.users_total.t, params.count_of_orders.t);
+    assert_eq!(params.count_of_matching.t.status, "paid");
+    assert_eq!(params.au.org_id, 3);
 }
 
 #[test]

@@ -23,14 +23,24 @@ pub(crate) fn snake_case(name: &str) -> String {
     out
 }
 
+pub(crate) fn short_name(ty: &Type) -> String {
+    match ty {
+        Type::Path(path) => path.path.segments.last().map_or_else(
+            || "item".to_owned(),
+            |last| snake_case(&last.ident.to_string()),
+        ),
+        _ => "item".to_owned(),
+    }
+}
+
 pub(crate) fn field_name(ty: &Type) -> String {
+    let mut name = short_name(ty);
     let Type::Path(path) = ty else {
-        return "item".to_owned();
+        return name;
     };
     let Some(last) = path.path.segments.last() else {
-        return "item".to_owned();
+        return name;
     };
-    let mut name = snake_case(&last.ident.to_string());
     if let PathArguments::AngleBracketed(args) = &last.arguments {
         for arg in &args.args {
             if let GenericArgument::Type(inner) = arg {

@@ -4,7 +4,7 @@ use std::ops::ControlFlow;
 use sqlparser::ast::{
     AssignmentTarget, BinaryOperator, Expr, Function, FunctionArg, FunctionArgExpr,
     FunctionArguments, LimitClause, ObjectName, ObjectNamePart, Query, SelectItem, SetExpr,
-    Statement, TableFactor, Visit, Visitor,
+    Statement, TableAlias, TableFactor, Visit, Visitor,
 };
 use sqlparser::dialect::{Dialect, GenericDialect, MySqlDialect, PostgreSqlDialect, SQLiteDialect};
 use sqlparser::parser::Parser;
@@ -21,10 +21,10 @@ pub(crate) enum Kind {
     Ddl,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub(crate) struct Position {
     pub from: bool,
-    pub given_alias: bool,
+    pub alias: Option<String>,
 }
 
 #[derive(Clone, Copy)]
@@ -107,14 +107,14 @@ pub(crate) fn analyze(template: &Template, engine: Engine, sql: &LitStr) -> syn:
                 write!(text, "{REF}{}", refs.len()).unwrap();
                 refs.push(Position {
                     from: true,
-                    given_alias: false,
+                    alias: None,
                 });
             }
             Segment::Ref(_) => {
                 write!(text, "(SELECT {REF}{})", refs.len()).unwrap();
                 refs.push(Position {
                     from: false,
-                    given_alias: false,
+                    alias: None,
                 });
             }
         }
@@ -167,11 +167,11 @@ impl Analyzer {
         }
     }
 
-    fn place(&mut self, index: Option<usize>, given_alias: bool) {
+    fn place(&mut self, index: Option<usize>, alias: Option<&TableAlias>) {
         if let Some(position) = index.and_then(|index| self.refs.get_mut(index)) {
             *position = Position {
                 from: true,
-                given_alias,
+                alias: alias.map(|alias| alias.name.value.clone()),
             };
         }
     }
@@ -184,8 +184,8 @@ impl Visitor for Analyzer {
         match factor {
             TableFactor::Derived {
                 subquery, alias, ..
-            } => self.place(ref_marker(subquery), alias.is_some()),
-            TableFactor::Table { name, alias, .. } => self.place(ref_name(name), alias.is_some()),
+            } => self.place(ref_marker(subquery), alias.as_ref()),
+            TableFactor::Table { name, alias, .. } => self.place(ref_name(name), alias.as_ref()),
             _ => {}
         }
         ControlFlow::Continue(())
@@ -232,6 +232,12 @@ impl Visitor for Analyzer {
             for item in &select.projection {
                 if let SelectItem::ExprWithAlias { expr, alias } = item {
                     self.name(expr, Origin::Selected, Some(alias.value.clone()));
+                    if let Expr::Subquery(subquery) = expr
+                        && let Some(position) =
+                            ref_marker(subquery).and_then(|index| self.refs.get_mut(index))
+                    {
+                        position.alias = Some(alias.value.clone());
+                    }
                 }
             }
         }

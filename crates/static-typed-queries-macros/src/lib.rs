@@ -175,8 +175,11 @@ pub fn table(args: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// - `NameParams`, with a public field for every parameter and, for every
 ///   distinct item the template references, a field holding that item's own
-///   params. Item fields are named after the type in snake case, generic
-///   arguments included: `{CountOf<Users>}` becomes `count_of_users`.
+///   params. An item field takes the item's alias in the template if it has
+///   one of at least two characters (`{CountOf<Users>} AS total` becomes
+///   `total`), and otherwise the type's name in snake case (`count_of`).
+///   Items whose names would clash use the full type in snake case, generic
+///   arguments included: `count_of_users`.
 /// - `NameBuilder`, returned by `Name::builder()`. It has a setter for every
 ///   parameter and, for every referenced item, a method taking a closure that
 ///   fills in that item's builder. Items without parameters, such as tables,

@@ -5,7 +5,7 @@ use syn::{GenericParam, Generics, Ident, ItemStruct, LitStr, Type, parse_quote};
 use crate::analyze::{self, Analysis, Engine, Kind};
 use crate::args::{Args, Placement};
 use crate::docs;
-use crate::naming::{camel, field_name, snake_case, to_ident, unique};
+use crate::naming::{camel, field_name, short_name, snake_case, to_ident, unique};
 use crate::template::{self, Segment, Template};
 
 const RESERVED: &[&str] = &["build", "builder", "finish", "query"];
@@ -217,7 +217,7 @@ fn parts(template: &Template, analysis: &Analysis, params: &Params) -> Vec<Token
                 if !position.from {
                     return quote!(#krate::part::expr::Expr::part(#node));
                 }
-                let rule = if position.given_alias {
+                let rule = if position.alias.is_some() {
                     quote!(Given)
                 } else {
                     quote!(NodeName)
@@ -323,11 +323,44 @@ impl<'a> Params<'a> {
             .map(|group| group.name.to_string())
             .chain(RESERVED.iter().map(|name| (*name).to_owned()))
             .collect();
+        let refs = template
+            .segments
+            .iter()
+            .filter_map(|segment| match segment {
+                Segment::Ref(item) => Some(&item.ty),
+                _ => None,
+            });
+        let mut aliases: Vec<(String, &str)> = Vec::new();
+        for (ty, position) in refs.zip(&analysis.refs) {
+            if let Some(alias) = &position.alias
+                && alias.chars().count() >= 2
+                && !aliases.iter().any(|(key, _)| *key == type_key(ty))
+            {
+                aliases.push((type_key(ty), alias));
+            }
+        }
+        let preferred: Vec<String> = template
+            .children
+            .iter()
+            .map(
+                |ty| match aliases.iter().find(|(key, _)| *key == type_key(ty)) {
+                    Some((_, alias)) => to_ident(alias).to_string(),
+                    None => short_name(ty),
+                },
+            )
+            .collect();
         let children = template
             .children
             .iter()
-            .map(|ty| {
-                let name = unique(field_name(ty), &taken);
+            .zip(&preferred)
+            .map(|(ty, name)| {
+                let shared = preferred.iter().filter(|other| *other == name).count() > 1;
+                let name = if shared || taken.contains(name) {
+                    field_name(ty)
+                } else {
+                    name.clone()
+                };
+                let name = unique(name, &taken);
                 taken.push(name.clone());
                 let name = format_ident!("{name}");
                 Child {
