@@ -1,6 +1,6 @@
 use proc_macro2::{Literal, Span, TokenStream};
 use quote::{format_ident, quote};
-use syn::{GenericParam, Ident, ItemStruct, LitStr, Type};
+use syn::{GenericParam, Ident, ItemStruct, LitStr, Type, parse_quote};
 
 use crate::analyze::{self, Analysis, Engine, Kind};
 use crate::args::{Args, Placement};
@@ -106,6 +106,7 @@ pub(crate) fn query(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
     let params = Params::new(&template, &item);
     let params_ty = params.ty();
     let params_struct = params.definition();
+    let bind_params = params.bind_impl();
     let statement = item.generics.params.is_empty().then(|| {
         quote! {
             #krate::impl_statement!(#ident);
@@ -127,6 +128,7 @@ pub(crate) fn query(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
             const NODE: &'static #krate::node::Node = #node;
         }
 
+        #bind_params
         #statement
     })
 }
@@ -316,6 +318,68 @@ impl<'a> Params<'a> {
             #vis struct #ident #generics #where_clause {
                 #(#fields,)*
                 #(#children,)*
+            }
+        })
+    }
+
+    fn bind_impl(&self) -> Option<TokenStream> {
+        if self.is_empty() {
+            return None;
+        }
+        let krate = krate();
+        let sqlx = quote!(#krate::__private::sqlx);
+        let bind = quote!(#krate::statement::params::BindParams);
+
+        let mut generics = self.item.generics.clone();
+        generics
+            .params
+            .insert(0, GenericParam::Type(parse_quote!(__DB: #sqlx::Database)));
+        let where_clause = generics.make_where_clause();
+        for field in &self.fields {
+            let ty = &field.ty;
+            where_clause
+                .predicates
+                .push(parse_quote!(for<'__t> #ty: #sqlx::Encode<'__t, __DB> + #sqlx::Type<__DB>));
+        }
+        for child in &self.children {
+            let ty = &child.ty;
+            where_clause
+                .predicates
+                .push(parse_quote!(<#ty as #krate::sql::Sql>::Params: #bind<__DB>));
+        }
+        let (impl_generics, _, where_clause) = generics.split_for_impl();
+
+        let own = self.fields.iter().enumerate().map(|(slot, field)| {
+            let name = &field.name;
+            let slot = Literal::u16_unsuffixed(slot as u16);
+            quote!(([], #slot) => args.add(&self.#name),)
+        });
+        let children = self.children.iter().enumerate().map(|(step, child)| {
+            let name = &child.name;
+            let step = Literal::u16_unsuffixed(step as u16);
+            quote!(([#step, rest @ ..], _) => #bind::<__DB>::bind(&self.#name, rest, slot, args),)
+        });
+        let ty = self.ty();
+
+        Some(quote! {
+            #krate::__if_sqlx! {
+                impl #impl_generics #bind<__DB> for #ty #where_clause {
+                    fn bind(
+                        &self,
+                        path: &[u16],
+                        slot: u16,
+                        args: &mut <__DB as #sqlx::Database>::Arguments,
+                    ) -> ::core::result::Result<(), #sqlx::error::BoxDynError> {
+                        use #sqlx::Arguments as _;
+                        match (path, slot) {
+                            #(#own)*
+                            #(#children)*
+                            _ => ::core::result::Result::Err(
+                                #krate::statement::params::unknown(path, slot),
+                            ),
+                        }
+                    }
+                }
             }
         })
     }
