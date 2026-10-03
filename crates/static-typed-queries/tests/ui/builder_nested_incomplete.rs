@@ -11,5 +11,5 @@ pub struct ActiveUsers;
 pub struct Count;
 
 fn main() {
-    let _ = Count::builder().active_users(|b| b).build();
+    let _ = Count::builder().build();
 }

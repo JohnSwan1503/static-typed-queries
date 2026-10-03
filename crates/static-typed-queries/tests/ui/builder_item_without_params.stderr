@@ -1,0 +1,13 @@
+error[E0277]: there's nothing to set on this item
+  --> tests/ui/builder_item_without_params.rs:11:33
+   |
+11 |     let _ = ByStatus::builder().orders();
+   |                                 ^^^^^^ it has no parameters, so it needs no call
+   |
+   = help: the trait `static_typed_queries::builder::Scope<__ByStatusBuilderOrders<ByStatusBuilder<Unset<Set>, ()>>>` is not implemented for `NoParams`
+note: required by a bound in `ByStatusBuilder::<ParamStatus, ItemOrders, __K>::orders`
+  --> tests/ui/builder_item_without_params.rs:7:1
+   |
+ 7 | #[query(Postgres, sql = "SELECT id FROM {Orders} WHERE status = {_: String}")]
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `ByStatusBuilder::<ParamStatus, ItemOrders, __K>::orders`
+   = note: this error originates in the attribute macro `query` (in Nightly builds, run with -Z macro-backtrace for more info)

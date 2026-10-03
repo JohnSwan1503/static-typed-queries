@@ -187,14 +187,18 @@ fn insert_columns_update_targets_and_aliases_name_params() {
 fn nested_items_take_closures_and_tables_need_no_call() {
     let params = Report::builder()
         .email("%@example.com".to_owned())
-        .org_size(|b| b.t(|b| b.org_id(1)))
-        .active_users(|b| b.org_id(2))
+        .org_size()
+        .t()
+        .org_id(1)
+        .active_users()
+        .org_id(2)
         .build();
     assert_eq!(params.org_size.t.org_id, 1);
     assert_eq!(params.active_users.org_id, 2);
 
     let join = CommaJoin::builder()
-        .matching(|b| b.status("paid".to_owned()))
+        .matching()
+        .status("paid".to_owned())
         .build();
     assert_eq!(join.matching.status, "paid");
 }
@@ -202,8 +206,11 @@ fn nested_items_take_closures_and_tables_need_no_call() {
 #[test]
 fn items_are_named_by_alias_then_type_then_full_type() {
     let params = ItemNames::builder()
-        .count_of_matching(|b| b.t(|b| b.status("paid".to_owned())))
-        .au(|b| b.org_id(3))
+        .count_of_matching()
+        .t()
+        .status("paid".to_owned())
+        .au()
+        .org_id(3)
         .build();
     let ((), ()) = (params.users_total.t, params.count_of_orders.t);
     assert_eq!(params.count_of_matching.t.status, "paid");

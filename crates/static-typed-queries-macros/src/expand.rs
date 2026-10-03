@@ -463,7 +463,7 @@ impl<'a> Params<'a> {
             }
             for child in &self.children {
                 lines.push(format!(
-                    "- `.{}(|b| …)`: the parameters of {}",
+                    "- `.{}()`, then a setter: the parameters of {}",
                     child.name,
                     self.link(&child.ty)
                 ));
@@ -619,6 +619,12 @@ impl<'a> Params<'a> {
         quote!(#builder<#(#args,)* #(#states),*>)
     }
 
+    fn builder_in(&self, states: &[TokenStream], parent: &TokenStream) -> TokenStream {
+        let builder = &self.builder;
+        let args = self.item_args();
+        quote!(#builder<#(#args,)* #(#states,)* #parent>)
+    }
+
     fn generics(&self, extra: &[TokenStream]) -> Generics {
         let mut generics = self.item.generics.clone();
         for param in extra {
@@ -659,9 +665,19 @@ impl<'a> Params<'a> {
         let params_ty = self.ty();
         let args = self.item_args();
         let fields = self.fields();
+        let fill = quote!(#krate::builder::Fill);
+        let root = quote!(#krate::builder::Root);
+        let parent = quote!(__K);
+        let with_parent = |extra: &[TokenStream]| {
+            let mut params = extra.to_vec();
+            params.push(parent.clone());
+            self.generics(&params)
+        };
         let mut out = TokenStream::new();
 
-        let generics = self.generics(&states);
+        let mut struct_params = states.clone();
+        struct_params.push(quote!(__K = #root));
+        let generics = self.generics(&struct_params);
         let where_clause = &generics.where_clause;
         let group_fields = self.groups.iter().map(|group| {
             let (field, ty) = (&group.field, &group.ty);
@@ -681,7 +697,7 @@ impl<'a> Params<'a> {
             ),
             String::new(),
             format!(
-                "There's a setter for every parameter of [`{ident}`]. `build` only compiles once all of them are set."
+                "There's a setter for every parameter of [`{ident}`], and a method for every item it references that moves to that item's builder for one setter call. `build` only compiles once every parameter is set."
             ),
         ]);
         out.extend(quote! {
@@ -689,6 +705,7 @@ impl<'a> Params<'a> {
             #vis struct #builder #generics #where_clause {
                 #(#group_fields,)*
                 #(#child_fields,)*
+                __parent: __K,
                 __state: ::core::marker::PhantomData<fn() -> (#(#group_states,)* #(#args,)*)>,
             }
         });
@@ -710,11 +727,11 @@ impl<'a> Params<'a> {
                 .filter(|(other, _)| *other != index)
                 .map(|(_, state)| state.clone())
                 .collect();
-            let generics = self.generics(&free);
+            let generics = with_parent(&free);
             let (impl_generics, _, where_clause) = generics.split_for_impl();
             let mut done = states.clone();
             done[index] = quote!(#krate::builder::Set);
-            let done = self.builder_ty(&done);
+            let done = self.builder_in(&done, &parent);
             let again = format_ident!("{}Again", group.state);
             let (message, label) = match group.slots.len() {
                 1 => (
@@ -743,10 +760,14 @@ impl<'a> Params<'a> {
             });
 
             free.push(quote!(__Rest: #krate::builder::Remaining));
-            let generics = self.generics(&free);
-            let (impl_generics, _, where_clause) = generics.split_for_impl();
-            let current = self.builder_ty(&current);
             let next = self.builder_ty(&next);
+            let mut generics = with_parent(&free);
+            generics
+                .make_where_clause()
+                .predicates
+                .push(parse_quote!(__K: #fill<#next>));
+            let (impl_generics, _, where_clause) = generics.split_for_impl();
+            let current = self.builder_in(&current, &parent);
             let others = fields.iter().filter(|other| **other != field);
             let origins = docs::origins(&group.origins);
             let doc = doc(&match group.slots.len() {
@@ -758,55 +779,108 @@ impl<'a> Params<'a> {
             out.extend(quote! {
                 impl #impl_generics #current #where_clause {
                     #doc
-                    pub fn #name(self, value: #ty) -> #next {
+                    pub fn #name(self, value: #ty) -> <__K as #fill<#next>>::Output {
                         let mut #field = self.#field;
                         #field[#len - 1 - <__Rest as #krate::builder::Remaining>::N] =
                             ::core::option::Option::Some(value);
-                        #builder {
+                        #fill::fill(self.__parent, #builder {
                             #field,
                             #(#others: self.#others,)*
+                            __parent: #root,
                             __state: ::core::marker::PhantomData,
-                        }
+                        })
                     }
                 }
             });
         }
 
         for (index, child) in self.children.iter().enumerate() {
-            let name = &child.name;
-            let field = &child.field;
-            let ty = &child.ty;
-            let mut next = states.clone();
-            next[self.groups.len() + index] = quote!(__Next);
-            let mut generics = self.generics(&states);
+            let slot = self.groups.len() + index;
+            let (name, field, state) = (&child.name, &child.field, &child.state);
+            let hole = format_ident!("__{}{}", builder, camel(name));
+            let others: Vec<&&Ident> = fields.iter().filter(|other| **other != field).collect();
+            let mut vacant = states.clone();
+            vacant[slot] = quote!(());
+            let vacant = self.builder_in(&vacant, &parent);
+
+            let generics = with_parent(&states);
+            let (impl_generics, _, where_clause) = generics.split_for_impl();
+            let current = self.builder_in(&states, &parent);
+            let doc = doc(&format!(
+                "Moves to the builder of {}. Its next setter sets one of its parameters and returns to the outermost builder.",
+                self.link(&child.ty)
+            ));
+            out.extend(quote! {
+                #[doc(hidden)]
+                #vis struct #hole<P>(P);
+
+                impl #impl_generics #current #where_clause {
+                    #doc
+                    pub fn #name<__Scoped>(self) -> __Scoped
+                    where
+                        #state: #krate::builder::Scope<#hole<#vacant>, Scoped = __Scoped>,
+                    {
+                        #krate::builder::Scope::scope(self.#field, #hole(#builder {
+                            #field: (),
+                            #(#others: self.#others,)*
+                            __parent: self.__parent,
+                            __state: ::core::marker::PhantomData,
+                        }))
+                    }
+                }
+            });
+
+            let mut filled = states.clone();
+            filled[slot] = quote!(__Item);
+            let filled = self.builder_ty(&filled);
+            let mut free: Vec<TokenStream> = states
+                .iter()
+                .enumerate()
+                .filter(|(other, _)| *other != slot)
+                .map(|(_, state)| state.clone())
+                .collect();
+            free.push(quote!(__Item));
+            let mut generics = with_parent(&free);
             generics
                 .make_where_clause()
                 .predicates
-                .push(parse_quote!(#ty: #krate::builder::Build));
+                .push(parse_quote!(__K: #fill<#filled>));
             let (impl_generics, _, where_clause) = generics.split_for_impl();
-            let current = self.builder_ty(&states);
-            let next = self.builder_ty(&next);
-            let others = fields.iter().filter(|other| **other != field);
-            let doc = doc(&format!(
-                "Sets the parameters of {} through its builder.",
-                self.link(ty)
-            ));
             out.extend(quote! {
-                impl #impl_generics #current #where_clause {
-                    #doc
-                    pub fn #name<__Next>(
-                        self,
-                        build: impl ::core::ops::FnOnce(<#ty as #krate::builder::Build>::Builder) -> __Next,
-                    ) -> #next {
-                        #builder {
-                            #field: build(<#ty as #krate::builder::Build>::builder()),
-                            #(#others: self.#others,)*
+                impl #impl_generics #fill<__Item> for #hole<#vacant> #where_clause {
+                    type Output = <__K as #fill<#filled>>::Output;
+
+                    fn fill(self, item: __Item) -> Self::Output {
+                        let parent = self.0;
+                        #fill::fill(parent.__parent, #builder {
+                            #field: item,
+                            #(#others: parent.#others,)*
+                            __parent: #root,
                             __state: ::core::marker::PhantomData,
-                        }
+                        })
                     }
                 }
             });
         }
+
+        let generics = with_parent(&states);
+        let (impl_generics, _, where_clause) = generics.split_for_impl();
+        let any = self.builder_ty(&states);
+        let scoped = self.builder_in(&states, &parent);
+        out.extend(quote! {
+            #[diagnostic::do_not_recommend]
+            impl #impl_generics #krate::builder::Scope<__K> for #any #where_clause {
+                type Scoped = #scoped;
+
+                fn scope(self, parent: __K) -> #scoped {
+                    #builder {
+                        #(#fields: self.#fields,)*
+                        __parent: parent,
+                        __state: ::core::marker::PhantomData,
+                    }
+                }
+            }
+        });
 
         let mut ready: Vec<syn::WherePredicate> = Vec::new();
         for group in &self.groups {
@@ -852,7 +926,6 @@ impl<'a> Params<'a> {
             .predicates
             .extend(ready.iter().cloned());
         let (impl_generics, _, where_clause) = generics.split_for_impl();
-        let any = self.builder_ty(&states);
         let params_ident = &self.ident;
         let extract_groups = self.groups.iter().map(|group| {
             let (name, field) = (&group.name, &group.field);
@@ -956,6 +1029,7 @@ impl<'a> Params<'a> {
                     #builder {
                         #(#empty_groups,)*
                         #(#start_children,)*
+                        __parent: #root,
                         __state: ::core::marker::PhantomData,
                     }
                 }

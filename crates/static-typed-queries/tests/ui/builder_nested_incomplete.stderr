@@ -1,8 +1,8 @@
 error[E0277]: `ActiveUsers` is missing `org_id`
-  --> tests/ui/builder_nested_incomplete.rs:14:50
+  --> tests/ui/builder_nested_incomplete.rs:14:30
    |
-14 |     let _ = Count::builder().active_users(|b| b).build();
-   |                                                  ^^^^^ call `.org_id(…)` on the `ActiveUsers` builder first
+14 |     let _ = Count::builder().build();
+   |                              ^^^^^ call `.org_id(…)` on the `ActiveUsers` builder first
    |
    = help: the trait `ParamOrgId` is not implemented for `Unset<Set>`
 help: the trait `Finish<ActiveUsersParams>` is conditionally implemented for `ActiveUsersBuilder<ParamOrgId, ItemUsers>`

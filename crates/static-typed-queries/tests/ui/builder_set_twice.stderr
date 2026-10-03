@@ -7,9 +7,9 @@ error[E0277]: `status` is already set on the `Search` builder
    |                                                         required by a bound introduced by this call
    |
    = help: the trait `ParamStatusAgain` is not implemented for `String`
-note: required by a bound in `SearchBuilder::<ParamCreatedAt, Set, ItemOrders>::status`
+note: required by a bound in `SearchBuilder::<ParamCreatedAt, Set, ItemOrders, __K>::status`
   --> tests/ui/builder_set_twice.rs:7:1
    |
  7 | #[query(Postgres, sql = "SELECT id FROM {Orders} WHERE created_at BETWEEN {_: i64} AND {_: i64} AND status = {_: String}")]
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `SearchBuilder::<ParamCreatedAt, Set, ItemOrders>::status`
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `SearchBuilder::<ParamCreatedAt, Set, ItemOrders, __K>::status`
    = note: this error originates in the attribute macro `query` (in Nightly builds, run with -Z macro-backtrace for more info)

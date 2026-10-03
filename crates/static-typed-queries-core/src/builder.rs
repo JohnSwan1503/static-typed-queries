@@ -25,11 +25,37 @@ pub trait Build: Sql {
 }
 
 #[diagnostic::on_unimplemented(
-    message = "`{Self}` isn't a builder for `{P}`",
-    label = "an item's closure must return the builder it was given"
+    message = "`{Self}` can't build `{P}`",
+    label = "not every parameter is set"
 )]
 pub trait Finish<P> {
     fn finish(self) -> P;
+}
+
+pub struct Root;
+
+pub trait Fill<B> {
+    type Output;
+
+    fn fill(self, builder: B) -> Self::Output;
+}
+
+impl<B> Fill<B> for Root {
+    type Output = B;
+
+    fn fill(self, builder: B) -> B {
+        builder
+    }
+}
+
+#[diagnostic::on_unimplemented(
+    message = "there's nothing to set on this item",
+    label = "it has no parameters, so it needs no call"
+)]
+pub trait Scope<K> {
+    type Scoped;
+
+    fn scope(self, parent: K) -> Self::Scoped;
 }
 
 pub struct NoParams;

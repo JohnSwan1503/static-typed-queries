@@ -161,7 +161,7 @@ pub fn table(args: TokenStream, item: TokenStream) -> TokenStream {
 ///     r#"WITH "org_users" AS (SELECT id FROM "users" WHERE org_id = $1) SELECT count(*) FROM "org_users""#
 /// );
 ///
-/// let params = OrgSize::builder().org_users(|b| b.org_id(7)).build();
+/// let params = OrgSize::builder().org_users().org_id(7).build();
 /// assert_eq!(params.org_users.org_id, 7);
 /// ```
 ///
@@ -181,11 +181,13 @@ pub fn table(args: TokenStream, item: TokenStream) -> TokenStream {
 ///   Items whose names would clash use the full type in snake case, generic
 ///   arguments included: `count_of_users`.
 /// - `NameBuilder`, returned by `Name::builder()`. It has a setter for every
-///   parameter and, for every referenced item, a method taking a closure that
-///   fills in that item's builder. Items without parameters, such as tables,
-///   need no call. `build()` returns `NameParams`, and with a database feature
-///   enabled `query()` returns a `sqlx` query with everything bound. Both
-///   only compile once every parameter is set.
+///   parameter and, for every referenced item, a method that moves to that
+///   item's builder for one setter call, which then returns to the outermost
+///   builder: `Name::builder().active_users().org_id(7)`. Items without
+///   parameters, such as tables, need no call. `build()` returns
+///   `NameParams`, and with a database feature enabled `query()` returns a
+///   `sqlx` query with everything bound. Both only compile once every
+///   parameter is set.
 /// - A `Statement` impl and an inherent `Name::SQL` constant holding the
 ///   rendered SQL.
 ///

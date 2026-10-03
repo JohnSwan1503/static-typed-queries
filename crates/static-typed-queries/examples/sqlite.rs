@@ -58,8 +58,11 @@ async fn main() -> Result<(), sqlx::Error> {
     let rows = UserReport::builder()
         .total(100)
         .email("%@example.com".to_owned())
-        .org_size(|b| b.t(|b| b.org_id(1)))
-        .active_users(|b| b.org_id(1))
+        .org_size()
+        .t()
+        .org_id(1)
+        .active_users()
+        .org_id(1)
         .query()?
         .fetch_all(&mut conn)
         .await?;
