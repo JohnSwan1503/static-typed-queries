@@ -1296,6 +1296,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "sqlparser",
+ "static-typed-queries",
  "syn 3.0.6",
 ]
 

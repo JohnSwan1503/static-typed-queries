@@ -14,3 +14,6 @@ syn = { version = "3.0.6", features = ["extra-traits", "fold", "full", "visit", 
 
 # Compile-time SQL Validation, Sanitization, Interface
 sqlparser = { version = "0.63.0", features = ["visitor"] }
+
+[dev-dependencies]
+static-typed-queries = { path = "../static-typed-queries", features = ["all"] }
