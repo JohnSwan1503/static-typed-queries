@@ -368,6 +368,10 @@ impl<'a> Params<'a> {
         }
     }
 
+    fn module(&self) -> Ident {
+        format_ident!("__{}_builder", snake_case(&self.item.ident.to_string()))
+    }
+
     fn link(&self, ty: &Type) -> String {
         docs::link(ty, &self.item_args())
     }
@@ -722,26 +726,53 @@ impl<'a> Params<'a> {
             });
         }
 
-        let child_states: Vec<TokenStream> = self
-            .children
-            .iter()
-            .map(|child| child.state.to_token_stream())
-            .collect();
-        let mut generics = self.generics(&child_states);
+        let module = self.module();
+        let mut traits = TokenStream::new();
+        let mut ready: Vec<syn::WherePredicate> = Vec::new();
+        for group in &self.groups {
+            let (name, state) = (&group.name, &group.state);
+            let (message, label) = match group.slots.len() {
+                1 => (
+                    format!("`{ident}` is missing `{name}`"),
+                    format!("call `.{name}(…)` on the `{ident}` builder first"),
+                ),
+                len => (
+                    format!("`{ident}` is missing values for `{name}`"),
+                    format!(
+                        "call `.{name}(…)` {len} times on the `{ident}` builder first, once per value"
+                    ),
+                ),
+            };
+            traits.extend(quote! {
+                #[diagnostic::on_unimplemented(message = #message, label = #label)]
+                pub trait #state {}
+
+                #[diagnostic::do_not_recommend]
+                impl #state for #krate::builder::Set {}
+            });
+            ready.push(parse_quote!(#state: #module::#state));
+        }
         for child in &self.children {
             let (state, ty) = (&child.state, &child.ty);
-            generics.make_where_clause().predicates.push(parse_quote!(
+            ready.push(parse_quote!(
                 #state: #krate::builder::Finish<<#ty as #krate::sql::Sql>::Params>
             ));
         }
+        if !self.groups.is_empty() {
+            out.extend(quote! {
+                #[doc(hidden)]
+                #vis mod #module {
+                    #traits
+                }
+            });
+        }
+        let mut generics = self.generics(&states);
+        generics
+            .make_where_clause()
+            .predicates
+            .extend(ready.iter().cloned());
         let (impl_generics, _, where_clause) = generics.split_for_impl();
-        let complete: Vec<TokenStream> = self
-            .groups
-            .iter()
-            .map(|_| quote!(#krate::builder::Set))
-            .chain(child_states.iter().cloned())
-            .collect();
-        let complete = self.builder_ty(&complete);
+        let any = self.builder_ty(&states);
         let params_ident = &self.ident;
         let extract_groups = self.groups.iter().map(|group| {
             let (name, field) = (&group.name, &group.field);
@@ -757,7 +788,7 @@ impl<'a> Params<'a> {
             quote!(#name: #krate::builder::Finish::finish(self.#field))
         });
         out.extend(quote! {
-            impl #impl_generics #krate::builder::Finish<#params_ty> for #complete #where_clause {
+            impl #impl_generics #krate::builder::Finish<#params_ty> for #any #where_clause {
                 fn finish(self) -> #params_ty {
                     #params_ident {
                         #(#extract_groups,)*
@@ -769,13 +800,12 @@ impl<'a> Params<'a> {
 
         let generics = self.generics(&states);
         let (impl_generics, _, where_clause) = generics.split_for_impl();
-        let any = self.builder_ty(&states);
         out.extend(quote! {
             impl #impl_generics #any #where_clause {
                 /// Returns the parameters. Compiles only once every parameter is set.
                 pub fn build(self) -> #params_ty
                 where
-                    Self: #krate::builder::Finish<#params_ty>,
+                    #(#ready,)*
                 {
                     #krate::builder::Finish::finish(self)
                 }
@@ -794,7 +824,7 @@ impl<'a> Params<'a> {
                             #krate::__private::sqlx::Error,
                         >
                         where
-                            Self: #krate::builder::Finish<#params_ty>,
+                            #(#ready,)*
                         {
                             <#ident as #krate::statement::Statement>::query(
                                 &#krate::builder::Finish::finish(self),

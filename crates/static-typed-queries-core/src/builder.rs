@@ -25,8 +25,8 @@ pub trait Build: Sql {
 }
 
 #[diagnostic::on_unimplemented(
-    message = "`{Self}` still has parameters to set",
-    label = "call every setter (as many times as its parameter appears) before building"
+    message = "`{Self}` isn't a builder for `{P}`",
+    label = "an item's closure must return the builder it was given"
 )]
 pub trait Finish<P> {
     fn finish(self) -> P;
