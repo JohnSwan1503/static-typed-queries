@@ -2,20 +2,64 @@ use core::marker::PhantomData;
 
 use crate::sql::Sql;
 
-pub struct Set;
+pub struct Filled;
 
-pub struct Unset<Rest>(PhantomData<Rest>);
+pub struct Missing<Rest>(PhantomData<Rest>);
 
 pub trait Remaining {
     const N: usize;
 }
 
-impl Remaining for Set {
+impl Remaining for Filled {
     const N: usize = 0;
 }
 
-impl<Rest: Remaining> Remaining for Unset<Rest> {
+impl<Rest: Remaining> Remaining for Missing<Rest> {
     const N: usize = Rest::N + 1;
+}
+
+pub struct Open<B>(pub B);
+
+pub struct Built<P>(pub P);
+
+pub struct True;
+
+pub struct False;
+
+pub trait Ready {
+    type Out;
+}
+
+impl Ready for Filled {
+    type Out = True;
+}
+
+impl<Rest> Ready for Missing<Rest> {
+    type Out = False;
+}
+
+impl<B> Ready for Open<B> {
+    type Out = False;
+}
+
+impl<P> Ready for Built<P> {
+    type Out = True;
+}
+
+pub trait And<B> {
+    type Out;
+}
+
+impl And<True> for True {
+    type Out = True;
+}
+
+impl And<False> for True {
+    type Out = False;
+}
+
+impl<B> And<B> for False {
+    type Out = False;
 }
 
 pub trait Build: Sql {
@@ -24,12 +68,49 @@ pub trait Build: Sql {
     fn builder() -> Self::Builder;
 }
 
-#[diagnostic::on_unimplemented(
-    message = "`{Self}` can't build `{P}`",
-    label = "not every parameter is set"
-)]
-pub trait Finish<P> {
-    fn finish(self) -> P;
+pub trait Finish {
+    type Params;
+
+    fn finish(self) -> Self::Params;
+}
+
+pub trait Settle<B> {
+    type Out;
+
+    fn settle(builder: B) -> Self::Out;
+}
+
+impl<B: Finish> Settle<B> for True {
+    type Out = Built<B::Params>;
+
+    fn settle(builder: B) -> Self::Out {
+        Built(builder.finish())
+    }
+}
+
+impl<B> Settle<B> for False {
+    type Out = Open<B>;
+
+    fn settle(builder: B) -> Self::Out {
+        Open(builder)
+    }
+}
+
+pub trait Settled {
+    type Slot;
+
+    fn settled(self) -> Self::Slot;
+}
+
+impl<B: Ready> Settled for B
+where
+    B::Out: Settle<B>,
+{
+    type Slot = <B::Out as Settle<B>>::Out;
+
+    fn settled(self) -> Self::Slot {
+        <B::Out as Settle<B>>::settle(self)
+    }
 }
 
 pub struct Root;
@@ -48,10 +129,6 @@ impl<B> Fill<B> for Root {
     }
 }
 
-#[diagnostic::on_unimplemented(
-    message = "there's nothing to set on this item",
-    label = "it has no parameters, so it needs no call"
-)]
 pub trait Scope<K> {
     type Scoped;
 
@@ -60,6 +137,12 @@ pub trait Scope<K> {
 
 pub struct NoParams;
 
-impl Finish<()> for NoParams {
+impl Ready for NoParams {
+    type Out = True;
+}
+
+impl Finish for NoParams {
+    type Params = ();
+
     fn finish(self) {}
 }

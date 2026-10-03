@@ -7,6 +7,10 @@ pub use static_typed_queries_macros::{query, table};
 #[cfg(feature = "parse-check")]
 pub use static_typed_queries_core::check;
 
+pub mod state {
+    pub use static_typed_queries_core::builder::{Built, Filled, Missing, Open};
+}
+
 pub mod bind {
     pub use static_typed_queries_core::statement::bind::Bind;
     pub use static_typed_queries_core::statement::bind::path::Path;

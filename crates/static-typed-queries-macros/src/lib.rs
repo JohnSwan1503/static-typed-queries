@@ -177,14 +177,15 @@ pub fn table(args: TokenStream, item: TokenStream) -> TokenStream {
 ///   `total`), and otherwise the type's name in snake case (`count_of`).
 ///   Items whose names would clash use the full type in snake case, generic
 ///   arguments included: `count_of_users`.
-/// - `NameBuilder`, returned by `Name::builder()`. It has a setter for every
-///   parameter and, for every referenced item, a method that moves to that
-///   item's builder for one setter call, which then returns to the outermost
-///   builder: `Name::builder().active_users().org_id(7)`. Items without
-///   parameters, such as tables, need no call. `build()` returns
-///   `NameParams`, and with a database feature enabled `query()` returns a
-///   `sqlx` query with everything bound. Both only compile once every
-///   parameter is set.
+/// - `NameBuilder`, returned by `Name::builder()`. Its methods follow its
+///   state: a parameter's setter exists while the parameter still needs a
+///   value, and an item's method exists while the item has parameters left.
+///   The item method moves to that item's builder for one setter call, which
+///   then returns to the outermost builder:
+///   `Name::builder().active_users().org_id(7)`. Items without parameters,
+///   such as tables, have no method. Once everything is set, the builder has
+///   only `build()`, which returns `NameParams`, and, with a database feature
+///   enabled, `query()`, which returns a `sqlx` query with everything bound.
 /// - A `Statement` impl and an inherent `Name::SQL` constant holding the
 ///   rendered SQL.
 /// - With the `parse-check` feature, a `#[cfg(test)]` test named

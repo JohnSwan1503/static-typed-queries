@@ -1,15 +1,13 @@
-error[E0277]: `status` is already set on the `Search` builder
-  --> tests/ui/builder_set_twice.rs:10:64
-   |
-10 |     let _ = Search::builder().status("paid".to_owned()).status("again".to_owned());
-   |                                                         ------ ^^^^^^^^^^^^^^^^^^ `status` takes one value
-   |                                                         |
-   |                                                         required by a bound introduced by this call
-   |
-   = help: the trait `ParamStatusAgain` is not implemented for `String`
-note: required by a bound in `SearchBuilder::<ParamCreatedAt, static_typed_queries::__private::builder::Set, ItemOrders, __K>::status`
-  --> tests/ui/builder_set_twice.rs:6:1
+error[E0599]: no method named `status` found for struct `SearchBuilder<CreatedAt<Missing<Missing<Filled>>>, Status<Filled>, Built<()>>` in the current scope
+  --> tests/ui/builder_set_twice.rs:10:57
    |
  6 | #[query(Postgres, sql = "SELECT id FROM {Orders} WHERE created_at BETWEEN {_: i64} AND {_: i64} AND status = {_: String}")]
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `SearchBuilder::<ParamCreatedAt, Set, ItemOrders, __K>::status`
-   = note: this error originates in the attribute macro `query` (in Nightly builds, run with -Z macro-backtrace for more info)
+   | --------------------------------------------------------------------------------------------------------------------------- method `status` not found for this struct
+...
+10 |     let _ = Search::builder().status("paid".to_owned()).status("again".to_owned());
+   |                                                         ^^^^^^ method not found in `SearchBuilder<CreatedAt<Missing<Missing<Filled>>>, Status<Filled>, Built<()>>`
+   |
+   = note: the method was found for `SearchBuilder<ParamCreatedAt, Status<Missing<__Rest>>, ItemOrders, __K>`
+   = help: items from traits can only be used if the trait is implemented and in scope
+   = note: the following trait defines an item `status`, perhaps you need to implement it:
+           candidate #1: `futures_task::spawn::Spawn`
