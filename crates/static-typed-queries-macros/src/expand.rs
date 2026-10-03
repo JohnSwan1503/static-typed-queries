@@ -3,7 +3,7 @@ use quote::quote;
 use syn::{GenericParam, Ident, ItemStruct, LitStr};
 
 use crate::analyze::{self, Analysis, Engine, Kind};
-use crate::args::Args;
+use crate::args::{Args, Placement};
 use crate::naming::snake_case;
 use crate::template::{self, Segment, Template};
 
@@ -15,6 +15,12 @@ pub(crate) fn table(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
     let krate = krate();
     if let Some(sql) = &args.sql {
         return Err(syn::Error::new(sql.span(), "tables take `name`, not `sql`"));
+    }
+    if args.placement.is_some() {
+        return Err(syn::Error::new(
+            Span::call_site(),
+            "tables are always referenced by name",
+        ));
     }
     if !item.generics.params.is_empty() {
         return Err(syn::Error::new_spanned(
@@ -86,11 +92,12 @@ pub(crate) fn query(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
         .name
         .as_ref()
         .map_or_else(|| snake_case(&ident.to_string()), LitStr::value);
+    let inject = placement(args.placement.unwrap_or(Placement::Subquery));
     let node = node(
         &node_name,
         fingerprint(ident, &item),
         kind,
-        quote!(#krate::node::inject::Inject::Subquery),
+        inject,
         parts(&template, &analysis),
     );
 
@@ -154,6 +161,14 @@ fn fingerprint(ident: &Ident, item: &ItemStruct) -> TokenStream {
     fingerprint
 }
 
+fn placement(placement: Placement) -> TokenStream {
+    let krate = krate();
+    match placement {
+        Placement::Cte { recursive } => quote!(#krate::node::inject::Inject::cte(#recursive)),
+        Placement::Subquery => quote!(#krate::node::inject::Inject::Subquery),
+    }
+}
+
 fn parts(template: &Template, analysis: &Analysis) -> Vec<TokenStream> {
     let krate = krate();
     let mut positions = analysis.refs.iter();
@@ -174,11 +189,18 @@ fn parts(template: &Template, analysis: &Analysis) -> Vec<TokenStream> {
                 } else {
                     quote!(NodeName)
                 };
+                let inject = match item.placement {
+                    Some(placement) => {
+                        let placement = self::placement(placement);
+                        quote!(::core::option::Option::Some(#placement))
+                    }
+                    None => quote!(::core::option::Option::None),
+                };
                 quote! {
                     #krate::part::from::From::part(
                         #node,
                         #krate::part::from::rule::AliasRule::#rule,
-                        ::core::option::Option::None,
+                        #inject,
                     )
                 }
             }

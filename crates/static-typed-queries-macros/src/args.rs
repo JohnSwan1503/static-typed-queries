@@ -1,12 +1,44 @@
 use std::fmt::Display;
 
 use syn::parse::{Parse, ParseStream};
-use syn::{Ident, LitStr, Token, Type};
+use syn::{Ident, LitStr, Token, Type, parenthesized};
+
+#[derive(Clone, Copy)]
+pub(crate) enum Placement {
+    Cte { recursive: bool },
+    Subquery,
+}
+
+impl Placement {
+    pub(crate) fn parse_keyword(input: ParseStream) -> syn::Result<Placement> {
+        let keyword: Ident = input.parse()?;
+        if keyword == "subquery" {
+            return Ok(Placement::Subquery);
+        }
+        if keyword != "cte" {
+            return Err(syn::Error::new(
+                keyword.span(),
+                "expected `cte`, `cte(recursive)` or `subquery`",
+            ));
+        }
+        if !input.peek(syn::token::Paren) {
+            return Ok(Placement::Cte { recursive: false });
+        }
+        let content;
+        parenthesized!(content in input);
+        let flag: Ident = content.parse()?;
+        if flag != "recursive" {
+            return Err(syn::Error::new(flag.span(), "expected `recursive`"));
+        }
+        Ok(Placement::Cte { recursive: true })
+    }
+}
 
 pub(crate) struct Args {
     pub dialect: Type,
     pub sql: Option<LitStr>,
     pub name: Option<LitStr>,
+    pub placement: Option<Placement>,
     to_add: ToAdd,
 }
 
@@ -15,8 +47,9 @@ struct ToAdd(Vec<Option<&'static str>>, usize);
 impl ToAdd {
     fn record_set(&mut self, key: &str) {
         let slots: &[usize] = match key {
-            "sql" => &[0],
-            "name" => &[1],
+            "cte" | "subquery" => &[0, 1],
+            "sql" => &[2],
+            "name" => &[3],
             _ => return,
         };
         for &idx in slots {
@@ -29,7 +62,10 @@ impl ToAdd {
 
 impl Default for ToAdd {
     fn default() -> Self {
-        ToAdd(vec![Some("sql"), Some("name")], 2)
+        ToAdd(
+            vec![Some("cte"), Some("subquery"), Some("sql"), Some("name")],
+            4,
+        )
     }
 }
 
@@ -69,6 +105,7 @@ impl Parse for Args {
             dialect: input.parse()?,
             sql: None,
             name: None,
+            placement: None,
             to_add: ToAdd::default(),
         };
         while !input.is_empty() {
@@ -78,6 +115,13 @@ impl Parse for Args {
             }
             let key: Ident = input.fork().parse()?;
             match key.to_string().as_str() {
+                key_str @ "cte" | key_str @ "subquery" => set(
+                    &mut args.placement,
+                    Placement::parse_keyword(input)?,
+                    &key,
+                    &mut args.to_add,
+                    key_str,
+                )?,
                 key_str @ "sql" => set(
                     &mut args.sql,
                     value(input)?,

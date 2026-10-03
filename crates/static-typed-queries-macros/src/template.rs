@@ -1,4 +1,7 @@
-use syn::{LitStr, Type};
+use syn::parse::{Parse, ParseStream};
+use syn::{LitStr, Token, Type};
+
+use crate::args::Placement;
 
 pub(crate) enum Segment {
     Lit(String),
@@ -7,6 +10,7 @@ pub(crate) enum Segment {
 
 pub(crate) struct Ref {
     pub ty: Type,
+    pub placement: Option<Placement>,
     pub target: bool,
 }
 
@@ -16,7 +20,24 @@ pub(crate) struct Template {
 
 enum Raw {
     Lit(String),
-    Ref(Type),
+    Ref(RefSyntax),
+}
+
+struct RefSyntax {
+    ty: Type,
+    placement: Option<Placement>,
+}
+
+impl Parse for RefSyntax {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let ty = input.parse()?;
+        let placement = if input.parse::<Option<Token![as]>>()?.is_some() {
+            Some(Placement::parse_keyword(input)?)
+        } else {
+            None
+        };
+        Ok(RefSyntax { ty, placement })
+    }
 }
 
 pub(crate) fn parse(sql: &LitStr) -> syn::Result<Template> {
@@ -27,7 +48,7 @@ pub(crate) fn parse(sql: &LitStr) -> syn::Result<Template> {
     for (i, item) in raw.iter().enumerate() {
         match item {
             Raw::Lit(text) => segments.push(Segment::Lit(text.clone())),
-            Raw::Ref(ty) => {
+            Raw::Ref(syntax) => {
                 let previous = match i.checked_sub(1).map(|j| &raw[j]) {
                     Some(Raw::Lit(text)) => last_words(text),
                     _ => Vec::new(),
@@ -37,7 +58,8 @@ pub(crate) fn parse(sql: &LitStr) -> syn::Result<Template> {
                     [.., "INTO" | "UPDATE" | "TABLE" | "TRUNCATE"] | [.., "DELETE", "FROM"]
                 );
                 segments.push(Segment::Ref(Box::new(Ref {
-                    ty: ty.clone(),
+                    ty: syntax.ty.clone(),
+                    placement: syntax.placement,
                     target,
                 })));
             }
@@ -144,9 +166,10 @@ fn dollar_tag(chars: &[char], start: usize) -> Option<Vec<char>> {
 }
 
 fn placeholder(content: &str) -> Result<Raw, String> {
-    let ty = syn::parse_str::<Type>(content)
-        .map_err(|_| format!("can't read placeholder `{{{content}}}`; expected `{{Item}}`"))?;
-    Ok(Raw::Ref(ty))
+    let syntax = syn::parse_str::<RefSyntax>(content).map_err(|_| {
+        format!("can't read placeholder `{{{content}}}`; expected `{{Item}}` or `{{Item as cte}}`")
+    })?;
+    Ok(Raw::Ref(syntax))
 }
 
 fn last_words(text: &str) -> Vec<&'static str> {
