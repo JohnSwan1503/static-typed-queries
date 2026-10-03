@@ -18,7 +18,7 @@ impl Dialect for Sqlite {
     }
 }
 
-#[cfg(any(feature = "sqlite", feature = "sqlite-unbundled"))]
+#[cfg(feature = "sqlite")]
 impl crate::dialect::driver::Driver for Sqlite {
     type Database = sqlx::Sqlite;
 }

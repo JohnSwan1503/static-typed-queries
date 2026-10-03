@@ -1,9 +1,4 @@
-#![cfg(any(
-    feature = "mysql",
-    feature = "postgres",
-    feature = "sqlite",
-    feature = "sqlite-unbundled"
-))]
+#![cfg(any(feature = "mysql", feature = "postgres", feature = "sqlite"))]
 
 #[macro_use]
 mod support;
@@ -77,7 +72,7 @@ mod postgres {
     }
 }
 
-#[cfg(any(feature = "sqlite", feature = "sqlite-unbundled"))]
+#[cfg(feature = "sqlite")]
 mod sqlite {
     use static_typed_queries_core::dialect::sqlite::Sqlite;
     use static_typed_queries_core::statement::Statement;

@@ -9,7 +9,6 @@ all = ["mysql", "postgres", "sqlite"]
 mysql = ["static-typed-queries-core/mysql"]
 postgres = ["static-typed-queries-core/postgres"]
 sqlite = ["static-typed-queries-core/sqlite"]
-sqlite-unbundled = ["static-typed-queries-core/sqlite-unbundled"]
 parse-check = ["static-typed-queries-core/parse-check"]
 
 [dependencies]

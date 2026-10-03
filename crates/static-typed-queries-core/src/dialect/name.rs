@@ -5,7 +5,7 @@ pub struct Name(&'static str);
 impl Name {
     #[cfg(any(test, feature = "postgres"))]
     pub const POSTGRES: Name = Name("PostgreSQL");
-    #[cfg(any(test, feature = "sqlite", feature = "sqlite-unbundled"))]
+    #[cfg(any(test, feature = "sqlite"))]
     pub const SQLITE: Name = Name("Sqlite");
     #[cfg(any(test, feature = "mysql"))]
     pub const MYSQL: Name = Name("MySql");

@@ -2,5 +2,5 @@
 pub mod mysql;
 #[cfg(any(test, feature = "postgres"))]
 pub mod postgres;
-#[cfg(any(test, feature = "sqlite", feature = "sqlite-unbundled"))]
+#[cfg(any(test, feature = "sqlite"))]
 pub mod sqlite;

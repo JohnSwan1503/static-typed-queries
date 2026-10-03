@@ -13,7 +13,7 @@ pub use impls::mysql;
 #[cfg(any(test, feature = "postgres"))]
 pub use impls::postgres;
 #[doc(inline)]
-#[cfg(any(test, any(feature = "sqlite", feature = "sqlite-unbundled")))]
+#[cfg(any(test, feature = "sqlite"))]
 pub use impls::sqlite;
 
 pub trait Dialect: 'static {
