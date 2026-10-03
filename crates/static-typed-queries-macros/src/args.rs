@@ -42,6 +42,7 @@ pub(crate) struct Args {
     pub display: Option<Ident>,
     pub debug: Option<Ident>,
     pub parse_check: Option<LitBool>,
+    pub separate: Option<Vec<Type>>,
     to_add: ToAdd,
 }
 
@@ -56,6 +57,7 @@ impl ToAdd {
             "display" => &[4],
             "debug" => &[5],
             "parse_check" => &[6],
+            "separate" => &[7],
             _ => return,
         };
         for &idx in slots {
@@ -77,8 +79,9 @@ impl Default for ToAdd {
                 Some("display"),
                 Some("debug"),
                 Some("parse_check"),
+                Some("separate"),
             ],
-            7,
+            8,
         )
     }
 }
@@ -123,6 +126,7 @@ impl Parse for Args {
             display: None,
             debug: None,
             parse_check: None,
+            separate: None,
             to_add: ToAdd::default(),
         };
         while !input.is_empty() {
@@ -174,6 +178,13 @@ impl Parse for Args {
                     &mut args.to_add,
                     key_str,
                 )?,
+                key_str @ "separate" => set(
+                    &mut args.separate,
+                    types(input)?,
+                    &key,
+                    &mut args.to_add,
+                    key_str,
+                )?,
                 _ => {
                     return Err(syn::Error::new(key.span(), args.to_add));
                 }
@@ -181,6 +192,16 @@ impl Parse for Args {
         }
         Ok(args)
     }
+}
+
+fn types(input: ParseStream) -> syn::Result<Vec<Type>> {
+    input.parse::<Ident>()?;
+    let content;
+    parenthesized!(content in input);
+    Ok(content
+        .parse_terminated(Type::parse, Token![,])?
+        .into_iter()
+        .collect())
 }
 
 fn value<T: Parse>(input: ParseStream) -> syn::Result<T> {

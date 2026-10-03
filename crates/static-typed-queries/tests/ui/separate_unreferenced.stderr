@@ -1,0 +1,5 @@
+error: `CountOf<Users>` isn't referenced in the template
+  --> tests/ui/separate_unreferenced.rs:12:28
+   |
+12 | #[query(Postgres, separate(CountOf<Users>), sql = "SELECT id FROM {Users}")]
+   |                            ^^^^^^^^^^^^^^

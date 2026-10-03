@@ -302,11 +302,8 @@ impl<'a, D: Dialect> Renderer<'a, D> {
         };
         let mut depth = path.steps().len();
         loop {
-            if let Some(index) = item_index(frame(root, path, depth), child) {
-                return match path.prefix(depth).child(index) {
-                    Some(path) => path,
-                    None => fail(&["items can't be nested more than 16 deep"]),
-                };
+            if let Some(path) = item_path(frame(root, path, depth), path.prefix(depth), child) {
+                return path;
             }
             if depth == 0 {
                 break;
@@ -402,6 +399,7 @@ const fn placement<D: Dialect>(from: From) -> Inject {
             "` modifies data, so it can only be embedded as a CTE",
         ]),
         (Kind::Ddl, _) => fail(&["`", name, "` is DDL, so it can't be embedded"]),
+        (Kind::Scope, _) => fail(&["`", name, "` only holds values, so it can't be embedded"]),
     }
     inject
 }
@@ -417,14 +415,28 @@ const fn frame(root: &'static Node, path: Path, depth: usize) -> &'static Node {
     node
 }
 
-const fn item_index(frame: &'static Node, child: &'static Node) -> Option<u16> {
+const fn item_path(frame: &'static Node, prefix: Path, child: &'static Node) -> Option<Path> {
     let items = frame.items.0;
     let mut i = 0;
     while i < items.len() {
-        if same_node(items[i], child) {
-            return Some(i as u16);
-        }
-        i += 1;
+        let item = items[i];
+        let path = if same_node(item, child) {
+            prefix.child(i as u16)
+        } else if let Kind::Scope = item.kind
+            && same_node(item.items.0[0], child)
+        {
+            match prefix.child(i as u16) {
+                Some(path) => path.child(0),
+                None => None,
+            }
+        } else {
+            i += 1;
+            continue;
+        };
+        return match path {
+            Some(path) => Some(path),
+            None => fail(&["items can't be nested more than 16 deep"]),
+        };
     }
     None
 }

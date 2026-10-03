@@ -117,16 +117,29 @@ pub(crate) fn query(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
         .as_ref()
         .map_or_else(|| snake_case(&ident.to_string()), LitStr::value);
     let inject = placement(args.placement.unwrap_or(Placement::Subquery));
-    let items = items(&template, &item.generics);
+    let wrappers = separate(&args, &item, &template)?;
+    let separate: Vec<(Type, Type)> = wrappers
+        .iter()
+        .map(|(named, wrapper)| {
+            let wrapper = &wrapper.ident;
+            (named.clone(), parse_quote!(#wrapper))
+        })
+        .collect();
+    let items = items(&template, &item.generics, &separate);
     let params = Params::new(&template, &analysis, &items, &item, sql)?;
+    let fields: Vec<Type> = items.iter().map(|(ty, _)| ty.clone()).collect();
     let node = node(
         &node_name,
         fingerprint(ident, &item),
         kind,
         inject,
         parts(&template, &analysis, &params),
-        &items,
+        &fields,
     );
+    let wrappers = wrappers
+        .iter()
+        .map(|(named, wrapper)| self::wrapper(named, wrapper, &args.dialect, sql))
+        .collect::<syn::Result<Vec<_>>>()?;
 
     let dialect = &args.dialect;
     let (impl_generics, ty_generics, where_clause) = item.generics.split_for_impl();
@@ -178,34 +191,166 @@ pub(crate) fn query(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
         #builder
         #statement
         #fmt
+        #(#wrappers)*
     })
 }
 
-fn items(template: &Template, generics: &Generics) -> Vec<Type> {
-    fn add(ty: &Type, generics: &Generics, items: &mut Vec<Type>) {
-        let open = generics
-            .type_params()
-            .any(|param| matches!(ty, Type::Path(path) if path.qself.is_none() && path.path.is_ident(&param.ident)));
-        if open || items.iter().any(|item| type_key(item) == type_key(ty)) {
-            return;
-        }
-        items.push(ty.clone());
-        if let Type::Path(path) = ty
-            && let Some(last) = path.path.segments.last()
-            && let PathArguments::AngleBracketed(args) = &last.arguments
-        {
-            for arg in &args.args {
-                if let GenericArgument::Type(arg) = arg {
-                    add(arg, generics, items);
-                }
-            }
-        }
-    }
+fn items(template: &Template, generics: &Generics, separate: &[(Type, Type)]) -> Vec<(Type, Type)> {
     let mut items = Vec::new();
     for ty in &template.children {
-        add(ty, generics, &mut items);
+        add_item(ty, generics, separate, &mut items);
     }
     items
+}
+
+fn add_item(
+    ty: &Type,
+    generics: &Generics,
+    separate: &[(Type, Type)],
+    items: &mut Vec<(Type, Type)>,
+) {
+    let open = generics.type_params().any(
+        |param| matches!(ty, Type::Path(path) if path.qself.is_none() && path.path.is_ident(&param.ident)),
+    );
+    if open
+        || items
+            .iter()
+            .any(|(_, named)| type_key(named) == type_key(ty))
+    {
+        return;
+    }
+    if let Some((_, wrapper)) = separate
+        .iter()
+        .find(|(named, _)| type_key(named) == type_key(ty))
+    {
+        items.push((wrapper.clone(), ty.clone()));
+        return;
+    }
+    items.push((ty.clone(), ty.clone()));
+    for arg in type_args(ty) {
+        add_item(arg, generics, separate, items);
+    }
+}
+
+fn type_args(ty: &Type) -> Vec<&Type> {
+    let Type::Path(path) = ty else {
+        return Vec::new();
+    };
+    let Some(PathArguments::AngleBracketed(args)) =
+        path.path.segments.last().map(|last| &last.arguments)
+    else {
+        return Vec::new();
+    };
+    args.args
+        .iter()
+        .filter_map(|arg| match arg {
+            GenericArgument::Type(arg) => Some(arg),
+            _ => None,
+        })
+        .collect()
+}
+
+fn separate(
+    args: &Args,
+    item: &ItemStruct,
+    template: &Template,
+) -> syn::Result<Vec<(Type, ItemStruct)>> {
+    let Some(types) = &args.separate else {
+        return Ok(Vec::new());
+    };
+    if !item.generics.params.is_empty() {
+        return Err(syn::Error::new_spanned(
+            &item.generics,
+            "`separate` isn't supported on generic queries",
+        ));
+    }
+    let mut wrappers: Vec<(Type, ItemStruct)> = Vec::new();
+    for ty in types {
+        let key = type_key(ty);
+        if !template.children.iter().any(|child| type_key(child) == key) {
+            return Err(syn::Error::new_spanned(
+                ty,
+                format!(
+                    "`{}` isn't referenced in the template",
+                    docs::type_string(ty)
+                ),
+            ));
+        }
+        if type_args(ty).is_empty() {
+            return Err(syn::Error::new_spanned(
+                ty,
+                format!(
+                    "`{}` has no type arguments, so there's nothing to separate",
+                    docs::type_string(ty)
+                ),
+            ));
+        }
+        if wrappers.iter().any(|(other, _)| type_key(other) == key) {
+            return Err(syn::Error::new_spanned(
+                ty,
+                format!("`{}` is listed twice", docs::type_string(ty)),
+            ));
+        }
+        let ident = format_ident!(
+            "__{}{}",
+            item.ident,
+            camel(&format_ident!("{}", field_name(ty)))
+        );
+        let vis = &item.vis;
+        wrappers.push((ty.clone(), parse_quote!(#[doc(hidden)] #vis struct #ident;)));
+    }
+    Ok(wrappers)
+}
+
+fn wrapper(
+    named: &Type,
+    item: &ItemStruct,
+    dialect: &Type,
+    sql: &LitStr,
+) -> syn::Result<TokenStream> {
+    let krate = krate();
+    let mut items = Vec::new();
+    add_item(named, &item.generics, &[], &mut items);
+    let template = Template {
+        segments: Vec::new(),
+        params: Vec::new(),
+        children: Vec::new(),
+    };
+    let analysis = Analysis {
+        kind: Kind::Query,
+        refs: Vec::new(),
+        names: Vec::new(),
+    };
+    let mut params = Params::new(&template, &analysis, &items, item, sql)?;
+    params.synthetic = true;
+    let ident = &item.ident;
+    let fields: Vec<Type> = items.iter().map(|(ty, _)| ty.clone()).collect();
+    let node = node(
+        &snake_case(&ident.to_string()),
+        fingerprint(ident, item),
+        quote!(Scope),
+        quote!(#krate::node::inject::Inject::Subquery),
+        Vec::new(),
+        &fields,
+    );
+    let params_ty = params.ty();
+    let params_struct = params.definition();
+    let bind_params = params.bind_impl();
+    let builder = params.builder(dialect);
+    Ok(quote! {
+        #item
+
+        #params_struct
+
+        impl #krate::sql::Sql for #ident {
+            type Dialect = #dialect;
+            type Params = #params_ty;
+            const NODE: &'static #krate::node::Node = #node;
+        }
+
+        #bind_params
+        #builder
+    })
 }
 
 fn node(
@@ -310,6 +455,7 @@ struct Child {
     name: Ident,
     field: Ident,
     ty: Type,
+    named: Type,
     state: Ident,
 }
 
@@ -319,13 +465,14 @@ struct Params<'a> {
     builder: Ident,
     groups: Vec<Group>,
     children: Vec<Child>,
+    synthetic: bool,
 }
 
 impl<'a> Params<'a> {
     fn new(
         template: &Template,
         analysis: &Analysis,
-        items: &[Type],
+        items: &[(Type, Type)],
         item: &'a ItemStruct,
         sql: &LitStr,
     ) -> syn::Result<Params<'a>> {
@@ -399,19 +546,19 @@ impl<'a> Params<'a> {
         let preferred: Vec<String> = items
             .iter()
             .map(
-                |ty| match aliases.iter().find(|(key, _)| *key == type_key(ty)) {
+                |(_, named)| match aliases.iter().find(|(key, _)| *key == type_key(named)) {
                     Some((_, alias)) => to_ident(alias).to_string(),
-                    None => short_name(ty),
+                    None => short_name(named),
                 },
             )
             .collect();
         let children = items
             .iter()
             .zip(&preferred)
-            .map(|(ty, name)| {
+            .map(|((ty, named), name)| {
                 let shared = preferred.iter().filter(|other| *other == name).count() > 1;
                 let name = if shared || taken.contains(name) {
-                    field_name(ty)
+                    field_name(named)
                 } else {
                     name.clone()
                 };
@@ -423,6 +570,7 @@ impl<'a> Params<'a> {
                     field: builder_field(&name),
                     name,
                     ty: ty.clone(),
+                    named: named.clone(),
                 }
             })
             .collect();
@@ -432,6 +580,7 @@ impl<'a> Params<'a> {
             builder: format_ident!("{}Builder", item.ident),
             groups,
             children,
+            synthetic: false,
         })
     }
 
@@ -517,10 +666,15 @@ impl<'a> Params<'a> {
                 ));
             }
             for child in &self.children {
+                let separate = if type_key(&child.ty) == type_key(&child.named) {
+                    ""
+                } else {
+                    ", with its own values for its type arguments"
+                };
                 lines.push(format!(
-                    "- `.{}()`, then a setter: the parameters of {}",
+                    "- `.{}()`, then a setter: the parameters of {}{separate}",
                     child.name,
-                    self.link(&child.ty)
+                    self.link(&child.named)
                 ));
             }
             if !self.children.is_empty() {
@@ -570,15 +724,17 @@ impl<'a> Params<'a> {
         });
         let children = self.children.iter().map(|child| {
             let (name, ty) = (&child.name, &child.ty);
-            let doc = doc(&format!("The parameters of {}.", self.link(ty)));
+            let doc = doc(&format!("The parameters of {}.", self.link(&child.named)));
             quote!(#doc pub #name: <#ty as #krate::sql::Sql>::Params)
         });
         let doc = doc(&format!(
             "The parameters of [`{}`], built by [`{}`].",
             self.item.ident, self.builder
         ));
+        let hidden = self.synthetic.then(|| quote!(#[doc(hidden)]));
         Some(quote! {
             #doc
+            #hidden
             #vis struct #ident #generics #where_clause {
                 #(#groups,)*
                 #(#children,)*
@@ -744,6 +900,7 @@ impl<'a> Params<'a> {
             quote!(#field: #state)
         });
         let group_states = self.groups.iter().map(|group| &group.state);
+        let hidden = self.synthetic.then(|| quote!(#[doc(hidden)]));
         let builder_doc = docs::attrs(&[
             format!(
                 "Builds [`{}`]; start with `{}`.",
@@ -757,6 +914,7 @@ impl<'a> Params<'a> {
         ]);
         out.extend(quote! {
             #(#builder_doc)*
+            #hidden
             #vis struct #builder #generics #where_clause {
                 #(#group_fields,)*
                 #(#child_fields,)*
@@ -863,7 +1021,7 @@ impl<'a> Params<'a> {
             let current = self.builder_in(&states, &parent);
             let doc = doc(&format!(
                 "Moves to the builder of {}. Its next setter sets one of its parameters and returns to the outermost builder.",
-                self.link(&child.ty)
+                self.link(&child.named)
             ));
             out.extend(quote! {
                 #[doc(hidden)]
@@ -1019,7 +1177,7 @@ impl<'a> Params<'a> {
                 }
             }
         });
-        if self.item.generics.params.is_empty() {
+        if self.item.generics.params.is_empty() && !self.synthetic {
             out.extend(quote! {
                 #krate::__if_sqlx! {
                     impl #impl_generics #any #where_clause {

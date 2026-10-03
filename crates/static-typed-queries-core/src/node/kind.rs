@@ -4,4 +4,5 @@ pub enum Kind {
     Query,
     Dml,
     Ddl,
+    Scope,
 }

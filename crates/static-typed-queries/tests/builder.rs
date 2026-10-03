@@ -103,6 +103,13 @@ pub struct Report;
 )]
 pub struct ItemNames;
 
+#[query(
+    Postgres,
+    separate(CountOf<ActiveUsers>),
+    sql = "SELECT u.email, {CountOf<ActiveUsers>} AS org_size FROM {ActiveUsers} u"
+)]
+pub struct SeparateCounts;
+
 #[test]
 fn names_come_from_the_sql_and_collisions_need_repeated_calls() {
     let params = Search::builder()
@@ -212,6 +219,28 @@ fn items_are_named_by_alias_then_type_then_full_type() {
     );
     assert_eq!(params.matching.status, "paid");
     assert_eq!(params.au.org_id, 3);
+}
+
+#[test]
+fn separate_items_hold_their_own_values() {
+    let params = SeparateCounts::builder()
+        .active_users()
+        .org_id(1)
+        .org_size()
+        .active_users()
+        .org_id(2)
+        .build();
+    assert_eq!(params.active_users.org_id, 1);
+    assert_eq!(params.org_size.active_users.org_id, 2);
+    assert_eq!(
+        SeparateCounts::SQL,
+        r#"WITH "active_users" AS (SELECT id, email FROM "users" WHERE org_id = $1), "active_users_2" AS (SELECT id, email FROM "users" WHERE org_id = $2) SELECT u.email, (SELECT count(*) FROM "active_users") AS org_size FROM "active_users_2" u"#
+    );
+    let paths: Vec<Vec<u16>> = SeparateCounts::BINDS
+        .iter()
+        .map(|bind| bind.path().steps().to_vec())
+        .collect();
+    assert_eq!(paths, [vec![0, 1], vec![1]]);
 }
 
 #[test]
