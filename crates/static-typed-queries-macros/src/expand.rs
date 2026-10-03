@@ -645,6 +645,8 @@ impl<'a> Params<'a> {
             }
         });
 
+        let module = self.module();
+        let mut traits = TokenStream::new();
         for (index, group) in self.groups.iter().enumerate() {
             let name = &group.name;
             let field = &group.field;
@@ -660,6 +662,38 @@ impl<'a> Params<'a> {
                 .filter(|(other, _)| *other != index)
                 .map(|(_, state)| state.clone())
                 .collect();
+            let generics = self.generics(&free);
+            let (impl_generics, _, where_clause) = generics.split_for_impl();
+            let mut done = states.clone();
+            done[index] = quote!(#krate::builder::Set);
+            let done = self.builder_ty(&done);
+            let again = format_ident!("{}Again", group.state);
+            let (message, label) = match group.slots.len() {
+                1 => (
+                    format!("`{name}` is already set on the `{ident}` builder"),
+                    format!("`{name}` takes one value"),
+                ),
+                len => (
+                    format!("all {len} `{name}` values are already set on the `{ident}` builder"),
+                    format!("`{name}` takes {len} values, one per appearance in the template"),
+                ),
+            };
+            traits.extend(quote! {
+                #[diagnostic::on_unimplemented(message = #message, label = #label)]
+                pub trait #again {}
+
+                #[diagnostic::do_not_recommend]
+                impl #again for ::core::convert::Infallible {}
+            });
+            out.extend(quote! {
+                impl #impl_generics #done #where_clause {
+                    #[doc(hidden)]
+                    pub fn #name<__Value: #module::#again>(self, _: __Value) -> Self {
+                        self
+                    }
+                }
+            });
+
             free.push(quote!(__Rest: #krate::builder::Remaining));
             let generics = self.generics(&free);
             let (impl_generics, _, where_clause) = generics.split_for_impl();
@@ -726,8 +760,6 @@ impl<'a> Params<'a> {
             });
         }
 
-        let module = self.module();
-        let mut traits = TokenStream::new();
         let mut ready: Vec<syn::WherePredicate> = Vec::new();
         for group in &self.groups {
             let (name, state) = (&group.name, &group.state);
