@@ -1,7 +1,7 @@
 use std::fmt::Display;
 
 use syn::parse::{Parse, ParseStream};
-use syn::{Ident, LitStr, Token, Type, parenthesized};
+use syn::{Ident, LitBool, LitStr, Token, Type, parenthesized};
 
 #[derive(Clone, Copy)]
 pub(crate) enum Placement {
@@ -41,6 +41,7 @@ pub(crate) struct Args {
     pub placement: Option<Placement>,
     pub display: Option<Ident>,
     pub debug: Option<Ident>,
+    pub parse_check: Option<LitBool>,
     to_add: ToAdd,
 }
 
@@ -54,6 +55,7 @@ impl ToAdd {
             "name" => &[3],
             "display" => &[4],
             "debug" => &[5],
+            "parse_check" => &[6],
             _ => return,
         };
         for &idx in slots {
@@ -74,8 +76,9 @@ impl Default for ToAdd {
                 Some("name"),
                 Some("display"),
                 Some("debug"),
+                Some("parse_check"),
             ],
-            6,
+            7,
         )
     }
 }
@@ -119,6 +122,7 @@ impl Parse for Args {
             placement: None,
             display: None,
             debug: None,
+            parse_check: None,
             to_add: ToAdd::default(),
         };
         while !input.is_empty() {
@@ -158,6 +162,13 @@ impl Parse for Args {
                 )?,
                 key_str @ "debug" => set(
                     &mut args.debug,
+                    value(input)?,
+                    &key,
+                    &mut args.to_add,
+                    key_str,
+                )?,
+                key_str @ "parse_check" => set(
+                    &mut args.parse_check,
                     value(input)?,
                     &key,
                     &mut args.to_add,

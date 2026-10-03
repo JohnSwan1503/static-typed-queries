@@ -25,6 +25,12 @@ pub(crate) fn table(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
             "tables are always referenced by name",
         ));
     }
+    if let Some(parse_check) = &args.parse_check {
+        return Err(syn::Error::new(
+            parse_check.span(),
+            "tables have no SQL to check",
+        ));
+    }
     if !item.generics.params.is_empty() {
         return Err(syn::Error::new_spanned(
             &item.generics,
@@ -122,8 +128,20 @@ pub(crate) fn query(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
     let params_struct = params.definition();
     let bind_params = params.bind_impl();
     let builder = params.builder(dialect);
+    let parse_check = args.parse_check.as_ref().is_none_or(|check| check.value);
     let statement = item.generics.params.is_empty().then(|| {
         let test = format_ident!("{}_sql_parses", snake_case(&ident.to_string()));
+        let test = parse_check.then(|| {
+            quote! {
+                #krate::__if_parse_check! {
+                    #[cfg(test)]
+                    #[test]
+                    fn #test() {
+                        #krate::check::parse::<#ident>();
+                    }
+                }
+            }
+        });
         quote! {
             #krate::impl_statement!(#ident);
 
@@ -132,13 +150,7 @@ pub(crate) fn query(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
                 pub const SQL: &'static str = <Self as #krate::statement::Statement>::SQL;
             }
 
-            #krate::__if_parse_check! {
-                #[cfg(test)]
-                #[test]
-                fn #test() {
-                    #krate::check::parse::<#ident>();
-                }
-            }
+            #test
         }
     });
     let fmt = fmt(&args, &item, true)?;

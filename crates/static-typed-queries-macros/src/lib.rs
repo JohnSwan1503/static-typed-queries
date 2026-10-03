@@ -107,6 +107,9 @@ pub fn table(args: TokenStream, item: TokenStream) -> TokenStream {
 ///   rendered SQL or the name.
 /// - `debug = sql` or `debug = tree`: implements `Debug`, writing the rendered
 ///   SQL as a quoted string or the query's node tree.
+/// - `parse_check = false`: leaves the query out of the `parse-check`
+///   feature's tests. Use it on queries defined inside functions, where rustc
+///   can't run the generated test.
 ///
 /// The template is parsed with the grammar of the dialect, which is picked by
 /// the last segment of the dialect path: `Postgres`, `MySql` or `Sqlite`. Any

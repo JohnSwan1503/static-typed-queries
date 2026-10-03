@@ -89,3 +89,16 @@ fn statement_kind_comes_from_the_parsed_sql() {
         r#"INSERT INTO "users" (email) VALUES ($1) RETURNING id"#
     );
 }
+
+#[test]
+fn queries_inside_functions_can_skip_the_parse_check() {
+    #[query(
+        Postgres,
+        parse_check = false,
+        sql = "SELECT id FROM {Users} WHERE id = {id: i64}"
+    )]
+    pub struct Local;
+
+    assert_eq!(Local::SQL, r#"SELECT id FROM "users" WHERE id = $1"#);
+    assert_eq!(Local::builder().id(7).build().id, 7);
+}
