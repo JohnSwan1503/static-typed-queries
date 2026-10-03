@@ -1,4 +1,6 @@
 pub mod builder;
+#[cfg(feature = "parse-check")]
+pub mod check;
 pub mod dialect;
 pub mod embed;
 pub mod node;
@@ -26,5 +28,21 @@ macro_rules! __if_sqlx {
 #[doc(hidden)]
 #[macro_export]
 macro_rules! __if_sqlx {
+    ($($tokens:tt)*) => {};
+}
+
+#[cfg(feature = "parse-check")]
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __if_parse_check {
+    ($($tokens:tt)*) => {
+        $($tokens)*
+    };
+}
+
+#[cfg(not(feature = "parse-check"))]
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __if_parse_check {
     ($($tokens:tt)*) => {};
 }

@@ -123,12 +123,21 @@ pub(crate) fn query(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
     let bind_params = params.bind_impl();
     let builder = params.builder(dialect);
     let statement = item.generics.params.is_empty().then(|| {
+        let test = format_ident!("{}_sql_parses", snake_case(&ident.to_string()));
         quote! {
             #krate::impl_statement!(#ident);
 
             impl #ident {
                 /// The SQL, rendered at compile time.
                 pub const SQL: &'static str = <Self as #krate::statement::Statement>::SQL;
+            }
+
+            #krate::__if_parse_check! {
+                #[cfg(test)]
+                #[test]
+                fn #test() {
+                    #krate::check::parse::<#ident>();
+                }
             }
         }
     });

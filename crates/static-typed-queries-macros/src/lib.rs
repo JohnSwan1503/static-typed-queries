@@ -190,6 +190,9 @@ pub fn table(args: TokenStream, item: TokenStream) -> TokenStream {
 ///   parameter is set.
 /// - A `Statement` impl and an inherent `Name::SQL` constant holding the
 ///   rendered SQL.
+/// - With the `parse-check` feature, a `#[cfg(test)]` test named
+///   `name_sql_parses` that parses the rendered SQL, everything embedded,
+///   with the dialect's grammar. Enable it under `[dev-dependencies]`.
 ///
 /// When several `{_: Type}` parameters end up with the same name, they share
 /// one field of type `[Type; N]` and the setter is called `N` times, in the

@@ -21,4 +21,9 @@ pub trait Dialect: 'static {
     const PARAMS: params::ParamStyle;
     const QUOTE: quote::Quote;
     const DML_IN_CTE: bool;
+
+    #[cfg(feature = "parse-check")]
+    fn grammar() -> Box<dyn sqlparser::dialect::Dialect> {
+        Box::new(sqlparser::dialect::GenericDialect {})
+    }
 }

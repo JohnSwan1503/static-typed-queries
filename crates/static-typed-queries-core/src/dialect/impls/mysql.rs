@@ -11,6 +11,11 @@ impl Dialect for MySql {
     const PARAMS: ParamStyle = ParamStyle::question_mark(false);
     const DML_IN_CTE: bool = false;
     const QUOTE: Quote = Quote::new(b'`', b'`');
+
+    #[cfg(feature = "parse-check")]
+    fn grammar() -> Box<dyn sqlparser::dialect::Dialect> {
+        Box::new(sqlparser::dialect::MySqlDialect {})
+    }
 }
 
 #[cfg(feature = "mysql")]

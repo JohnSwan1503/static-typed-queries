@@ -11,6 +11,11 @@ impl Dialect for Postgres {
     const PARAMS: ParamStyle = ParamStyle::dollar_sign(true);
     const DML_IN_CTE: bool = true;
     const QUOTE: Quote = Quote::new(b'"', b'"');
+
+    #[cfg(feature = "parse-check")]
+    fn grammar() -> Box<dyn sqlparser::dialect::Dialect> {
+        Box::new(sqlparser::dialect::PostgreSqlDialect {})
+    }
 }
 
 #[cfg(feature = "postgres")]

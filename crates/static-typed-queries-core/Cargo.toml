@@ -10,12 +10,14 @@ mysql = ["sqlx/mysql"]
 postgres = ["sqlx/postgres"]
 sqlite = ["sqlx/sqlite"]
 sqlite-unbundled = ["sqlx/sqlite-unbundled"]
+parse-check = ["dep:sqlparser"]
 
 [dependencies]
+sqlparser = { version = "0.63.0", optional = true }
 sqlx = { workspace = true, optional = true }
 
 [dev-dependencies]
-static-typed-queries-core = { path = ".", features = ["mysql", "postgres", "sqlite"] }
+static-typed-queries-core = { path = ".", features = ["mysql", "postgres", "sqlite", "parse-check"] }
 sqlx = { workspace = true, features = ["runtime-tokio"] }
 tokio.workspace = true
 trybuild.workspace = true

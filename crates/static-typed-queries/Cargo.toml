@@ -10,13 +10,14 @@ mysql = ["static-typed-queries-core/mysql"]
 postgres = ["static-typed-queries-core/postgres"]
 sqlite = ["static-typed-queries-core/sqlite"]
 sqlite-unbundled = ["static-typed-queries-core/sqlite-unbundled"]
+parse-check = ["static-typed-queries-core/parse-check"]
 
 [dependencies]
 static-typed-queries-core = { path = "../static-typed-queries-core" }
 static-typed-queries-macros = { path = "../static-typed-queries-macros" }
 
 [dev-dependencies]
-static-typed-queries = { path = ".", features = ["mysql", "postgres", "sqlite"] }
+static-typed-queries = { path = ".", features = ["mysql", "postgres", "sqlite", "parse-check"] }
 sqlx = { workspace = true, features = ["runtime-tokio", "sqlite"] }
 tokio.workspace = true
 trybuild.workspace = true
