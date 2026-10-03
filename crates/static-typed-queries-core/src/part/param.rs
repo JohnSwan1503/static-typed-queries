@@ -1,15 +1,26 @@
 use super::Part;
 
-#[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct Param(u16);
+pub struct Param {
+    slot: u16,
+    field: &'static str,
+    ty: &'static str,
+}
 
 impl Param {
-    pub const fn part(param: u16) -> Part {
-        Part::Param(Param(param))
+    pub const fn part(slot: u16, field: &'static str, ty: &'static str) -> Part {
+        Part::Param(Param { slot, field, ty })
     }
 
     pub const fn inner(self) -> u16 {
-        self.0
+        self.slot
+    }
+
+    pub const fn field(self) -> &'static str {
+        self.field
+    }
+
+    pub const fn ty(self) -> &'static str {
+        self.ty
     }
 }

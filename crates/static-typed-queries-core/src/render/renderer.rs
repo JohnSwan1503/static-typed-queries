@@ -9,6 +9,7 @@ use crate::node::kind::Kind;
 use crate::part::Part;
 use crate::part::from::From;
 use crate::part::from::rule::AliasRule;
+use crate::part::param::Param;
 use crate::statement::bind::Bind;
 use crate::statement::bind::path::Path;
 use crate::statement::bind::slot::Slot;
@@ -212,7 +213,7 @@ impl<'a, D: Dialect> Renderer<'a, D> {
             match parts[i] {
                 Part::Lit(lit) => self.push(lit.as_str()),
                 Part::Ident(ident) => self.quoted(ident.0, 0),
-                Part::Param(param) => self.param(node, path, Slot::from_param(param)),
+                Part::Param(param) => self.param(node, path, param),
                 Part::Expr(expr) => {
                     self.push("(");
                     self.body(expr.as_ref(), child_path(node, path, expr.as_ref()));
@@ -245,12 +246,13 @@ impl<'a, D: Dialect> Renderer<'a, D> {
         }
     }
 
-    const fn param(&mut self, node: &'static Node, path: Path, slot: Slot) {
+    const fn param(&mut self, node: &'static Node, path: Path, param: Param) {
         self.byte(D::PARAMS.prefix());
         if !D::PARAMS.numbered() {
-            self.bind(node, path, slot);
+            self.bind(node, path, param);
             return;
         }
+        let slot = Slot::from_param(param);
         let number = match self.number_of(path, slot) {
             Some(number) => number,
             None => {
@@ -259,7 +261,7 @@ impl<'a, D: Dialect> Renderer<'a, D> {
                 }
                 self.numbered[self.numbered_count] = Some(Numbered { path, slot });
                 self.numbered_count += 1;
-                self.bind(node, path, slot);
+                self.bind(node, path, param);
                 self.numbered_count as u16
             }
         };
@@ -280,12 +282,12 @@ impl<'a, D: Dialect> Renderer<'a, D> {
         None
     }
 
-    const fn bind(&mut self, node: &'static Node, path: Path, slot: Slot) {
+    const fn bind(&mut self, node: &'static Node, path: Path, param: Param) {
         if self.size.binds == u16::MAX as usize {
             fail(&["a statement can't have more than 65535 parameters"]);
         }
         if !self.binds.is_empty() {
-            self.binds[self.size.binds] = Bind::from_node(node, path, slot);
+            self.binds[self.size.binds] = Bind::from_param(node, path, param);
         }
         self.size.binds += 1;
     }

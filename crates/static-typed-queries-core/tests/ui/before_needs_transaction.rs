@@ -23,7 +23,7 @@ const SET_TENANT: &Node = node!(
     Inject::Subquery,
     [
         Lit::part("SELECT set_config('app.tenant', "),
-        Param::part(0),
+        Param::part(0, "tenant", "String"),
         Lit::part(", true)")
     ]
 );

@@ -18,7 +18,7 @@ const TREE: &Node = node!(
     Inject::cte(true),
     [
         Lit::part("SELECT id FROM nodes WHERE id = "),
-        Param::part(0),
+        Param::part(0, "root", "i64"),
         Lit::part(" UNION ALL SELECT n.id FROM nodes n JOIN tree t ON n.parent_id = t.id"),
     ]
 );

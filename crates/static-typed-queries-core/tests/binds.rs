@@ -27,7 +27,7 @@ const ORG_EVENTS: &Node = node!(
         Lit::part("SELECT id, kind FROM "),
         Ident::part("events"),
         Lit::part(" WHERE org_id = "),
-        Param::part(0),
+        Param::part(0, "org_id", "i64"),
     ]
 );
 
@@ -40,7 +40,7 @@ const KIND_COUNT: &Node = node!(
         Lit::part("SELECT count(*) FROM "),
         From::part(ORG_EVENTS, AliasRule::NodeName, None),
         Lit::part(" WHERE kind = "),
-        Param::part(0),
+        Param::part(0, "kind", "&'static str"),
     ]
 );
 
@@ -55,9 +55,9 @@ const REPORT: &Node = node!(
         Lit::part(" AS first, (SELECT max(id) FROM "),
         From::part(ORG_EVENTS, AliasRule::NodeName, None),
         Lit::part(" WHERE id < "),
-        Param::part(0),
+        Param::part(0, "below", "i64"),
         Lit::part(" AND id <> "),
-        Param::part(0),
+        Param::part(0, "below", "i64"),
         Lit::part(") AS below"),
     ]
 );
@@ -171,11 +171,15 @@ fn items_with_params_get_one_instance_per_path() {
     assert_eq!(
         ReportPostgres::BINDS,
         [
-            Bind::from_native("org_events", 1, &[0, 0], 0),
-            Bind::from_native("org_events", 1, &[1], 0),
-            Bind::from_native("kind_count", 2, &[0], 0),
-            Bind::from_native("report", 3, &[], 0),
+            Bind::from_native("org_events", 1, &[0, 0], 0, "org_id", "i64"),
+            Bind::from_native("org_events", 1, &[1], 0, "org_id", "i64"),
+            Bind::from_native("kind_count", 2, &[0], 0, "kind", "&'static str"),
+            Bind::from_native("report", 3, &[], 0, "below", "i64"),
         ]
+    );
+    assert_eq!(
+        ReportPostgres::BINDS[2].to_string(),
+        "kind_count.kind: &'static str"
     );
 }
 
@@ -184,11 +188,11 @@ fn positional_binds_repeat_for_every_placeholder() {
     assert_eq!(
         ReportMySql::BINDS,
         [
-            Bind::from_native("org_events", 1, &[0, 0], 0),
-            Bind::from_native("org_events", 1, &[1], 0),
-            Bind::from_native("kind_count", 2, &[0], 0),
-            Bind::from_native("report", 3, &[], 0),
-            Bind::from_native("report", 3, &[], 0),
+            Bind::from_native("org_events", 1, &[0, 0], 0, "org_id", "i64"),
+            Bind::from_native("org_events", 1, &[1], 0, "org_id", "i64"),
+            Bind::from_native("kind_count", 2, &[0], 0, "kind", "&'static str"),
+            Bind::from_native("report", 3, &[], 0, "below", "i64"),
+            Bind::from_native("report", 3, &[], 0, "below", "i64"),
         ]
     );
 }

@@ -107,17 +107,17 @@ pub(crate) fn query(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
         .as_ref()
         .map_or_else(|| snake_case(&ident.to_string()), LitStr::value);
     let inject = placement(args.placement.unwrap_or(Placement::Subquery));
+    let params = Params::new(&template, &analysis, &item, sql)?;
     let node = node(
         &node_name,
         fingerprint(ident, &item),
         kind,
         inject,
-        parts(&template, &analysis),
+        parts(&template, &analysis, &params),
     );
 
     let dialect = &args.dialect;
     let (impl_generics, ty_generics, where_clause) = item.generics.split_for_impl();
-    let params = Params::new(&template, &analysis, &item, sql)?;
     let params_ty = params.ty();
     let params_struct = params.definition();
     let bind_params = params.bind_impl();
@@ -197,7 +197,7 @@ fn placement(placement: Placement) -> TokenStream {
     }
 }
 
-fn parts(template: &Template, analysis: &Analysis) -> Vec<TokenStream> {
+fn parts(template: &Template, analysis: &Analysis, params: &Params) -> Vec<TokenStream> {
     let krate = krate();
     let mut positions = analysis.refs.iter();
     template
@@ -206,8 +206,9 @@ fn parts(template: &Template, analysis: &Analysis) -> Vec<TokenStream> {
         .map(|segment| match segment {
             Segment::Lit(text) => quote!(#krate::part::lit::Lit::part(#text)),
             Segment::Param(slot) => {
+                let (field, ty) = params.describe(*slot);
                 let slot = Literal::u16_unsuffixed(*slot);
-                quote!(#krate::part::param::Param::part(#slot))
+                quote!(#krate::part::param::Param::part(#slot, #field, #ty))
             }
             Segment::Ref(item) => {
                 let position = positions.next().expect("a position for every reference");
@@ -344,6 +345,20 @@ impl<'a> Params<'a> {
             groups,
             children,
         })
+    }
+
+    fn describe(&self, slot: u16) -> (String, String) {
+        self.groups
+            .iter()
+            .find_map(|group| {
+                let index = group.slots.iter().position(|other| *other == slot)?;
+                let field = match group.slots.len() {
+                    1 => group.name.to_string(),
+                    _ => format!("{}[{index}]", group.name),
+                };
+                Some((field, docs::type_string(&group.ty)))
+            })
+            .expect("every slot belongs to a group")
     }
 
     fn is_empty(&self) -> bool {

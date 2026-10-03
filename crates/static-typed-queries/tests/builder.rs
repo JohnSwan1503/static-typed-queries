@@ -117,6 +117,33 @@ fn names_come_from_the_sql_and_collisions_need_repeated_calls() {
 }
 
 #[test]
+fn binds_name_the_field_and_type_they_come_from() {
+    let binds: Vec<String> = Search::BINDS.iter().map(ToString::to_string).collect();
+    assert_eq!(
+        binds,
+        [
+            "search.created_at[0]: i64",
+            "search.created_at[1]: i64",
+            "search.status: String",
+            "search.customer_id[0]: i64",
+            "search.customer_id[1]: i64",
+            "search.note: String",
+            "search.limit: i64",
+            "search.offset: i64",
+        ]
+    );
+    let binds: Vec<String> = Report::BINDS.iter().map(ToString::to_string).collect();
+    assert_eq!(
+        binds,
+        [
+            "active_users.org_id: i64",
+            "active_users.org_id: i64",
+            "report.email: String",
+        ]
+    );
+}
+
+#[test]
 fn insert_columns_update_targets_and_aliases_name_params() {
     let insert = PlaceOrder::builder().customer_id(1).total(500).build();
     assert_eq!((insert.customer_id, insert.total), (1, 500));

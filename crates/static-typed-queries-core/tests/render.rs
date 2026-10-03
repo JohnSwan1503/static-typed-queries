@@ -41,7 +41,7 @@ impl Sql for ActiveUsers {
             Lit::part("SELECT id, email FROM "),
             From::part(Users::NODE, AliasRule::NodeName, None),
             Lit::part(" WHERE deleted_at IS NULL AND org_id = "),
-            Param::part(0),
+            Param::part(0, "org_id", "i64"),
         ]
     );
 }
@@ -79,7 +79,7 @@ impl Sql for UserReport {
             Lit::part(" AS total FROM "),
             From::part(ActiveUsers::NODE, AliasRule::Given, None),
             Lit::part(" u WHERE u.id = "),
-            Param::part(0),
+            Param::part(0, "id", "i64"),
         ]
     );
 }
@@ -124,9 +124,9 @@ const BETWEEN: &Node = node!(
     Inject::Subquery,
     [
         Lit::part("SELECT id FROM t WHERE a > "),
-        Param::part(0),
+        Param::part(0, "min", "i64"),
         Lit::part(" AND b > "),
-        Param::part(0)
+        Param::part(0, "min", "i64")
     ]
 );
 
@@ -141,7 +141,7 @@ const TWICE: &Node = node!(
         Lit::part(" OR id IN "),
         Expr::part(BETWEEN),
         Lit::part(" LIMIT "),
-        Param::part(0),
+        Param::part(0, "limit", "i64"),
     ]
 );
 
@@ -228,7 +228,7 @@ const TREE: &Node = node!(
     Inject::Cte { recursive: true },
     [
         Lit::part("SELECT id, parent_id FROM nodes WHERE id = "),
-        Param::part(0),
+        Param::part(0, "root", "i64"),
         Lit::part(
             " UNION ALL SELECT n.id, n.parent_id FROM nodes n JOIN tree t ON n.parent_id = t.id"
         ),

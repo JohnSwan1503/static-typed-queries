@@ -47,14 +47,9 @@ const SCHEMA: &str = "
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), sqlx::Error> {
     println!("-- UserReport::SQL, built at compile time:\n{UserReport}\n");
-    println!("-- bind order:");
-    for bind in UserReport::BINDS {
-        println!(
-            "   {:<14} path {:?} slot {}",
-            bind.name().as_str(),
-            bind.path(),
-            bind.slot().inner()
-        );
+    println!("-- binds:");
+    for (i, bind) in UserReport::BINDS.iter().enumerate() {
+        println!("   ${} {bind}", i + 1);
     }
 
     let mut conn = SqliteConnection::connect("sqlite::memory:").await?;

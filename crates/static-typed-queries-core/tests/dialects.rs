@@ -25,9 +25,9 @@ const RECENT: &Node = node!(
         Lit::part("SELECT id FROM "),
         Ident::part("events"),
         Lit::part(" WHERE at > "),
-        Param::part(0),
+        Param::part(0, "since", "i64"),
         Lit::part(" OR at > "),
-        Param::part(0),
+        Param::part(0, "since", "i64"),
     ]
 );
 
@@ -40,7 +40,7 @@ const RECENT_COUNT: &Node = node!(
         Lit::part("SELECT count(*) FROM "),
         From::part(RECENT, AliasRule::NodeName, None),
         Lit::part(" WHERE id > "),
-        Param::part(0),
+        Param::part(0, "min_id", "i64"),
     ]
 );
 
