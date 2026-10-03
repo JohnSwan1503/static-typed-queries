@@ -114,8 +114,6 @@ impl Display for ToAdd {
     }
 }
 
-impl Args {}
-
 impl Parse for Args {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let mut args = Args {

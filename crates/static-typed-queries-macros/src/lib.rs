@@ -8,13 +8,9 @@ mod template;
 use proc_macro::TokenStream;
 use syn::{ItemStruct, parse_macro_input};
 
-#[cfg(doc)]
-use static_typed_queries::dialect::postgres::Postgres;
-
 /// Declares a database table that [`query`] templates can reference as `{Type}`.
 ///
 /// ```
-/// use static_typed_queries::dialect::postgres::Postgres;
 /// use static_typed_queries::prelude::*;
 ///
 /// #[table(Postgres, name = "audit.events")]
@@ -28,15 +24,9 @@ use static_typed_queries::dialect::postgres::Postgres;
 ///
 /// ## Arguments
 ///
-/// 1. ***Dialect***: The first argument is always a type that implements `Dialect`,
-///   This crate provides implementations for the following, available via their
-///   respective feature flags:
-///     * MySQL: [`MySql`]()
-///     * PostgreSQL: [`Postgres`](::static_typed_queries::dialect::postgres::Postgres)
-///     * SQLite: [`Sqlite`](::static_typed_queries::dialect::sqlite::Sqlite)
-/// 2.
-///
-/// The dialect type comes first, followed by any of these in any order:
+/// The first argument is the dialect: `MySql`, `Postgres` or `Sqlite`, each
+/// behind the feature of the same name. It's followed by any of these in any
+/// order:
 ///
 /// - `name = "..."` (required): the table's name in the database. Write a
 ///   schema-qualified name with dots; each segment is quoted on its own using
@@ -66,7 +56,6 @@ pub fn table(args: TokenStream, item: TokenStream) -> TokenStream {
 /// at compile time from a template.
 ///
 /// ```
-/// use static_typed_queries::dialect::postgres::Postgres;
 /// use static_typed_queries::prelude::*;
 ///
 /// #[table(Postgres, name = "users")]
@@ -149,7 +138,6 @@ pub fn table(args: TokenStream, item: TokenStream) -> TokenStream {
 /// anywhere else is always inlined as a parenthesized subquery.
 ///
 /// ```
-/// # use static_typed_queries::dialect::postgres::Postgres;
 /// # use static_typed_queries::prelude::*;
 /// # #[table(Postgres, name = "users")]
 /// # pub struct Users;
@@ -227,7 +215,6 @@ pub fn table(args: TokenStream, item: TokenStream) -> TokenStream {
 /// it, so its parameters are set there, once, and `CountOf` has nothing to set.
 ///
 /// ```
-/// # use static_typed_queries::dialect::postgres::Postgres;
 /// # use static_typed_queries::prelude::*;
 /// # #[table(Postgres, name = "users")]
 /// # pub struct Users;

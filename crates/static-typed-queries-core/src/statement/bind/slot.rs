@@ -18,8 +18,4 @@ impl Slot {
     pub const fn inner(self) -> u16 {
         self.0
     }
-
-    pub const fn as_index(self) -> usize {
-        self.0 as usize
-    }
 }

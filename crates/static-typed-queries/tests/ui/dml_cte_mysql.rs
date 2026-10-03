@@ -1,4 +1,3 @@
-use static_typed_queries::dialect::mysql::MySql;
 use static_typed_queries::prelude::*;
 
 #[table(MySql, name = "events")]

@@ -1,6 +1,5 @@
 use std::marker::PhantomData;
 
-use static_typed_queries::dialect::postgres::Postgres;
 use static_typed_queries::prelude::*;
 
 #[table(Postgres, name = "audit.events")]

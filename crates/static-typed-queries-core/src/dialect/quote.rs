@@ -10,12 +10,4 @@ impl Quote {
     pub const fn as_array(self) -> [u8; 2] {
         self.0
     }
-
-    pub const fn open(&self) -> u8 {
-        self.0[0]
-    }
-
-    pub const fn close(&self) -> u8 {
-        self.0[1]
-    }
 }

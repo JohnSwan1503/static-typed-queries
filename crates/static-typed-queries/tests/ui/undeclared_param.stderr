@@ -1,5 +1,5 @@
 error: parameter `org_id` isn't declared; declare it once as `{org_id: Type}`
- --> tests/ui/undeclared_param.rs:7:25
+ --> tests/ui/undeclared_param.rs:6:25
   |
-7 | #[query(Postgres, sql = "SELECT id FROM {Users} WHERE org_id = {org_id}")]
+6 | #[query(Postgres, sql = "SELECT id FROM {Users} WHERE org_id = {org_id}")]
   |                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

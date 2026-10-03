@@ -1,13 +1,13 @@
 error[E0277]: `Search` is missing `status`
-  --> tests/ui/builder_missing_param.rs:11:59
+  --> tests/ui/builder_missing_param.rs:10:59
    |
-11 |     let _ = Search::builder().created_at(1).created_at(2).build();
+10 |     let _ = Search::builder().created_at(1).created_at(2).build();
    |                                                           ^^^^^ call `.status(…)` on the `Search` builder first
    |
-   = help: the trait `ParamStatus` is not implemented for `Unset<Set>`
+   = help: the trait `ParamStatus` is not implemented for `static_typed_queries::__private::builder::Unset<static_typed_queries::__private::builder::Set>`
 note: required by a bound in `SearchBuilder::<ParamCreatedAt, ParamStatus, ItemOrders>::build`
-  --> tests/ui/builder_missing_param.rs:7:1
+  --> tests/ui/builder_missing_param.rs:6:1
    |
- 7 | #[query(Postgres, sql = "SELECT id FROM {Orders} WHERE created_at BETWEEN {_: i64} AND {_: i64} AND status = {_: String}")]
+ 6 | #[query(Postgres, sql = "SELECT id FROM {Orders} WHERE created_at BETWEEN {_: i64} AND {_: i64} AND status = {_: String}")]
    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `SearchBuilder::<ParamCreatedAt, ParamStatus, ItemOrders>::build`
    = note: this error originates in the attribute macro `query` (in Nightly builds, run with -Z macro-backtrace for more info)

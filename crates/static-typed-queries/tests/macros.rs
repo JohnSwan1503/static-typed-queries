@@ -1,6 +1,4 @@
-use static_typed_queries::dialect::mysql::MySql;
-use static_typed_queries::dialect::postgres::Postgres;
-use static_typed_queries::node::kind::Kind;
+use static_typed_queries::__private::node::kind::Kind;
 use static_typed_queries::prelude::*;
 
 #[table(Postgres, name = "users")]

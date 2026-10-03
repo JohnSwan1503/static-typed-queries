@@ -14,7 +14,7 @@ use crate::template::{self, Segment, Template};
 const RESERVED: &[&str] = &["build", "builder", "finish", "query"];
 
 fn krate() -> TokenStream {
-    quote!(::static_typed_queries)
+    quote!(::static_typed_queries::__private)
 }
 
 pub(crate) fn table(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {

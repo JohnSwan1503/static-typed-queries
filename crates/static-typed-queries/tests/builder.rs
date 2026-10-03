@@ -1,8 +1,6 @@
 use std::marker::PhantomData;
 
 use sqlx::{Connection, Row, SqliteConnection};
-use static_typed_queries::dialect::postgres::Postgres;
-use static_typed_queries::dialect::sqlite::Sqlite;
 use static_typed_queries::prelude::*;
 
 #[table(Postgres, name = "orders")]

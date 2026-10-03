@@ -1,13 +1,13 @@
 error[E0277]: `Search` is missing values for `created_at`
-  --> tests/ui/builder_collision_set_once.rs:11:71
+  --> tests/ui/builder_collision_set_once.rs:10:71
    |
-11 |     let _ = Search::builder().status("paid".to_owned()).created_at(1).build();
+10 |     let _ = Search::builder().status("paid".to_owned()).created_at(1).build();
    |                                                                       ^^^^^ call `.created_at(…)` 2 times on the `Search` builder first, once per value
    |
-   = help: the trait `ParamCreatedAt` is not implemented for `Unset<Set>`
+   = help: the trait `ParamCreatedAt` is not implemented for `static_typed_queries::__private::builder::Unset<static_typed_queries::__private::builder::Set>`
 note: required by a bound in `SearchBuilder::<ParamCreatedAt, ParamStatus, ItemOrders>::build`
-  --> tests/ui/builder_collision_set_once.rs:7:1
+  --> tests/ui/builder_collision_set_once.rs:6:1
    |
- 7 | #[query(Postgres, sql = "SELECT id FROM {Orders} WHERE created_at BETWEEN {_: i64} AND {_: i64} AND status = {_: String}")]
+ 6 | #[query(Postgres, sql = "SELECT id FROM {Orders} WHERE created_at BETWEEN {_: i64} AND {_: i64} AND status = {_: String}")]
    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `SearchBuilder::<ParamCreatedAt, ParamStatus, ItemOrders>::build`
    = note: this error originates in the attribute macro `query` (in Nightly builds, run with -Z macro-backtrace for more info)

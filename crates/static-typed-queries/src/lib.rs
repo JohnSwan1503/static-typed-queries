@@ -1,15 +1,39 @@
-#[cfg(feature = "parse-check")]
-pub use static_typed_queries_core::check;
-pub use static_typed_queries_core::{builder, dialect, embed, node, part, render, sql, statement};
+pub use static_typed_queries_core::builder::Build;
+pub use static_typed_queries_core::sql::Sql;
+pub use static_typed_queries_core::statement::Statement;
 pub use static_typed_queries_core::{impl_debug, impl_display, impl_statement};
 pub use static_typed_queries_macros::{query, table};
 
-#[doc(hidden)]
-pub use static_typed_queries_core::{__if_parse_check, __if_sqlx, __private};
+#[cfg(feature = "parse-check")]
+pub use static_typed_queries_core::check;
+
+pub mod bind {
+    pub use static_typed_queries_core::statement::bind::Bind;
+    pub use static_typed_queries_core::statement::bind::path::Path;
+    pub use static_typed_queries_core::statement::bind::slot::Slot;
+}
+
+pub mod dialect {
+    pub use static_typed_queries_core::dialect::Dialect;
+    #[cfg(feature = "mysql")]
+    pub use static_typed_queries_core::dialect::mysql::MySql;
+    #[cfg(feature = "postgres")]
+    pub use static_typed_queries_core::dialect::postgres::Postgres;
+    #[cfg(feature = "sqlite")]
+    pub use static_typed_queries_core::dialect::sqlite::Sqlite;
+}
 
 pub mod prelude {
-    pub use crate::builder::Build;
-    pub use crate::sql::Sql;
-    pub use crate::statement::Statement;
-    pub use crate::{query, table};
+    #[cfg(feature = "mysql")]
+    pub use crate::dialect::MySql;
+    #[cfg(feature = "postgres")]
+    pub use crate::dialect::Postgres;
+    #[cfg(feature = "sqlite")]
+    pub use crate::dialect::Sqlite;
+    pub use crate::{Build, Sql, Statement, query, table};
+}
+
+#[doc(hidden)]
+pub mod __private {
+    pub use static_typed_queries_core::*;
 }
