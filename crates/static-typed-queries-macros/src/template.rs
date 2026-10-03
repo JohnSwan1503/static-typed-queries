@@ -1,10 +1,12 @@
+use quote::ToTokens;
 use syn::parse::{Parse, ParseStream};
-use syn::{LitStr, Token, Type};
+use syn::{Ident, LitStr, Token, Type};
 
 use crate::args::Placement;
 
 pub(crate) enum Segment {
     Lit(String),
+    Param(u16),
     Ref(Box<Ref>),
 }
 
@@ -14,13 +16,45 @@ pub(crate) struct Ref {
     pub target: bool,
 }
 
+pub(crate) struct Param {
+    pub name: Option<Ident>,
+    pub ty: Type,
+}
+
 pub(crate) struct Template {
     pub segments: Vec<Segment>,
+    pub params: Vec<Param>,
+    pub children: Vec<Type>,
 }
 
 enum Raw {
     Lit(String),
+    Decl(Option<Ident>, Type),
+    Name(Ident, RefSyntax),
     Ref(RefSyntax),
+}
+
+struct ParamDeclaration {
+    name: Option<Ident>,
+    ty: Type,
+}
+
+impl Parse for ParamDeclaration {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let name = if input.parse::<Option<Token![_]>>()?.is_some() {
+            None
+        } else {
+            Some(input.parse::<Ident>()?)
+        };
+        if input.peek(Token![::]) {
+            return Err(input.error("not a parameter declaration"));
+        }
+        input.parse::<Token![:]>()?;
+        Ok(ParamDeclaration {
+            name,
+            ty: input.parse()?,
+        })
+    }
 }
 
 struct RefSyntax {
@@ -44,11 +78,41 @@ pub(crate) fn parse(sql: &LitStr) -> syn::Result<Template> {
     let error = |message: String| syn::Error::new(sql.span(), message);
     let raw = scan(&sql.value()).map_err(error)?;
 
+    let mut declared: Vec<(Ident, Type)> = Vec::new();
+    for item in &raw {
+        if let Raw::Decl(Some(name), ty) = item {
+            if declared.iter().any(|(other, _)| other == name) {
+                return Err(error(format!(
+                    "parameter `{name}` is declared more than once; declare it once as `{{{name}: Type}}` and reuse it as `{{{name}}}`"
+                )));
+            }
+            declared.push((name.clone(), ty.clone()));
+        }
+    }
+
     let mut segments = Vec::new();
+    let mut params: Vec<Param> = Vec::new();
+    let mut children: Vec<Type> = Vec::new();
     for (i, item) in raw.iter().enumerate() {
         match item {
             Raw::Lit(text) => segments.push(Segment::Lit(text.clone())),
-            Raw::Ref(syntax) => {
+            Raw::Decl(None, ty) => {
+                params.push(Param {
+                    name: None,
+                    ty: ty.clone(),
+                });
+                segments.push(Segment::Param(params.len() as u16 - 1));
+            }
+            Raw::Decl(Some(name), _) => segments.push(named(name, &declared, &mut params)),
+            Raw::Name(name, _) if declared.iter().any(|(other, _)| other == name) => {
+                segments.push(named(name, &declared, &mut params));
+            }
+            Raw::Name(name, _) if name.to_string().starts_with(|c: char| c.is_lowercase()) => {
+                return Err(error(format!(
+                    "parameter `{name}` isn't declared; declare it once as `{{{name}: Type}}`"
+                )));
+            }
+            Raw::Name(_, syntax) | Raw::Ref(syntax) => {
                 let previous = match i.checked_sub(1).map(|j| &raw[j]) {
                     Some(Raw::Lit(text)) => last_words(text),
                     _ => Vec::new(),
@@ -57,6 +121,12 @@ pub(crate) fn parse(sql: &LitStr) -> syn::Result<Template> {
                     previous.as_slice(),
                     [.., "INTO" | "UPDATE" | "TABLE" | "TRUNCATE"] | [.., "DELETE", "FROM"]
                 );
+                if !children
+                    .iter()
+                    .any(|child| type_key(child) == type_key(&syntax.ty))
+                {
+                    children.push(syntax.ty.clone());
+                }
                 segments.push(Segment::Ref(Box::new(Ref {
                     ty: syntax.ty.clone(),
                     placement: syntax.placement,
@@ -65,7 +135,33 @@ pub(crate) fn parse(sql: &LitStr) -> syn::Result<Template> {
             }
         }
     }
-    Ok(Template { segments })
+    Ok(Template {
+        segments,
+        params,
+        children,
+    })
+}
+
+fn named(name: &Ident, declared: &[(Ident, Type)], params: &mut Vec<Param>) -> Segment {
+    let slot = match params
+        .iter()
+        .position(|param| param.name.as_ref() == Some(name))
+    {
+        Some(slot) => slot,
+        None => {
+            let ty = declared
+                .iter()
+                .find(|(other, _)| other == name)
+                .map(|(_, ty)| ty.clone())
+                .expect("a declared parameter");
+            params.push(Param {
+                name: Some(name.clone()),
+                ty,
+            });
+            params.len() - 1
+        }
+    };
+    Segment::Param(slot as u16)
 }
 
 fn scan(text: &str) -> Result<Vec<Raw>, String> {
@@ -166,9 +262,19 @@ fn dollar_tag(chars: &[char], start: usize) -> Option<Vec<char>> {
 }
 
 fn placeholder(content: &str) -> Result<Raw, String> {
+    if let Ok(decl) = syn::parse_str::<ParamDeclaration>(content) {
+        return Ok(Raw::Decl(decl.name, decl.ty));
+    }
     let syntax = syn::parse_str::<RefSyntax>(content).map_err(|_| {
-        format!("can't read placeholder `{{{content}}}`; expected `{{Item}}` or `{{Item as cte}}`")
+        format!(
+            "can't read placeholder `{{{content}}}`; expected `{{Item}}`, `{{name: Type}}`, `{{_: Type}}` or `{{name}}`"
+        )
     })?;
+    if syntax.placement.is_none()
+        && let Ok(name) = syn::parse_str::<Ident>(content)
+    {
+        return Ok(Raw::Name(name, syntax));
+    }
     Ok(Raw::Ref(syntax))
 }
 
@@ -196,4 +302,8 @@ fn last_words(text: &str) -> Vec<&'static str> {
             _ => "",
         })
         .collect()
+}
+
+fn type_key(ty: &Type) -> String {
+    ty.to_token_stream().to_string()
 }

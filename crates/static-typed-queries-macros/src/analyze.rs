@@ -11,6 +11,7 @@ use syn::{LitStr, Type};
 
 use crate::template::{Segment, Template};
 
+const PARAM: &str = "__stq_p";
 const REF: &str = "__stq_r";
 
 pub(crate) enum Kind {
@@ -89,6 +90,7 @@ pub(crate) fn analyze(template: &Template, engine: Engine, sql: &LitStr) -> syn:
     for segment in &template.segments {
         match segment {
             Segment::Lit(lit) => text.push_str(lit),
+            Segment::Param(slot) => write!(text, "{PARAM}{slot}").unwrap(),
             Segment::Ref(item) if item.target => {
                 write!(text, "{REF}{}", refs.len()).unwrap();
                 refs.push(Position {

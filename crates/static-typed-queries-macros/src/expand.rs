@@ -1,10 +1,10 @@
-use proc_macro2::{Span, TokenStream};
-use quote::quote;
-use syn::{GenericParam, Ident, ItemStruct, LitStr};
+use proc_macro2::{Literal, Span, TokenStream};
+use quote::{format_ident, quote};
+use syn::{GenericParam, Ident, ItemStruct, LitStr, Type};
 
 use crate::analyze::{self, Analysis, Engine, Kind};
 use crate::args::{Args, Placement};
-use crate::naming::snake_case;
+use crate::naming::{field_name, snake_case, unique};
 use crate::template::{self, Segment, Template};
 
 fn krate() -> TokenStream {
@@ -103,6 +103,9 @@ pub(crate) fn query(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
 
     let dialect = &args.dialect;
     let (impl_generics, ty_generics, where_clause) = item.generics.split_for_impl();
+    let params = Params::new(&template, &item);
+    let params_ty = params.ty();
+    let params_struct = params.definition();
     let statement = item.generics.params.is_empty().then(|| {
         quote! {
             #krate::impl_statement!(#ident);
@@ -116,9 +119,11 @@ pub(crate) fn query(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
     Ok(quote! {
         #item
 
+        #params_struct
+
         impl #impl_generics #krate::sql::Sql for #ident #ty_generics #where_clause {
             type Dialect = #dialect;
-            type Params = ();
+            type Params = #params_ty;
             const NODE: &'static #krate::node::Node = #node;
         }
 
@@ -177,6 +182,10 @@ fn parts(template: &Template, analysis: &Analysis) -> Vec<TokenStream> {
         .iter()
         .map(|segment| match segment {
             Segment::Lit(text) => quote!(#krate::part::lit::Lit::part(#text)),
+            Segment::Param(slot) => {
+                let slot = Literal::u16_unsuffixed(*slot);
+                quote!(#krate::part::param::Param::part(#slot))
+            }
             Segment::Ref(item) => {
                 let position = positions.next().expect("a position for every reference");
                 let ty = &item.ty;
@@ -206,4 +215,108 @@ fn parts(template: &Template, analysis: &Analysis) -> Vec<TokenStream> {
             }
         })
         .collect()
+}
+
+struct Field {
+    name: Ident,
+    ty: Type,
+}
+
+struct Child {
+    name: Ident,
+    ty: Type,
+}
+
+struct Params<'a> {
+    item: &'a ItemStruct,
+    ident: Ident,
+    fields: Vec<Field>,
+    children: Vec<Child>,
+}
+
+impl<'a> Params<'a> {
+    fn new(template: &Template, item: &'a ItemStruct) -> Params<'a> {
+        let fields: Vec<Field> = template
+            .params
+            .iter()
+            .enumerate()
+            .map(|(slot, param)| Field {
+                name: param
+                    .name
+                    .clone()
+                    .unwrap_or_else(|| format_ident!("bind{}", slot + 1)),
+                ty: param.ty.clone(),
+            })
+            .collect();
+
+        let mut taken: Vec<String> = fields.iter().map(|field| field.name.to_string()).collect();
+        let children = template
+            .children
+            .iter()
+            .map(|ty| {
+                let name = unique(field_name(ty), &taken);
+                taken.push(name.clone());
+                Child {
+                    name: format_ident!("{name}"),
+                    ty: ty.clone(),
+                }
+            })
+            .collect();
+        Params {
+            item,
+            ident: format_ident!("{}Params", item.ident),
+            fields,
+            children,
+        }
+    }
+
+    fn is_empty(&self) -> bool {
+        self.fields.is_empty() && self.children.is_empty()
+    }
+
+    fn item_args(&self) -> Vec<&Ident> {
+        self.item
+            .generics
+            .type_params()
+            .map(|param| &param.ident)
+            .collect()
+    }
+
+    fn ty(&self) -> TokenStream {
+        if self.is_empty() {
+            return quote!(());
+        }
+        let ident = &self.ident;
+        let args = self.item_args();
+        if args.is_empty() {
+            quote!(#ident)
+        } else {
+            quote!(#ident<#(#args),*>)
+        }
+    }
+
+    fn definition(&self) -> Option<TokenStream> {
+        if self.is_empty() {
+            return None;
+        }
+        let krate = krate();
+        let vis = &self.item.vis;
+        let ident = &self.ident;
+        let generics = &self.item.generics;
+        let where_clause = &generics.where_clause;
+        let fields = self.fields.iter().map(|field| {
+            let (name, ty) = (&field.name, &field.ty);
+            quote!(pub #name: #ty)
+        });
+        let children = self.children.iter().map(|child| {
+            let (name, ty) = (&child.name, &child.ty);
+            quote!(pub #name: <#ty as #krate::sql::Sql>::Params)
+        });
+        Some(quote! {
+            #vis struct #ident #generics #where_clause {
+                #(#fields,)*
+                #(#children,)*
+            }
+        })
+    }
 }
