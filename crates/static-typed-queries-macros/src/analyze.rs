@@ -27,10 +27,20 @@ pub(crate) struct Position {
     pub given_alias: bool,
 }
 
+#[derive(Clone, Copy)]
+pub(crate) enum Origin {
+    Compared,
+    Inserted,
+    Assigned,
+    Selected,
+    Limit,
+    Offset,
+}
+
 pub(crate) struct Analysis {
     pub kind: Kind,
     pub refs: Vec<Position>,
-    pub names: Vec<Option<String>>,
+    pub names: Vec<Option<(String, Origin)>>,
 }
 
 #[derive(Clone, Copy)]
@@ -145,15 +155,15 @@ pub(crate) fn analyze(template: &Template, engine: Engine, sql: &LitStr) -> syn:
 
 struct Analyzer {
     refs: Vec<Position>,
-    names: Vec<Option<String>>,
+    names: Vec<Option<(String, Origin)>>,
 }
 
 impl Analyzer {
-    fn name(&mut self, expr: &Expr, name: Option<String>) {
+    fn name(&mut self, expr: &Expr, origin: Origin, name: Option<String>) {
         if let (Some(slot), Some(name)) = (param_slot(expr), name)
             && let Some(entry @ None) = self.names.get_mut(slot)
         {
-            *entry = Some(name);
+            *entry = Some((name, origin));
         }
     }
 
@@ -184,25 +194,25 @@ impl Visitor for Analyzer {
     fn pre_visit_expr(&mut self, expr: &Expr) -> ControlFlow<()> {
         match expr {
             Expr::BinaryOp { left, op, right } if is_comparison(op) => {
-                self.name(right, column(left));
-                self.name(left, column(right));
+                self.name(right, Origin::Compared, column(left));
+                self.name(left, Origin::Compared, column(right));
             }
             Expr::Between {
                 expr, low, high, ..
             } => {
-                self.name(low, column(expr));
-                self.name(high, column(expr));
+                self.name(low, Origin::Compared, column(expr));
+                self.name(high, Origin::Compared, column(expr));
             }
             Expr::InList { expr, list, .. } => {
                 for item in list {
-                    self.name(item, column(expr));
+                    self.name(item, Origin::Compared, column(expr));
                 }
             }
             Expr::Like { expr, pattern, .. } | Expr::ILike { expr, pattern, .. } => {
-                self.name(pattern, column(expr));
+                self.name(pattern, Origin::Compared, column(expr));
             }
             Expr::AnyOp { left, right, .. } | Expr::AllOp { left, right, .. } => {
-                self.name(right, column(left));
+                self.name(right, Origin::Compared, column(left));
             }
             _ => {}
         }
@@ -212,16 +222,16 @@ impl Visitor for Analyzer {
     fn pre_visit_query(&mut self, query: &Query) -> ControlFlow<()> {
         if let Some(LimitClause::LimitOffset { limit, offset, .. }) = &query.limit_clause {
             if let Some(limit) = limit {
-                self.name(limit, Some("limit".into()));
+                self.name(limit, Origin::Limit, Some("limit".into()));
             }
             if let Some(offset) = offset {
-                self.name(&offset.value, Some("offset".into()));
+                self.name(&offset.value, Origin::Offset, Some("offset".into()));
             }
         }
         if let SetExpr::Select(select) = &*query.body {
             for item in &select.projection {
                 if let SelectItem::ExprWithAlias { expr, alias } = item {
-                    self.name(expr, Some(alias.value.clone()));
+                    self.name(expr, Origin::Selected, Some(alias.value.clone()));
                 }
             }
         }
@@ -236,7 +246,7 @@ impl Visitor for Analyzer {
                 {
                     for row in &values.rows {
                         for (expr, column) in row.content.iter().zip(&insert.columns) {
-                            self.name(expr, object_name(column));
+                            self.name(expr, Origin::Inserted, object_name(column));
                         }
                     }
                 }
@@ -244,7 +254,7 @@ impl Visitor for Analyzer {
             Statement::Update(update) => {
                 for assignment in &update.assignments {
                     if let AssignmentTarget::ColumnName(column) = &assignment.target {
-                        self.name(&assignment.value, object_name(column));
+                        self.name(&assignment.value, Origin::Assigned, object_name(column));
                     }
                 }
             }

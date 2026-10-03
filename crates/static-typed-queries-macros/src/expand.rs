@@ -4,6 +4,7 @@ use syn::{GenericParam, Generics, Ident, ItemStruct, LitStr, Type, parse_quote};
 
 use crate::analyze::{self, Analysis, Engine, Kind};
 use crate::args::{Args, Placement};
+use crate::docs;
 use crate::naming::{camel, field_name, snake_case, to_ident, unique};
 use crate::template::{self, Segment, Template};
 
@@ -126,14 +127,17 @@ pub(crate) fn query(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
             #krate::impl_statement!(#ident);
 
             impl #ident {
+                /// The SQL, rendered at compile time.
                 pub const SQL: &'static str = <Self as #krate::statement::Statement>::SQL;
             }
         }
     });
     let fmt = fmt(&args, &item, true)?;
+    let mut documented = item.clone();
+    documented.attrs.extend(params.item_docs(sql));
 
     Ok(quote! {
-        #item
+        #documented
 
         #params_struct
 
@@ -241,6 +245,7 @@ struct Group {
     field: Ident,
     ty: Type,
     slots: Vec<u16>,
+    origins: Vec<String>,
     state: Ident,
 }
 
@@ -268,10 +273,18 @@ impl<'a> Params<'a> {
     ) -> syn::Result<Params<'a>> {
         let mut groups: Vec<Group> = Vec::new();
         for (slot, param) in template.params.iter().enumerate() {
-            let name = match (&param.name, &analysis.names[slot]) {
-                (Some(name), _) => name.clone(),
-                (None, Some(inferred)) => to_ident(inferred),
-                (None, None) => format_ident!("bind{}", slot + 1),
+            let (name, origin) = match (&param.name, &analysis.names[slot]) {
+                (Some(name), _) => (
+                    name.clone(),
+                    format!("declared as `{{{name}: {}}}`", docs::type_string(&param.ty)),
+                ),
+                (None, Some((inferred, origin))) => {
+                    (to_ident(inferred), docs::origin(*origin, inferred))
+                }
+                (None, None) => (
+                    format_ident!("bind{}", slot + 1),
+                    "not named by the SQL around it".to_owned(),
+                ),
             };
             let name = if RESERVED.contains(&name.to_string().as_str()) {
                 format_ident!("{name}_")
@@ -291,6 +304,7 @@ impl<'a> Params<'a> {
                         ));
                     }
                     group.slots.push(slot as u16);
+                    group.origins.push(origin);
                 }
                 None => groups.push(Group {
                     state: format_ident!("Param{}", camel(&name)),
@@ -298,6 +312,7 @@ impl<'a> Params<'a> {
                     name,
                     ty: param.ty.clone(),
                     slots: vec![slot as u16],
+                    origins: vec![origin],
                 }),
             }
         }
@@ -343,6 +358,72 @@ impl<'a> Params<'a> {
             .collect()
     }
 
+    fn constructor(&self) -> String {
+        let args: Vec<String> = self.item_args().iter().map(ToString::to_string).collect();
+        let ident = &self.item.ident;
+        if args.is_empty() {
+            format!("{ident}::builder()")
+        } else {
+            format!("{ident}::<{}>::builder()", args.join(", "))
+        }
+    }
+
+    fn link(&self, ty: &Type) -> String {
+        docs::link(ty, &self.item_args())
+    }
+
+    fn item_docs(&self, sql: &LitStr) -> Vec<syn::Attribute> {
+        let mut lines = Vec::new();
+        if self
+            .item
+            .attrs
+            .iter()
+            .any(|attr| attr.path().is_ident("doc"))
+        {
+            lines.push(String::new());
+        }
+        lines.push("# Template".to_owned());
+        lines.push(String::new());
+        lines.push("```sql".to_owned());
+        lines.extend(docs::template(&sql.value()));
+        lines.push("```".to_owned());
+        if !self.is_empty() {
+            lines.push(String::new());
+            lines.push("# Parameters".to_owned());
+            lines.push(String::new());
+            lines.push(format!(
+                "Set them through [`{}`], from `{}`:",
+                self.builder,
+                self.constructor()
+            ));
+            lines.push(String::new());
+            for group in &self.groups {
+                let times = match group.slots.len() {
+                    1 => String::new(),
+                    len => format!(" ×{len}"),
+                };
+                lines.push(format!(
+                    "- `.{}({})`{times}: {}",
+                    group.name,
+                    docs::type_string(&group.ty),
+                    docs::origins(&group.origins)
+                ));
+            }
+            for child in &self.children {
+                lines.push(format!(
+                    "- `.{}(|b| …)`: the parameters of {}",
+                    child.name,
+                    self.link(&child.ty)
+                ));
+            }
+            if !self.children.is_empty() {
+                lines.push(String::new());
+                lines.push("Items without parameters, such as tables, need no call.".to_owned());
+            }
+        }
+        docs::attrs(&lines)
+    }
+
     fn ty(&self) -> TokenStream {
         if self.is_empty() {
             return quote!(());
@@ -367,19 +448,30 @@ impl<'a> Params<'a> {
         let where_clause = &generics.where_clause;
         let groups = self.groups.iter().map(|group| {
             let (name, ty) = (&group.name, &group.ty);
+            let origins = docs::origins(&group.origins);
             match group.slots.len() {
-                1 => quote!(pub #name: #ty),
+                1 => {
+                    let doc = doc(&format!("{}.", docs::capitalize(&origins)));
+                    quote!(#doc pub #name: #ty)
+                }
                 len => {
+                    let doc = doc(&format!("{len} values in template order, {origins}."));
                     let len = Literal::usize_unsuffixed(len);
-                    quote!(pub #name: [#ty; #len])
+                    quote!(#doc pub #name: [#ty; #len])
                 }
             }
         });
         let children = self.children.iter().map(|child| {
             let (name, ty) = (&child.name, &child.ty);
-            quote!(pub #name: <#ty as #krate::sql::Sql>::Params)
+            let doc = doc(&format!("The parameters of {}.", self.link(ty)));
+            quote!(#doc pub #name: <#ty as #krate::sql::Sql>::Params)
         });
+        let doc = doc(&format!(
+            "The parameters of [`{}`], built by [`{}`].",
+            self.item.ident, self.builder
+        ));
         Some(quote! {
+            #doc
             #vis struct #ident #generics #where_clause {
                 #(#groups,)*
                 #(#children,)*
@@ -529,7 +621,19 @@ impl<'a> Params<'a> {
             quote!(#field: #state)
         });
         let group_states = self.groups.iter().map(|group| &group.state);
+        let builder_doc = docs::attrs(&[
+            format!(
+                "Builds [`{}`]; start with `{}`.",
+                self.ident,
+                self.constructor()
+            ),
+            String::new(),
+            format!(
+                "There's a setter for every parameter of [`{ident}`]. `build` only compiles once all of them are set."
+            ),
+        ]);
         out.extend(quote! {
+            #(#builder_doc)*
             #vis struct #builder #generics #where_clause {
                 #(#group_fields,)*
                 #(#child_fields,)*
@@ -558,8 +662,16 @@ impl<'a> Params<'a> {
             let current = self.builder_ty(&current);
             let next = self.builder_ty(&next);
             let others = fields.iter().filter(|other| **other != field);
+            let origins = docs::origins(&group.origins);
+            let doc = doc(&match group.slots.len() {
+                1 => format!("Sets `{name}`, {origins}."),
+                len => format!(
+                    "Sets the next of {len} `{name}` values, {origins}. Call it once per value, in template order."
+                ),
+            });
             out.extend(quote! {
                 impl #impl_generics #current #where_clause {
+                    #doc
                     pub fn #name(self, value: #ty) -> #next {
                         let mut #field = self.#field;
                         #field[#len - 1 - <__Rest as #krate::builder::Remaining>::N] =
@@ -589,8 +701,13 @@ impl<'a> Params<'a> {
             let current = self.builder_ty(&states);
             let next = self.builder_ty(&next);
             let others = fields.iter().filter(|other| **other != field);
+            let doc = doc(&format!(
+                "Sets the parameters of {} through its builder.",
+                self.link(ty)
+            ));
             out.extend(quote! {
                 impl #impl_generics #current #where_clause {
+                    #doc
                     pub fn #name<__Next>(
                         self,
                         build: impl ::core::ops::FnOnce(<#ty as #krate::builder::Build>::Builder) -> __Next,
@@ -655,6 +772,7 @@ impl<'a> Params<'a> {
         let any = self.builder_ty(&states);
         out.extend(quote! {
             impl #impl_generics #any #where_clause {
+                /// Returns the parameters. Compiles only once every parameter is set.
                 pub fn build(self) -> #params_ty
                 where
                     Self: #krate::builder::Finish<#params_ty>,
@@ -667,6 +785,8 @@ impl<'a> Params<'a> {
             out.extend(quote! {
                 #krate::__if_sqlx! {
                     impl #impl_generics #any #where_clause {
+                        /// Binds the parameters to the SQL as a `sqlx` query. Compiles only
+                        /// once every parameter is set.
                         pub fn query<'q>(
                             self,
                         ) -> ::core::result::Result<
@@ -733,6 +853,11 @@ impl<'a> Params<'a> {
         });
         out
     }
+}
+
+fn doc(text: &str) -> TokenStream {
+    let text = format!(" {text}");
+    quote!(#[doc = #text])
 }
 
 fn builder_field(name: &Ident) -> Ident {

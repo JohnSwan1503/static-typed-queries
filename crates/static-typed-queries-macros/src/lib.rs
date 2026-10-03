@@ -1,5 +1,6 @@
 mod analyze;
 mod args;
+mod docs;
 mod expand;
 mod naming;
 mod template;
@@ -193,6 +194,9 @@ pub fn table(args: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// A query with neither parameters nor references uses `()` as its params
 /// and gets no params or builder struct.
+///
+/// Every generated item is documented. The struct's own docs get the template
+/// and a list of its builder's methods appended.
 ///
 /// # Generic queries
 ///
