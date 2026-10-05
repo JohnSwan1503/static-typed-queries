@@ -40,16 +40,21 @@ use syn::{ItemStruct, parse_macro_input};
 ///
 /// A statement that uses a table with hooks, directly or through the items it
 /// embeds, renders them as statements of their own in its `BEFORE` and `AFTER`
-/// lists, each hook once per set of values. Its builder has no `query()` or
-/// `query_as()`, since one query would skip the hooks. It has `run(conn)`
-/// instead, which takes anything that implements `sqlx::Acquire` and runs the
-/// hooks and the statement in one transaction, so a failing hook rolls back
-/// the statement too. `run` returns the statement's rows when it has
-/// `row = Type`, and otherwise the number of rows it affected.
-/// `run_as::<T>(conn)` reads the rows as `T`.
+/// lists. Each hook runs once per statement, however many tables or paths
+/// reach it. The statement's builder has no `query()` or `query_as()`, since
+/// one query would skip the hooks. It has `run(conn)` instead, which takes
+/// anything that implements `sqlx::Acquire` and runs the hooks and the
+/// statement in one transaction, so a failing hook rolls back the statement
+/// too. `run` returns the statement's rows when it has `row = Type`, and
+/// otherwise the number of rows it affected. `run_as::<T>(conn)` reads the
+/// rows as `T`.
+///
+/// A hook with parameters takes its values from the run: pass its complete
+/// builder to `with`, in any order with the other setters.
 ///
 /// ```
 /// # use static_typed_queries::prelude::*;
+/// # use static_typed_queries::__private::__private::sqlx;
 /// #[query(Postgres, sql = "SELECT set_config('app.tenant', {tenant: String}, true)")]
 /// pub struct SetTenant;
 ///
@@ -63,24 +68,22 @@ use syn::{ItemStruct, parse_macro_input};
 ///     ByStatus::BEFORE[0].sql(),
 ///     "SELECT set_config('app.tenant', $1, true)"
 /// );
-/// let params = ByStatus::builder()
-///     .status("open".to_owned())
-///     .orders()
-///     .set_tenant()
-///     .tenant("acme".to_owned())
-///     .build();
-/// assert_eq!(params.orders.set_tenant.tenant, "acme");
+///
+/// async fn open_orders(conn: &mut sqlx::PgConnection) -> sqlx::Result<u64> {
+///     ByStatus::builder()
+///         .status("open".to_owned())
+///         .with(SetTenant::builder().tenant("acme".to_owned()))
+///         .run(conn)
+///         .await
+/// }
 /// ```
 ///
 /// Hooks can't be tables, and they can't use tables with hooks of their own.
 ///
 /// ## Generated items
 ///
-/// The struct implements `Sql` and `Build`. A table's items are its hooks:
-/// without hooks it has no parameters and a builder with nothing to set, so
-/// queries that reference it never need a builder call for it. With hooks it
-/// gets a params struct and a builder like a query's, and the parameters of
-/// its hooks are set through the queries that use it.
+/// The struct implements `Sql` and `Build`. A table has no parameters, even
+/// with hooks, so queries that reference it never need a builder call for it.
 ///
 /// A table has no SQL of its own: it doesn't implement `Statement`, and it is
 /// always rendered as its name, so `{Table as cte}` and `{Table as subquery}`
@@ -265,7 +268,8 @@ pub fn table(args: TokenStream, item: TokenStream) -> TokenStream {
 ///   such as tables, have no method. Once everything is set, the builder has
 ///   only `build()`, which returns `NameParams`, and, with a database feature
 ///   enabled, `query()`, which returns a `sqlx` query with everything bound.
-///   A query that uses a table with hooks has `run()` instead; see [`table`].
+///   A query that uses a table with hooks has `run()` instead, and `with()`
+///   for the values of its hooks; see [`table`].
 /// - A `Statement` impl and an inherent `Name::SQL` constant holding the
 ///   rendered SQL.
 /// - With the `parse-check` feature, a `#[cfg(test)]` test named
@@ -276,7 +280,7 @@ pub fn table(args: TokenStream, item: TokenStream) -> TokenStream {
 /// one field of type `[Type; N]` and the setter is called `N` times, in the
 /// order they appear in the template. Their types must match. A parameter
 /// whose name would clash with a builder method (`build`, `builder`, `finish`,
-/// `query`, `query_as`, `run` or `run_as`) gets a trailing underscore.
+/// `query`, `query_as`, `run`, `run_as` or `with`) gets a trailing underscore.
 ///
 /// A query with neither parameters nor references uses `()` as its params
 /// and gets no params or builder struct.

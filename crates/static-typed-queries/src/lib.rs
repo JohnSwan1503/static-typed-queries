@@ -9,7 +9,7 @@ pub use static_typed_queries_core::check;
 
 pub mod state {
     pub use static_typed_queries_core::builder::{
-        Built, Filled, Missing, NoHooks, Open, WithHooks,
+        Built, Filled, HookValues, Missing, NoHooks, Open, WithHooks,
     };
 }
 

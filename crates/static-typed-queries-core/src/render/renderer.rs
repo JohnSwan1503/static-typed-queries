@@ -6,7 +6,6 @@ use crate::dialect::Dialect;
 use crate::node::Node;
 use crate::node::inject::Inject;
 use crate::node::kind::Kind;
-use crate::node::name::Name;
 use crate::part::Part;
 use crate::part::from::From;
 use crate::part::from::rule::AliasRule;
@@ -28,7 +27,7 @@ struct Cte {
 
 #[derive(Clone, Copy)]
 struct Hook {
-    name: Name,
+    root: &'static Node,
     node: &'static Node,
     path: Path,
     after: bool,
@@ -91,45 +90,41 @@ impl<'a, D: Dialect> Renderer<'a, D> {
     }
 
     pub(super) const fn statement(&mut self, root: &'static Node) {
-        self.root = Some(root);
         let (main, path) = target(root, Path::ROOT);
-        self.find_hooks(main, path);
+        self.find_hooks(main);
         self.render_hooks(false);
-        self.single(root.name, main, path);
+        self.single(root, main, path);
         self.render_hooks(true);
     }
 
-    const fn find_hooks(&mut self, node: &'static Node, path: Path) {
-        self.add_hooks(node, path, false);
-        self.add_hooks(node, path, true);
+    const fn find_hooks(&mut self, node: &'static Node) {
+        self.add_hooks(node, false);
+        self.add_hooks(node, true);
         let parts = node.parts.0;
         let mut i = 0;
         while i < parts.len() {
-            let child = match parts[i] {
-                Part::Expr(expr) => Some(expr.as_ref()),
-                Part::From(from) => Some(from.node()),
-                Part::Lit(_) | Part::Ident(_) | Part::Param(_) => None,
-            };
-            if let Some(child) = child {
-                self.find_hooks(child, self.child_path(path, child));
+            match parts[i] {
+                Part::Expr(expr) => self.find_hooks(expr.as_ref()),
+                Part::From(from) => self.find_hooks(from.node()),
+                Part::Lit(_) | Part::Ident(_) | Part::Param(_) => {}
             }
             i += 1;
         }
     }
 
-    const fn add_hooks(&mut self, owner: &'static Node, path: Path, after: bool) {
+    const fn add_hooks(&mut self, owner: &'static Node, after: bool) {
         let hooks = if after { owner.after.0 } else { owner.before.0 };
         let mut i = 0;
         while i < hooks.len() {
-            let name = hooks[i].name;
-            let (node, path) = hook(owner, hooks[i], self.child_path(path, hooks[i]));
-            if !self.has_hook(node, path, after) {
+            let root = hooks[i];
+            let (node, path) = hook(owner, root, Path::ROOT);
+            if !self.has_hook(root, after) {
                 let count = self.size.before + self.size.after;
                 if count == MAX_HOOKS {
                     fail(&["a statement can't have more than 64 hooks"]);
                 }
                 self.hooks[count] = Some(Hook {
-                    name,
+                    root,
                     node,
                     path,
                     after,
@@ -144,14 +139,12 @@ impl<'a, D: Dialect> Renderer<'a, D> {
         }
     }
 
-    const fn has_hook(&self, node: &'static Node, path: Path, after: bool) -> bool {
-        let path = instance_path(node, path);
+    const fn has_hook(&self, root: &'static Node, after: bool) -> bool {
         let mut i = 0;
         while i < self.size.before + self.size.after {
             if let Some(hook) = self.hooks[i]
                 && hook.after == after
-                && same_node(hook.node, node)
-                && instance_path(hook.node, hook.path).same(&path)
+                && same_node(hook.root, root)
             {
                 return true;
             }
@@ -166,13 +159,14 @@ impl<'a, D: Dialect> Renderer<'a, D> {
             if let Some(hook) = self.hooks[i]
                 && hook.after == after
             {
-                self.single(hook.name, hook.node, hook.path);
+                self.single(hook.root, hook.node, hook.path);
             }
             i += 1;
         }
     }
 
-    const fn single(&mut self, name: Name, node: &'static Node, path: Path) {
+    const fn single(&mut self, root: &'static Node, node: &'static Node, path: Path) {
+        self.root = Some(root);
         self.ctes = [None; MAX_CTES];
         self.cte_count = 0;
         self.recursive = false;
@@ -184,7 +178,8 @@ impl<'a, D: Dialect> Renderer<'a, D> {
         self.body(node, path);
         if !self.offsets.is_empty() {
             self.offsets[self.rendered] = Offsets {
-                name,
+                name: root.name,
+                fingerprint: root.fingerprint,
                 sql: self.size.sql,
                 binds: self.size.binds,
             };

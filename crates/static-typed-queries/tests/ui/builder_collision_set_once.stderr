@@ -7,4 +7,4 @@ error[E0599]: no method named `build` found for struct `SearchBuilder<CreatedAt<
 10 |     let _ = Search::builder().status("paid".to_owned()).created_at(1).build();
    |                                                                       ^^^^^ method not found in `SearchBuilder<CreatedAt<Missing<Filled>>, Status<Filled>, Built<()>>`
    |
-   = note: the method was found for `SearchBuilder<CreatedAt<Filled>, Status<Filled>, Built<<Orders as Sql>::Params>, __H>`
+   = note: the method was found for `SearchBuilder<CreatedAt<Filled>, Status<Filled>, Built<<Orders as Sql>::Params>, __H, __V>`

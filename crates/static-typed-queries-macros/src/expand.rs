@@ -13,7 +13,7 @@ use crate::naming::{camel, field_name, short_name, snake_case, to_ident, unique}
 use crate::template::{self, Segment, Template};
 
 const RESERVED: &[&str] = &[
-    "build", "builder", "finish", "query", "query_as", "run", "run_as",
+    "build", "builder", "finish", "query", "query_as", "run", "run_as", "with",
 ];
 
 fn krate() -> TokenStream {
@@ -75,10 +75,6 @@ pub(crate) fn table(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
     }
     let before = hooks(args.before.as_deref())?;
     let after = hooks(args.after.as_deref())?;
-    let mut items = Vec::new();
-    for ty in before.iter().chain(&after) {
-        add_item(ty, &item.generics, &[], &mut items);
-    }
     let template = Template {
         segments: Vec::new(),
         params: Vec::new(),
@@ -91,9 +87,7 @@ pub(crate) fn table(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
         refs: Vec::new(),
         names: Vec::new(),
     };
-    let mut params = Params::new(&template, &analysis, &items, &item, name)?;
-    params.runs = false;
-    let fields: Vec<Type> = items.iter().map(|(ty, _)| ty.clone()).collect();
+    let params = Params::new(&template, &analysis, &[], &item, name)?;
     let node_name = table.rsplit('.').next().unwrap_or(&table);
     let ident = &item.ident;
     let dialect = &args.dialect;
@@ -103,7 +97,7 @@ pub(crate) fn table(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
         quote!(Table),
         quote!(#krate::node::inject::Inject::Ident),
         parts,
-        &fields,
+        &[],
         [&before, &after],
     );
     let check = (!before.is_empty() || !after.is_empty()).then(|| {
@@ -111,12 +105,9 @@ pub(crate) fn table(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
             const _: () = #krate::render::check_hooks(<#ident as #krate::sql::Sql>::NODE);
         }
     });
-    let params_ty = params.ty();
-    let params_struct = params.definition();
-    let derives = params.derives();
-    let bind_params = params.bind_impl();
     let builder = params.builder(dialect, None);
-    let embed_checks = embeds(&item, &fields, dialect);
+    let hook_types: Vec<Type> = before.iter().chain(&after).cloned().collect();
+    let embed_checks = embeds(&item, &hook_types, dialect);
     let fmt = fmt(&args, &item, false)?;
     let mut documented = item.clone();
     documented
@@ -126,18 +117,14 @@ pub(crate) fn table(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
     Ok(quote! {
         #documented
 
-        #params_struct
-        #derives
-
         impl #krate::sql::Sql for #ident {
             type Dialect = #dialect;
-            type Params = #params_ty;
+            type Params = ();
             const NODE: &'static #krate::node::Node = #node;
         }
 
         #check
         #embed_checks
-        #bind_params
         #builder
         #fmt
     })
@@ -1076,7 +1063,9 @@ impl<'a> Params<'a> {
                 };
                 lines.push("# Hooks".to_owned());
                 lines.push(String::new());
-                lines.push(format!("Every statement that uses this table runs {runs}."));
+                lines.push(format!(
+                    "Every statement that uses this table runs {runs}, each hook once. A hook with parameters takes its values from the statement builder's `with`."
+                ));
             }
         }
         if !self.is_empty() {
@@ -1265,6 +1254,13 @@ impl<'a> Params<'a> {
         out.extend(quote! {
             impl #impl_generics ::core::cmp::Eq for #ident #ty_generics #where_clause {}
         });
+        let (impl_generics, _, where_clause) = self.item.generics.split_for_impl();
+        let item = &self.item.ident;
+        out.extend(quote! {
+            impl #impl_generics #krate::builder::ParamsOf for #ident #ty_generics #where_clause {
+                type Item = #item #ty_generics;
+            }
+        });
         Some(out)
     }
 
@@ -1354,11 +1350,12 @@ impl<'a> Params<'a> {
         &self,
         states: &[TokenStream],
         hooked: &TokenStream,
+        values: &TokenStream,
         parent: &TokenStream,
     ) -> TokenStream {
         let builder = &self.builder;
         let args = self.item_args();
-        quote!(#builder<#(#args,)* #(#states,)* #hooked, #parent>)
+        quote!(#builder<#(#args,)* #(#states,)* #hooked, #values, #parent>)
     }
 
     fn generics(&self, extra: &[TokenStream]) -> Generics {
@@ -1410,6 +1407,7 @@ impl<'a> Params<'a> {
         let root = quote!(#b::Root);
         let parent = quote!(__K);
         let hooked = quote!(__H);
+        let values = quote!(__V);
         let except = |slot: usize, extra: &[TokenStream]| {
             let mut params: Vec<TokenStream> = states
                 .iter()
@@ -1419,6 +1417,7 @@ impl<'a> Params<'a> {
                 .collect();
             params.extend(extra.iter().cloned());
             params.push(hooked.clone());
+            params.push(values.clone());
             self.generics(&params)
         };
         let mut out = TokenStream::new();
@@ -1442,6 +1441,7 @@ impl<'a> Params<'a> {
 
         let mut struct_params = states.clone();
         struct_params.push(quote!(__H = #b::NoHooks));
+        struct_params.push(quote!(__V = ()));
         struct_params.push(quote!(__K = #root));
         let generics = self.generics(&struct_params);
         let where_clause = &generics.where_clause;
@@ -1473,6 +1473,7 @@ impl<'a> Params<'a> {
             #vis struct #builder #generics #where_clause {
                 #(#group_fields,)*
                 #(#child_fields,)*
+                __values: __V,
                 __parent: __K,
                 __state: ::core::marker::PhantomData<fn() -> (#(#group_states,)* #(#args,)* __H)>,
             }
@@ -1481,6 +1482,7 @@ impl<'a> Params<'a> {
         let generics = self.generics(&{
             let mut params = states.clone();
             params.push(hooked.clone());
+            params.push(values.clone());
             params
         });
         let mut ready_generics = generics.clone();
@@ -1502,7 +1504,7 @@ impl<'a> Params<'a> {
             all = quote!(<#out as #b::And<#all>>::Out);
         }
         let (impl_generics, _, where_clause) = ready_generics.split_for_impl();
-        let rooted = self.builder_in(&states, &hooked, &root);
+        let rooted = self.builder_in(&states, &hooked, &values, &root);
         out.extend(quote! {
             impl #impl_generics #b::Ready for #rooted #where_clause {
                 type Out = #all;
@@ -1512,10 +1514,11 @@ impl<'a> Params<'a> {
             let mut params = states.clone();
             params.push(parent.clone());
             params.push(hooked.clone());
+            params.push(values.clone());
             params
         });
         let (impl_generics, _, where_clause) = generics.split_for_impl();
-        let scoped = self.builder_in(&states, &hooked, &parent);
+        let scoped = self.builder_in(&states, &hooked, &values, &parent);
         out.extend(quote! {
             impl #impl_generics #b::Scope<__K> for #rooted #where_clause {
                 type Scoped = #scoped;
@@ -1523,6 +1526,7 @@ impl<'a> Params<'a> {
                 fn scope(self, parent: __K) -> #scoped {
                     #builder {
                         #(#fields: self.#fields,)*
+                        __values: self.__values,
                         __parent: parent,
                         __state: ::core::marker::PhantomData,
                     }
@@ -1537,14 +1541,14 @@ impl<'a> Params<'a> {
             current[index] = quote!(#module::#marker<#b::Missing<__Rest>>);
             let mut next = states.clone();
             next[index] = quote!(#module::#marker<__Rest>);
-            let next = self.builder_in(&next, &hooked, &root);
+            let next = self.builder_in(&next, &hooked, &values, &root);
             let mut generics = except(index, &[quote!(__Rest: #b::Remaining), parent.clone()]);
             generics
                 .make_where_clause()
                 .predicates
                 .push(parse_quote!(__K: #b::Fill<#next>));
             let (impl_generics, _, where_clause) = generics.split_for_impl();
-            let current = self.builder_in(&current, &hooked, &parent);
+            let current = self.builder_in(&current, &hooked, &values, &parent);
             let others = fields.iter().filter(|other| **other != field);
             let origins = docs::origins(&group.origins);
             let doc = doc(&match group.slots.len() {
@@ -1563,6 +1567,7 @@ impl<'a> Params<'a> {
                         #b::Fill::fill(self.__parent, #builder {
                             #field,
                             #(#others: self.#others,)*
+                            __values: self.__values,
                             __parent: #root,
                             __state: ::core::marker::PhantomData,
                         })
@@ -1578,10 +1583,10 @@ impl<'a> Params<'a> {
             let others: Vec<&&Ident> = fields.iter().filter(|other| **other != field).collect();
             let mut vacant = states.clone();
             vacant[slot] = quote!(());
-            let vacant = self.builder_in(&vacant, &hooked, &parent);
+            let vacant = self.builder_in(&vacant, &hooked, &values, &parent);
             let mut current = states.clone();
             current[slot] = quote!(#b::Open<__B>);
-            let current = self.builder_in(&current, &hooked, &parent);
+            let current = self.builder_in(&current, &hooked, &values, &parent);
             let generics = except(slot, &[quote!(__B), parent.clone()]);
             let (impl_generics, _, where_clause) = generics.split_for_impl();
             let doc = doc(&format!(
@@ -1601,6 +1606,7 @@ impl<'a> Params<'a> {
                         #b::Scope::scope(self.#field.0, #hole(#builder {
                             #field: (),
                             #(#others: self.#others,)*
+                            __values: self.__values,
                             __parent: self.__parent,
                             __state: ::core::marker::PhantomData,
                         }))
@@ -1610,7 +1616,7 @@ impl<'a> Params<'a> {
 
             let mut filled = states.clone();
             filled[slot] = quote!(<__Item as #b::Settled>::Slot);
-            let filled = self.builder_in(&filled, &hooked, &root);
+            let filled = self.builder_in(&filled, &hooked, &values, &root);
             let mut generics = except(slot, &[parent.clone(), quote!(__Item)]);
             let clause = generics.make_where_clause();
             clause.predicates.push(parse_quote!(__Item: #b::Settled));
@@ -1625,6 +1631,7 @@ impl<'a> Params<'a> {
                         #b::Fill::fill(parent.__parent, #builder {
                             #field: #b::Settled::settled(item),
                             #(#others: parent.#others,)*
+                            __values: parent.__values,
                             __parent: #root,
                             __state: ::core::marker::PhantomData,
                         })
@@ -1645,10 +1652,11 @@ impl<'a> Params<'a> {
                 quote!(#b::Built<<#ty as #krate::sql::Sql>::Params>)
             }))
             .collect();
-        let unhooked = self.builder_in(&complete, &quote!(#b::NoHooks), &root);
-        let with_hooks = self.builder_in(&complete, &quote!(#b::WithHooks), &root);
-        let complete = self.builder_in(&complete, &hooked, &root);
-        let generics = self.generics(&[hooked.clone()]);
+        let with_hooks = quote!(#b::WithHooks);
+        let unhooked = self.builder_in(&complete, &quote!(#b::NoHooks), &quote!(()), &root);
+        let run_builder = self.builder_in(&complete, &with_hooks, &values, &root);
+        let complete = self.builder_in(&complete, &hooked, &values, &root);
+        let generics = self.generics(&[hooked.clone(), values.clone()]);
         let (impl_generics, _, where_clause) = generics.split_for_impl();
         let params_ident = &self.ident;
         let extract_groups = self.groups.iter().map(|group| {
@@ -1665,16 +1673,19 @@ impl<'a> Params<'a> {
             quote!(#name: self.#field.0)
         });
         let marker_value = self.marker_value();
+        let finish = quote! {
+            #params_ident {
+                #(#extract_groups,)*
+                #(#extract_children,)*
+                #marker_value
+            }
+        };
         out.extend(quote! {
             impl #impl_generics #b::Finish for #complete #where_clause {
                 type Params = #params_ty;
 
                 fn finish(self) -> #params_ty {
-                    #params_ident {
-                        #(#extract_groups,)*
-                        #(#extract_children,)*
-                        #marker_value
-                    }
+                    #finish
                 }
             }
 
@@ -1744,8 +1755,8 @@ impl<'a> Params<'a> {
                             self,
                             conn: A,
                         ) -> ::core::result::Result<::std::vec::Vec<#row>, #error> {
-                            let params = #b::Finish::finish(self);
-                            #run::fetch_all::<#ident, #row, A>(&params, conn).await
+                            let params = #finish;
+                            #run::fetch_all::<#ident, #row, __V, A>(&params, &self.__values, conn).await
                         }
                     }
                 }
@@ -1755,14 +1766,17 @@ impl<'a> Params<'a> {
                         self,
                         conn: A,
                     ) -> ::core::result::Result<u64, #error> {
-                        let params = #b::Finish::finish(self);
-                        #run::execute::<#ident, A>(&params, conn).await
+                        let params = #finish;
+                        #run::execute::<#ident, __V, A>(&params, &self.__values, conn).await
                     }
                 },
             };
             out.extend(quote! {
                 #krate::__if_sqlx! {
-                    impl #with_hooks {
+                    impl<__V> #run_builder
+                    where
+                        __V: #krate::statement::params::BindHooks<#driver::Database<#dialect>>,
+                    {
                         #run_main
 
                         /// Runs the statement and its hooks in one transaction, and reads each row of the statement as `O`.
@@ -1775,8 +1789,37 @@ impl<'a> Params<'a> {
                                 + ::core::marker::Send
                                 + ::core::marker::Unpin,
                         {
-                            let params = #b::Finish::finish(self);
-                            #run::fetch_all::<#ident, O, A>(&params, conn).await
+                            let params = #finish;
+                            #run::fetch_all::<#ident, O, __V, A>(&params, &self.__values, conn).await
+                        }
+                    }
+                }
+            });
+            let mut params = states.clone();
+            params.push(values.clone());
+            let generics = self.generics(&params);
+            let (impl_generics, _, where_clause) = generics.split_for_impl();
+            let open = self.builder_in(&states, &with_hooks, &values, &root);
+            let given = self.builder_in(
+                &states,
+                &with_hooks,
+                &quote!((#b::HookValues<__Hook>, __V)),
+                &root,
+            );
+            out.extend(quote! {
+                impl #impl_generics #open #where_clause {
+                    /// Gives the values of a hook with parameters, from its complete builder. Each hook runs once per statement.
+                    pub fn with<__B, __Hook>(self, values: __B) -> #given
+                    where
+                        __B: #b::Finish,
+                        __B::Params: #b::ParamsOf<Item = __Hook>,
+                        __Hook: #krate::sql::Sql,
+                    {
+                        #builder {
+                            #(#fields: self.#fields,)*
+                            __values: #b::with(values, self.__values),
+                            __parent: #root,
+                            __state: ::core::marker::PhantomData,
                         }
                     }
                 }
@@ -1802,7 +1845,7 @@ impl<'a> Params<'a> {
         } else {
             quote!(#b::NoHooks)
         };
-        let initial = self.builder_in(&initial, &hooks, &root);
+        let initial = self.builder_in(&initial, &hooks, &quote!(()), &root);
         let mut generics = self.item.generics.clone();
         for child in &self.children {
             let ty = &child.ty;
@@ -1830,6 +1873,7 @@ impl<'a> Params<'a> {
                     #builder {
                         #(#empty_groups,)*
                         #(#start_children,)*
+                        __values: (),
                         __parent: #root,
                         __state: ::core::marker::PhantomData,
                     }

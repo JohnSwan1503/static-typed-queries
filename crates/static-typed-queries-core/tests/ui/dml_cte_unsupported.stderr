@@ -23,8 +23,8 @@ note: inside `measure::<MySql>`
 note: inside `render::renderer::Renderer::<'_, MySql>::statement`
   --> src/render/renderer.rs
    |
-   |         self.single(root.name, main, path);
-   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |         self.single(root, main, path);
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 note: inside `render::renderer::Renderer::<'_, MySql>::single`
   --> src/render/renderer.rs
    |

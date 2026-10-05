@@ -2,7 +2,10 @@ use sqlx::Database;
 use sqlx::error::BoxDynError;
 
 use super::bind::Bind;
+use super::hook::Hook;
+use crate::builder::HookValues;
 use crate::dialect::driver::{self, Arguments, Driver};
+use crate::sql::Sql;
 
 // Path steps index a node's distinct referenced items in order of first appearance.
 pub trait BindParams<DB: Database> {
@@ -15,10 +18,33 @@ impl<DB: Database> BindParams<DB> for () {
     }
 }
 
+pub trait BindHooks<DB: Database> {
+    fn values(&self, hook: &Hook) -> Option<&dyn BindParams<DB>>;
+}
+
+impl<DB: Database> BindHooks<DB> for () {
+    fn values(&self, _: &Hook) -> Option<&dyn BindParams<DB>> {
+        None
+    }
+}
+
+impl<DB: Database, H: Sql, Rest: BindHooks<DB>> BindHooks<DB> for (HookValues<H>, Rest)
+where
+    H::Params: BindParams<DB>,
+{
+    fn values(&self, hook: &Hook) -> Option<&dyn BindParams<DB>> {
+        if hook.fingerprint() == H::NODE.fingerprint && hook.name() == H::NODE.name {
+            Some(&self.0.0)
+        } else {
+            self.1.values(hook)
+        }
+    }
+}
+
 pub fn arguments<D, P>(params: &P, binds: &[Bind]) -> Result<Arguments<D>, sqlx::Error>
 where
     D: Driver,
-    P: BindParams<driver::Database<D>>,
+    P: BindParams<driver::Database<D>> + ?Sized,
 {
     let mut args = Arguments::<D>::default();
     for bind in binds {

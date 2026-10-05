@@ -80,6 +80,27 @@ impl HookState for HookFlag<true> {
     type Out = WithHooks;
 }
 
+pub struct HookValues<H: Sql>(pub H::Params);
+
+#[diagnostic::on_unimplemented(
+    message = "only hooks with parameters take values",
+    label = "builds no parameters",
+    note = "a hook without parameters runs without a `with`"
+)]
+pub trait ParamsOf {
+    type Item: Sql<Params = Self>;
+}
+
+pub type With<B, V> = (HookValues<<<B as Finish>::Params as ParamsOf>::Item>, V);
+
+pub fn with<B, V>(builder: B, values: V) -> With<B, V>
+where
+    B: Finish,
+    B::Params: ParamsOf,
+{
+    (HookValues(builder.finish()), values)
+}
+
 pub trait Build: Sql {
     type Builder;
 

@@ -23,8 +23,8 @@ note: inside `measure::<Postgres>`
 note: inside `render::renderer::Renderer::<'_, Postgres>::statement`
   --> src/render/renderer.rs
    |
-   |         self.single(root.name, main, path);
-   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |         self.single(root, main, path);
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 note: inside `render::renderer::Renderer::<'_, Postgres>::single`
   --> src/render/renderer.rs
    |

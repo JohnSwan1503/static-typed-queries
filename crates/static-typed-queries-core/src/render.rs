@@ -3,6 +3,7 @@ mod renderer;
 
 use crate::dialect::Dialect;
 use crate::node::Node;
+use crate::node::fingerprint::Fingerprint;
 use crate::node::name::Name;
 use crate::statement::bind::Bind;
 use crate::statement::hook::Hook;
@@ -25,6 +26,7 @@ impl Size {
 #[derive(Clone, Copy)]
 struct Offsets {
     name: Name,
+    fingerprint: Fingerprint,
     sql: usize,
     binds: usize,
 }
@@ -32,6 +34,7 @@ struct Offsets {
 impl Offsets {
     const EMPTY: Offsets = Offsets {
         name: Name::EMPTY,
+        fingerprint: Fingerprint::EMPTY,
         sql: 0,
         binds: 0,
     };
@@ -53,7 +56,7 @@ pub struct Rendered<const S: usize, const B: usize, const N: usize> {
 
 impl<const S: usize, const B: usize, const N: usize> Rendered<S, B, N> {
     pub const fn statements(&'static self) -> [Hook; N] {
-        let mut statements = [Hook::new(Name::EMPTY, "", &[]); N];
+        let mut statements = [Hook::new(Name::EMPTY, Fingerprint::EMPTY, "", &[]); N];
         let mut start = Offsets::EMPTY;
         let mut i = 0;
         while i < N {
@@ -64,7 +67,7 @@ impl<const S: usize, const B: usize, const N: usize> Rendered<S, B, N> {
                 Err(_) => panic!("rendered SQL isn't valid UTF-8"),
             };
             let binds = self.binds.split_at(end.binds).0.split_at(start.binds).1;
-            statements[i] = Hook::new(end.name, sql, binds);
+            statements[i] = Hook::new(end.name, end.fingerprint, sql, binds);
             start = end;
             i += 1;
         }

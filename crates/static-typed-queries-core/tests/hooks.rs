@@ -53,7 +53,6 @@ const ORDERS: &Node = node!(
     Table,
     Inject::Ident,
     [Ident::part("orders")],
-    items = [SET_TENANT, PURGE],
     before = [SET_TENANT],
     after = [PURGE]
 );
@@ -139,7 +138,7 @@ fn hooks_render_as_their_own_statements_around_the_main_one() {
 }
 
 #[test]
-fn hook_binds_follow_the_path_to_the_hook() {
+fn hooks_bind_from_their_own_parameters() {
     let paths = |binds: &[static_typed_queries_core::statement::bind::Bind]| {
         binds
             .iter()
@@ -147,23 +146,18 @@ fn hook_binds_follow_the_path_to_the_hook() {
             .collect::<Vec<_>>()
     };
     assert_eq!(paths(OrderById::BINDS), [(vec![], "id")]);
-    assert_eq!(
-        paths(OrderById::BEFORE[0].binds()),
-        [(vec![0, 0], "tenant")]
-    );
+    assert_eq!(paths(OrderById::BEFORE[0].binds()), [(vec![], "tenant")]);
     assert_eq!(paths(OrderById::AFTER[0].binds()), []);
+    assert_eq!(OrderById::BEFORE[0].fingerprint(), SET_TENANT.fingerprint);
+    assert_eq!(OrderById::AFTER[0].fingerprint(), PURGE.fingerprint);
 }
 
 #[test]
-fn hooks_run_once_per_instance_of_their_values() {
+fn hooks_run_once_per_statement() {
     assert_eq!(
         BigOpenOrders::SQL,
         r#"WITH "open_orders" AS (SELECT id FROM "orders" WHERE status = $1) SELECT * FROM "open_orders" JOIN "orders" o USING (id) WHERE o.total > $2"#
     );
-    let tenants: Vec<_> = BigOpenOrders::BEFORE
-        .iter()
-        .map(|hook| hook.binds()[0].path().steps().to_vec())
-        .collect();
-    assert_eq!(tenants, [vec![0, 0, 0], vec![1, 0]]);
+    assert_eq!(sql(BigOpenOrders::BEFORE), sql(OrderById::BEFORE));
     assert_eq!(sql(BigOpenOrders::AFTER), sql(OrderById::AFTER));
 }

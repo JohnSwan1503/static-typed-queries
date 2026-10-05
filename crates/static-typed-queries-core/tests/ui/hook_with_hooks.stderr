@@ -23,23 +23,23 @@ note: inside `measure::<Postgres>`
 note: inside `render::renderer::Renderer::<'_, Postgres>::statement`
   --> src/render/renderer.rs
    |
-   |         self.find_hooks(main, path);
-   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |         self.find_hooks(main);
+   |         ^^^^^^^^^^^^^^^^^^^^^
 note: inside `render::renderer::Renderer::<'_, Postgres>::find_hooks`
   --> src/render/renderer.rs
    |
-   |                 self.find_hooks(child, self.child_path(path, child));
-   |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |                 Part::From(from) => self.find_hooks(from.node()),
+   |                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 note: inside `render::renderer::Renderer::<'_, Postgres>::find_hooks`
   --> src/render/renderer.rs
    |
-   |         self.add_hooks(node, path, true);
-   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |         self.add_hooks(node, true);
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^
 note: inside `render::renderer::Renderer::<'_, Postgres>::add_hooks`
   --> src/render/renderer.rs
    |
-   |             let (node, path) = hook(owner, hooks[i], self.child_path(path, hooks[i]));
-   |                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |             let (node, path) = hook(owner, root, Path::ROOT);
+   |                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 note: inside `render::renderer::hook`
   --> src/render/renderer.rs
    |

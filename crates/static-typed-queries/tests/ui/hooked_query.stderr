@@ -1,4 +1,4 @@
-error[E0599]: no method named `query` found for struct `OrderByIdBuilder<Id<Filled>, Built<OrdersParams>, WithHooks>` in the current scope
+error[E0599]: no method named `query` found for struct `OrderByIdBuilder<Id<Filled>, Built<()>, WithHooks>` in the current scope
   --> tests/ui/hooked_query.rs:13:40
    |
  9 | #[query(Postgres, sql = "SELECT id FROM {Orders} WHERE id = {_: i64}")]
@@ -7,7 +7,7 @@ error[E0599]: no method named `query` found for struct `OrderByIdBuilder<Id<Fill
 13 |     let _ = OrderById::builder().id(1).query();
    |             --------------------       ^^^^^ this is an associated function, not a method
    |             |
-   |             method `query` is available on `OrderByIdBuilder<Id<Missing<Filled>>, Built<OrdersParams>, WithHooks>`
+   |             method `query` is available on `OrderByIdBuilder<Id<Missing<Filled>>, Built<()>, WithHooks>`
    |
    = note: found the following associated functions; to be used as methods, functions must have a `self` parameter
 note: the candidate is defined in the trait `static_typed_queries::Statement`
@@ -26,5 +26,5 @@ note: the candidate is defined in the trait `static_typed_queries::Statement`
 help: use associated function syntax instead
    |
 13 -     let _ = OrderById::builder().id(1).query();
-13 +     let _ = OrderByIdBuilder::<Id<Filled>, Built<OrdersParams>, WithHooks>::query();
+13 +     let _ = OrderByIdBuilder::<Id<Filled>, Built<()>, WithHooks>::query();
    |

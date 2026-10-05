@@ -1,0 +1,21 @@
+error[E0277]: only hooks with parameters take values
+  --> tests/ui/hook_values_without_params.rs:13:45
+   |
+13 |     let _ = OrderById::builder().id(1).with(Audit::builder());
+   |                                        ---- ^^^^^^^^^^^^^^^^ builds no parameters
+   |                                        |
+   |                                        required by a bound introduced by this call
+   |
+   = help: the trait `static_typed_queries::__private::builder::ParamsOf` is not implemented for `()`
+   = note: a hook without parameters runs without a `with`
+help: the trait `static_typed_queries::__private::builder::ParamsOf` is implemented for `OrderByIdParams`
+  --> tests/ui/hook_values_without_params.rs:9:1
+   |
+ 9 | #[query(Postgres, sql = "SELECT id FROM {Orders} WHERE id = {_: i64}")]
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+note: required by a bound in `OrderByIdBuilder::<ParamId, ItemOrders, WithHooks, __V>::with`
+  --> tests/ui/hook_values_without_params.rs:9:1
+   |
+ 9 | #[query(Postgres, sql = "SELECT id FROM {Orders} WHERE id = {_: i64}")]
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `OrderByIdBuilder::<ParamId, ItemOrders, WithHooks, __V>::with`
+   = note: this error originates in the attribute macro `query` (in Nightly builds, run with -Z macro-backtrace for more info)

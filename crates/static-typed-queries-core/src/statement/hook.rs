@@ -1,3 +1,4 @@
+use crate::node::fingerprint::Fingerprint;
 use crate::node::name::Name;
 
 use super::bind::Bind;
@@ -5,17 +6,32 @@ use super::bind::Bind;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Hook {
     name: Name,
+    fingerprint: Fingerprint,
     sql: &'static str,
     binds: &'static [Bind],
 }
 
 impl Hook {
-    pub(crate) const fn new(name: Name, sql: &'static str, binds: &'static [Bind]) -> Hook {
-        Hook { name, sql, binds }
+    pub(crate) const fn new(
+        name: Name,
+        fingerprint: Fingerprint,
+        sql: &'static str,
+        binds: &'static [Bind],
+    ) -> Hook {
+        Hook {
+            name,
+            fingerprint,
+            sql,
+            binds,
+        }
     }
 
     pub const fn name(&self) -> Name {
         self.name
+    }
+
+    pub const fn fingerprint(&self) -> Fingerprint {
+        self.fingerprint
     }
 
     pub const fn sql(&self) -> &'static str {

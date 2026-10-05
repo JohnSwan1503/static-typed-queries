@@ -17,13 +17,18 @@ note: inside `measure::<Postgres>`
 note: inside `render::renderer::Renderer::<'_, Postgres>::statement`
   --> src/render/renderer.rs
    |
-   |         self.find_hooks(main, path);
-   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^
-note: inside `render::renderer::Renderer::<'_, Postgres>::find_hooks`
+   |         self.single(root, main, path);
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+note: inside `render::renderer::Renderer::<'_, Postgres>::single`
   --> src/render/renderer.rs
    |
-   |                 self.find_hooks(child, self.child_path(path, child));
-   |                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |         self.collect(node, path);
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^
+note: inside `render::renderer::Renderer::<'_, Postgres>::collect`
+  --> src/render/renderer.rs
+   |
+   |                     let child_path = self.child_path(path, child);
+   |                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 note: inside `render::renderer::Renderer::<'_, Postgres>::child_path`
   --> src/render/renderer.rs
    |

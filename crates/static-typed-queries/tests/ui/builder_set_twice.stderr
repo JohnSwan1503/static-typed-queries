@@ -7,7 +7,7 @@ error[E0599]: no method named `status` found for struct `SearchBuilder<CreatedAt
 10 |     let _ = Search::builder().status("paid".to_owned()).status("again".to_owned());
    |                                                         ^^^^^^ method not found in `SearchBuilder<CreatedAt<Missing<Missing<Filled>>>, Status<Filled>, Built<()>>`
    |
-   = note: the method was found for `SearchBuilder<ParamCreatedAt, Status<Missing<__Rest>>, ItemOrders, __H, __K>`
+   = note: the method was found for `SearchBuilder<ParamCreatedAt, Status<Missing<__Rest>>, ItemOrders, __H, __V, __K>`
    = help: items from traits can only be used if the trait is implemented and in scope
    = note: the following trait defines an item `status`, perhaps you need to implement it:
            candidate #1: `futures_task::spawn::Spawn`

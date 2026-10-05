@@ -19,6 +19,9 @@ pub struct Orders;
 #[table(Postgres, name = "events", after(Audit))]
 pub struct Events;
 
+#[table(Postgres, name = "refunds", before(SetTenant), after(Audit))]
+pub struct Refunds;
+
 #[table(Postgres, name = "users")]
 pub struct Users;
 
@@ -30,6 +33,12 @@ pub struct BigOrders;
 
 #[query(Postgres, sql = "SELECT count(*) FROM {BigOrders}")]
 pub struct BigOrderCount;
+
+#[query(Postgres, sql = "SELECT * FROM {BigOrders} JOIN {Orders} o USING (id)")]
+pub struct BigOrderRows;
+
+#[query(Postgres, sql = "SELECT id FROM {Orders} JOIN {Refunds} r USING (id)")]
+pub struct Refunded;
 
 #[query(Postgres, sql = "SELECT count(*) FROM {Events}")]
 pub struct EventCount;
@@ -61,19 +70,30 @@ fn statements_that_use_a_hooked_table_run_its_hooks() {
 }
 
 #[test]
-fn hook_parameters_are_set_through_the_table() {
+fn hooks_bind_their_own_parameters() {
     let params = ByStatus::builder()
         .status("open".to_owned())
-        .orders()
-        .set_tenant()
-        .tenant("acme".to_owned())
+        .with(SetTenant::builder().tenant("acme".to_owned()))
         .build();
     assert_eq!(params.status, "open");
-    assert_eq!(params.orders.set_tenant.tenant, "acme");
-    assert_eq!(ByStatus::BEFORE[0].binds()[0].path().steps(), [0, 0]);
+    assert_eq!(params.orders, ());
+    let bind = ByStatus::BEFORE[0].binds()[0];
+    assert_eq!((bind.path().steps(), bind.field()), (&[][..], "tenant"));
+    assert_eq!(
+        ByStatus::BEFORE[0].fingerprint(),
+        <SetTenant as Sql>::NODE.fingerprint
+    );
+}
 
-    let params = EventCount::builder().build();
-    assert_eq!(params.events.audit, ());
+#[test]
+fn each_hook_runs_once_per_statement() {
+    let names = |hooks: &[static_typed_queries::Hook]| -> Vec<&str> {
+        hooks.iter().map(|hook| hook.name().as_str()).collect()
+    };
+    assert_eq!(names(BigOrderRows::BEFORE), ["set_tenant"]);
+    assert_eq!(names(BigOrderRows::AFTER), ["audit"]);
+    assert_eq!(names(Refunded::BEFORE), ["set_tenant"]);
+    assert_eq!(names(Refunded::AFTER), ["audit"]);
 }
 
 #[test]
@@ -98,6 +118,9 @@ pub struct Note;
 #[table(Sqlite, name = "items", before(Bump), after(Note))]
 pub struct Items;
 
+#[table(Sqlite, name = "tags", before(Bump), after(Note))]
+pub struct Tags;
+
 #[derive(sqlx::FromRow, Debug, PartialEq)]
 pub struct Item {
     pub id: i64,
@@ -117,6 +140,12 @@ pub struct Pricey;
 )]
 pub struct Double;
 
+#[query(
+    Sqlite,
+    sql = "SELECT id FROM {Items} WHERE id IN (SELECT id FROM {Tags})"
+)]
+pub struct Tagged;
+
 async fn connect() -> sqlx::Result<sqlx::SqliteConnection> {
     use sqlx::Connection;
     let mut conn = sqlx::SqliteConnection::connect("sqlite::memory:").await?;
@@ -124,7 +153,9 @@ async fn connect() -> sqlx::Result<sqlx::SqliteConnection> {
         "CREATE TABLE items (id INTEGER PRIMARY KEY, price INTEGER);
          CREATE TABLE counters (name TEXT PRIMARY KEY, n INTEGER);
          CREATE TABLE audit (note TEXT UNIQUE);
+         CREATE TABLE tags (id INTEGER PRIMARY KEY);
          INSERT INTO items VALUES (1, 5), (2, 20), (3, 30);
+         INSERT INTO tags VALUES (2);
          INSERT INTO counters VALUES ('reads', 0);",
     )
     .execute(&mut conn)
@@ -146,13 +177,9 @@ async fn state(conn: &mut sqlx::SqliteConnection) -> sqlx::Result<(i64, Vec<Stri
 async fn run_wraps_the_statement_in_its_hooks() -> sqlx::Result<()> {
     let mut conn = connect().await?;
     let rows = Pricey::builder()
+        .with(Bump::builder().name("reads".to_owned()))
         .price(10)
-        .items()
-        .bump()
-        .name("reads".to_owned())
-        .items()
-        .note()
-        .note("pricey".to_owned())
+        .with(Note::builder().note("pricey".to_owned()))
         .run(&mut conn)
         .await?;
     assert_eq!(rows, [Item { id: 2, price: 20 }, Item { id: 3, price: 30 }]);
@@ -160,27 +187,32 @@ async fn run_wraps_the_statement_in_its_hooks() -> sqlx::Result<()> {
 
     let doubled = Double::builder()
         .price(25)
-        .items()
-        .bump()
-        .name("reads".to_owned())
-        .items()
-        .note()
-        .note("double".to_owned())
+        .with(Bump::builder().name("reads".to_owned()))
+        .with(Note::builder().note("double".to_owned()))
         .run(&mut conn)
         .await?;
     assert_eq!(doubled, 1);
 
     let ids: Vec<(i64,)> = Pricey::builder()
         .price(40)
-        .items()
-        .bump()
-        .name("reads".to_owned())
-        .items()
-        .note()
-        .note("ids".to_owned())
+        .with(Bump::builder().name("reads".to_owned()))
+        .with(Note::builder().note("ids".to_owned()))
         .run_as(&mut conn)
         .await?;
     assert_eq!(ids, [(3,)]);
+    Ok(())
+}
+
+#[tokio::test]
+async fn hooks_shared_by_two_tables_run_once() -> sqlx::Result<()> {
+    let mut conn = connect().await?;
+    let ids: Vec<(i64,)> = Tagged::builder()
+        .with(Bump::builder().name("reads".to_owned()))
+        .with(Note::builder().note("tagged".to_owned()))
+        .run_as(&mut conn)
+        .await?;
+    assert_eq!(ids, [(2,)]);
+    assert_eq!(state(&mut conn).await?, (1, vec!["tagged".to_owned()]));
     Ok(())
 }
 
@@ -190,12 +222,8 @@ async fn a_failing_hook_rolls_back_the_whole_run() -> sqlx::Result<()> {
     let run = |note: &str| {
         Double::builder()
             .price(0)
-            .items()
-            .bump()
-            .name("reads".to_owned())
-            .items()
-            .note()
-            .note(note.to_owned())
+            .with(Bump::builder().name("reads".to_owned()))
+            .with(Note::builder().note(note.to_owned()))
     };
     run("once").run(&mut conn).await?;
     let error = run("once").run(&mut conn).await.unwrap_err();

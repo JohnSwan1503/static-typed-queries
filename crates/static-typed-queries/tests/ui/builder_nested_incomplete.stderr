@@ -7,4 +7,4 @@ error[E0599]: no method named `build` found for struct `CountBuilder<Open<Active
 13 |     let _ = Count::builder().build();
    |                              ^^^^^ method not found in `CountBuilder<Open<ActiveUsersBuilder<OrgId<Missing<Filled>>, Built<()>>>>`
    |
-   = note: the method was found for `CountBuilder<Built<<ActiveUsers as Sql>::Params>, __H>`
+   = note: the method was found for `CountBuilder<Built<<ActiveUsers as Sql>::Params>, __H, __V>`
