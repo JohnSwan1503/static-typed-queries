@@ -19,13 +19,7 @@ pub(super) const fn placement<D: Dialect>(from: From, node: &'static Node) -> In
             "` isn't a table, so it can't be referenced by name",
         ]),
         (Kind::Dml, Inject::Cte { .. }) if D::DML_IN_CTE => {}
-        (Kind::Dml, Inject::Cte { .. }) => fail(&[
-            "`",
-            name,
-            "` modifies data, which ",
-            D::NAME.as_str(),
-            " doesn't allow in a CTE",
-        ]),
+        (Kind::Dml, Inject::Cte { .. }) => no_dml_in_cte::<D>(name),
         (Kind::Dml, _) => fail(&[
             "`",
             name,
@@ -43,13 +37,17 @@ pub(super) const fn attachable<D: Dialect>(node: &'static Node) {
     match node.kind {
         Kind::Query => {}
         Kind::Dml if D::DML_IN_CTE => {}
-        Kind::Dml => fail(&[
-            "`",
-            name,
-            "` modifies data, which ",
-            D::NAME.as_str(),
-            " doesn't allow in a CTE",
-        ]),
+        Kind::Dml => no_dml_in_cte::<D>(name),
         _ => fail(&["`", name, "` can't run as a CTE"]),
     }
+}
+
+const fn no_dml_in_cte<D: Dialect>(name: &str) -> ! {
+    fail(&[
+        "`",
+        name,
+        "` modifies data, which ",
+        D::NAME.as_str(),
+        " doesn't allow in a CTE",
+    ])
 }

@@ -38,15 +38,19 @@ note: inside `render::renderer::ctes::<impl render::renderer::Renderer<'_, MySql
 note: inside `render::renderer::placement::placement::<MySql>`
   --> src/render/renderer/placement.rs
    |
-   |           (Kind::Dml, Inject::Cte { .. }) => fail(&[
-   |  ____________________________________________^
-   | |             "`",
-   | |             name,
-   | |             "` modifies data, which ",
-   | |             D::NAME.as_str(),
-   | |             " doesn't allow in a CTE",
-   | |         ]),
-   | |__________^
+   |         (Kind::Dml, Inject::Cte { .. }) => no_dml_in_cte::<D>(name),
+   |                                            ^^^^^^^^^^^^^^^^^^^^^^^^
+note: inside `render::renderer::placement::no_dml_in_cte::<MySql>`
+  --> src/render/renderer/placement.rs
+   |
+   | /     fail(&[
+   | |         "`",
+   | |         name,
+   | |         "` modifies data, which ",
+   | |         D::NAME.as_str(),
+   | |         " doesn't allow in a CTE",
+   | |     ])
+   | |______^
 note: inside `render::error::fail`
   --> $RUST/core/src/panic.rs
    |

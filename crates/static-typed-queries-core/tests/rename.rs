@@ -6,11 +6,10 @@ use core::marker::PhantomData;
 use static_typed_queries_core::dialect::postgres::Postgres;
 use static_typed_queries_core::node::Node;
 use static_typed_queries_core::node::fingerprint::Fingerprint;
-use static_typed_queries_core::node::hooks::Hooks;
 use static_typed_queries_core::node::inject::Inject;
-use static_typed_queries_core::node::items::Items;
 use static_typed_queries_core::node::kind::Kind;
 use static_typed_queries_core::node::name::Name;
+use static_typed_queries_core::node::nodes::Nodes;
 use static_typed_queries_core::part::Parts;
 use static_typed_queries_core::part::from::From;
 use static_typed_queries_core::part::from::rule::AliasRule;
@@ -48,9 +47,9 @@ impl<T: Sql> Sql for Recent<T> {
             From::part(Target::Node(T::NODE), AliasRule::NodeName, None),
             Lit::part(" WHERE created_at > now() - interval '1 day'"),
         ]),
-        before: Hooks(&[]),
-        after: Hooks(&[]),
-        items: Items(&[]),
+        before: Nodes(&[]),
+        after: Nodes(&[]),
+        items: Nodes(&[]),
     };
 }
 

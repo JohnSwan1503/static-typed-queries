@@ -27,15 +27,19 @@ note: inside `static_typed_queries::__private::render::renderer::ctes::<impl sta
 note: inside `static_typed_queries::__private::render::renderer::placement::placement::<static_typed_queries::dialect::MySql>`
  --> $WORKSPACE/crates/static-typed-queries-core/src/render/renderer/placement.rs
   |
-  |           (Kind::Dml, Inject::Cte { .. }) => fail(&[
-  |  ____________________________________________^
-  | |             "`",
-  | |             name,
-  | |             "` modifies data, which ",
-  | |             D::NAME.as_str(),
-  | |             " doesn't allow in a CTE",
-  | |         ]),
-  | |__________^
+  |         (Kind::Dml, Inject::Cte { .. }) => no_dml_in_cte::<D>(name),
+  |                                            ^^^^^^^^^^^^^^^^^^^^^^^^
+note: inside `static_typed_queries::__private::render::renderer::placement::no_dml_in_cte::<static_typed_queries::dialect::MySql>`
+ --> $WORKSPACE/crates/static-typed-queries-core/src/render/renderer/placement.rs
+  |
+  | /     fail(&[
+  | |         "`",
+  | |         name,
+  | |         "` modifies data, which ",
+  | |         D::NAME.as_str(),
+  | |         " doesn't allow in a CTE",
+  | |     ])
+  | |______^
 note: inside `static_typed_queries::__private::render::error::fail`
  --> $RUST/core/src/panic.rs
   |

@@ -2,7 +2,7 @@ use sqlx::{Acquire, Executor, FromRow, IntoArguments};
 
 use crate::builder::Finish;
 use crate::dialect::driver::{Arguments, Connection, Database, Driver, Row};
-use crate::hooks::{HookNeeds, HookValues, Provides, with};
+use crate::hooks::{HookNeeds, HookValues, Provides};
 use crate::render::Render;
 use crate::sql::Sql;
 use crate::statement::Statement;
@@ -35,7 +35,7 @@ impl<S, V> With<S, V> {
     {
         With {
             statement: self.statement,
-            values: with(values.finish(), self.values),
+            values: (HookValues(values.finish()), self.values),
         }
     }
 

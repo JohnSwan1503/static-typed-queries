@@ -2,7 +2,7 @@ use core::marker::PhantomData;
 
 use crate::render::Render;
 use crate::sql::Sql;
-use crate::values::{Valueless, Values};
+use crate::values::Valueless;
 
 pub struct NoHooks;
 
@@ -75,7 +75,3 @@ impl<H, X, Rest: Provides<H, I>, I> Provides<H, There<I>> for (X, Rest) {}
 impl<H: Valueless> Provides<H, Free> for () {}
 
 pub trait HookNeeds<V, I> {}
-
-pub fn with<H: Values, V>(values: H, rest: V) -> (HookValues<H>, V) {
-    (HookValues(values), rest)
-}

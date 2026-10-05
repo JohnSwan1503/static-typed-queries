@@ -5,11 +5,6 @@ error[E0080]: evaluation panicked: `users` is a table, so it can't be a hook of 
   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ evaluation of `_::_` failed inside this call
   |
 note: inside `static_typed_queries::__private::render::check_hooks`
- --> $WORKSPACE/crates/static-typed-queries-core/src/render.rs
-  |
-  |     renderer::check_hooks(owner);
-  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-note: inside `static_typed_queries::__private::render::renderer::hooks::check_hooks`
  --> $WORKSPACE/crates/static-typed-queries-core/src/render/renderer/hooks.rs
   |
   |         hook(owner, node, Path::ROOT);

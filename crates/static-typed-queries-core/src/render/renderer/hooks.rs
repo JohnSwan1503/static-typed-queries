@@ -79,7 +79,7 @@ impl<'a, D: Dialect> Renderer<'a, D> {
     }
 }
 
-pub(crate) const fn check_hooks(owner: &'static Node) {
+pub const fn check_hooks(owner: &'static Node) {
     let (before, after) = (owner.before.0, owner.after.0);
     let mut i = 0;
     while i < before.len() + after.len() {
@@ -116,6 +116,6 @@ const fn hook(owner: &'static Node, hook: &'static Node, path: Path) -> (&'stati
     (node, path)
 }
 
-pub(crate) const fn hooked(root: &'static Node) -> bool {
+pub const fn hooked(root: &'static Node) -> bool {
     has(root, Probe::Hooks)
 }

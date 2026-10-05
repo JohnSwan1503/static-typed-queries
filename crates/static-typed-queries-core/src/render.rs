@@ -9,6 +9,8 @@ use crate::statement::bind::Bind;
 use crate::statement::hook::Hook;
 use renderer::Renderer;
 
+pub use renderer::{check_hooks, hooked};
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Size {
     pub sql: usize,
@@ -120,14 +122,6 @@ impl Output {
     pub const fn after(&self) -> &'static [Hook] {
         self.statements.split_at(self.before + self.steps).1
     }
-}
-
-pub const fn check_hooks(owner: &'static Node) {
-    renderer::check_hooks(owner);
-}
-
-pub const fn hooked(root: &'static Node) -> bool {
-    renderer::hooked(root)
 }
 
 pub const fn measure<D: Dialect>(root: &'static Node) -> Size {

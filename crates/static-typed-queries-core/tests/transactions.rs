@@ -7,11 +7,10 @@ use static_typed_queries_core::dialect::postgres::Postgres;
 use static_typed_queries_core::impl_transaction;
 use static_typed_queries_core::node::Node;
 use static_typed_queries_core::node::fingerprint::Fingerprint;
-use static_typed_queries_core::node::hooks::Hooks;
 use static_typed_queries_core::node::inject::Inject;
-use static_typed_queries_core::node::items::Items;
 use static_typed_queries_core::node::kind::Kind;
 use static_typed_queries_core::node::name::Name;
+use static_typed_queries_core::node::nodes::Nodes;
 use static_typed_queries_core::part::Parts;
 use static_typed_queries_core::part::expr::Expr;
 use static_typed_queries_core::part::from::From;
@@ -103,9 +102,9 @@ impl<T: Sql> Sql for CountOf<T> {
             Lit::part("SELECT count(*) FROM "),
             From::part(Target::Item(0), AliasRule::NodeName, None),
         ]),
-        before: Hooks(&[]),
-        after: Hooks(&[]),
-        items: Items(&[T::NODE]),
+        before: Nodes(&[]),
+        after: Nodes(&[]),
+        items: Nodes(&[T::NODE]),
     };
 }
 

@@ -1,9 +1,8 @@
 pub mod fingerprint;
-pub mod hooks;
 pub mod inject;
-pub mod items;
 pub mod kind;
 pub mod name;
+pub mod nodes;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Node {
@@ -12,7 +11,7 @@ pub struct Node {
     pub kind: kind::Kind,
     pub inject: inject::Inject,
     pub parts: crate::part::Parts,
-    pub before: hooks::Hooks,
-    pub after: hooks::Hooks,
-    pub items: items::Items,
+    pub before: nodes::Nodes,
+    pub after: nodes::Nodes,
+    pub items: nodes::Nodes,
 }

@@ -13,10 +13,7 @@ pub(super) const fn resolve(
     target: Target,
 ) -> (&'static Node, Path) {
     match target {
-        Target::Item(index) => match path.child(index) {
-            Some(path) => (node.items.0[index as usize], path),
-            None => fail(&["items can't be nested more than 16 deep"]),
-        },
+        Target::Item(index) => item(node, path, index),
         Target::Node(child) => {
             if has(child, Probe::Params) {
                 fail(&[
@@ -57,10 +54,16 @@ pub(super) const fn instance_path(node: &'static Node, path: Path) -> Path {
 }
 
 const fn unwrap(node: &'static Node, path: Path) -> (&'static Node, Path) {
-    match (node.kind, path.child(0)) {
-        (Kind::Scope, Some(path)) => (node.items.0[0], path),
-        (Kind::Scope, None) => fail(&["items can't be nested more than 16 deep"]),
+    match node.kind {
+        Kind::Scope => item(node, path, 0),
         _ => (node, path),
+    }
+}
+
+const fn item(node: &'static Node, path: Path, index: u16) -> (&'static Node, Path) {
+    match path.child(index) {
+        Some(path) => (node.items.0[index as usize], path),
+        None => fail(&["items can't be nested more than 16 deep"]),
     }
 }
 

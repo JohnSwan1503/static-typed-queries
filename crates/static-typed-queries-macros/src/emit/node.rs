@@ -36,9 +36,9 @@ pub(crate) fn node(
                 kind: #krate::Kind::#kind,
                 inject: #inject,
                 parts: #krate::Parts(&[#(#parts),*]),
-                before: #krate::Hooks(&[#(<#before as #krate::Sql>::NODE),*]),
-                after: #krate::Hooks(&[#(<#after as #krate::Sql>::NODE),*]),
-                items: #krate::Items(&[#(<#items as #krate::Sql>::NODE),*]),
+                before: #krate::Nodes(&[#(<#before as #krate::Sql>::NODE),*]),
+                after: #krate::Nodes(&[#(<#after as #krate::Sql>::NODE),*]),
+                items: #krate::Nodes(&[#(<#items as #krate::Sql>::NODE),*]),
             }
         }
     }

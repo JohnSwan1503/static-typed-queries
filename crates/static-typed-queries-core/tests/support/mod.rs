@@ -16,9 +16,9 @@ macro_rules! node {
             kind: static_typed_queries_core::node::kind::Kind::$kind,
             inject: $inject,
             parts: static_typed_queries_core::part::Parts(&[$($part),*]),
-            before: static_typed_queries_core::node::hooks::Hooks(&[$($($before),*)?]),
-            after: static_typed_queries_core::node::hooks::Hooks(&[$($($after),*)?]),
-            items: static_typed_queries_core::node::items::Items(&[$($($item),*)?]),
+            before: static_typed_queries_core::node::nodes::Nodes(&[$($($before),*)?]),
+            after: static_typed_queries_core::node::nodes::Nodes(&[$($($after),*)?]),
+            items: static_typed_queries_core::node::nodes::Nodes(&[$($($item),*)?]),
         }
     };
 }

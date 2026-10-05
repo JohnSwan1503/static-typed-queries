@@ -22,7 +22,7 @@ use list::List;
 use paths::{resolve, target};
 use text::Numbered;
 
-pub(super) use hooks::{check_hooks, hooked};
+pub use hooks::{check_hooks, hooked};
 
 const MAX_CTES: usize = 64;
 const MAX_HOOKS: usize = 64;
