@@ -241,6 +241,15 @@ pub fn table(args: TokenStream, item: TokenStream) -> TokenStream {
 ///     r#"SELECT (SELECT count(*) FROM "users") AS users"#
 /// );
 /// ```
+#[proc_macro_attribute]
+pub fn query(args: TokenStream, item: TokenStream) -> TokenStream {
+    let args = parse_macro_input!(args as args::Args);
+    let item = parse_macro_input!(item as ItemStruct);
+    expand::query(args, item)
+        .unwrap_or_else(|error| error.to_compile_error())
+        .into()
+}
+
 /// Makes an instantiation of a generic query a statement, with its own SQL,
 /// `BINDS` and builder.
 ///
@@ -279,15 +288,6 @@ pub fn statement(args: TokenStream, item: TokenStream) -> TokenStream {
     let args = parse_macro_input!(args as args::Args);
     let item = parse_macro_input!(item as ItemStruct);
     expand::statement(args, item)
-        .unwrap_or_else(|error| error.to_compile_error())
-        .into()
-}
-
-#[proc_macro_attribute]
-pub fn query(args: TokenStream, item: TokenStream) -> TokenStream {
-    let args = parse_macro_input!(args as args::Args);
-    let item = parse_macro_input!(item as ItemStruct);
-    expand::query(args, item)
         .unwrap_or_else(|error| error.to_compile_error())
         .into()
 }
