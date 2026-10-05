@@ -24,7 +24,7 @@ impl Builder<'_> {
         self.ty(&states, &quote!(#krate::Root))
     }
 
-    pub(super) fn finish(&self) -> TokenStream {
+    pub(super) fn finish(&self, methods: TokenStream) -> TokenStream {
         let krate = &self.krate;
         let ident = &self.input.ident;
         let complete = self.complete();
@@ -55,6 +55,12 @@ impl Builder<'_> {
                 #doc
                 pub fn build(self) -> #ident #ty_generics {
                     #krate::Finish::finish(self)
+                }
+            }
+
+            #krate::__if_sqlx! {
+                impl #impl_generics #complete #where_clause {
+                    #methods
                 }
             }
         }

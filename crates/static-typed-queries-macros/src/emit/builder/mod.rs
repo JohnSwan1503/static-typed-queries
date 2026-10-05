@@ -35,11 +35,16 @@ struct Slot {
 }
 
 // Returns the definitions, which must stay nameable, and the impls, which go in `emit::scoped`.
-pub(crate) fn builder(input: &ItemStruct, fields: &[Field]) -> (TokenStream, TokenStream) {
+// `methods` go on the complete builder when a database feature is enabled.
+pub(crate) fn builder(
+    input: &ItemStruct,
+    fields: &[Field],
+    methods: TokenStream,
+) -> (TokenStream, TokenStream) {
     if fields.is_empty() {
         return (TokenStream::new(), built(input));
     }
-    Builder::new(input, fields).emit()
+    Builder::new(input, fields).emit(methods)
 }
 
 impl<'a> Builder<'a> {
@@ -83,7 +88,7 @@ impl<'a> Builder<'a> {
         }
     }
 
-    fn emit(&self) -> (TokenStream, TokenStream) {
+    fn emit(&self, methods: TokenStream) -> (TokenStream, TokenStream) {
         let mut definitions = self.markers();
         definitions.extend(self.definition());
         definitions.extend(self.holes());
@@ -92,7 +97,7 @@ impl<'a> Builder<'a> {
         impls.extend(self.scope());
         impls.extend(self.setters());
         impls.extend(self.item_methods());
-        impls.extend(self.finish());
+        impls.extend(self.finish(methods));
         impls.extend(self.build());
         (definitions, impls)
     }

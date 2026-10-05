@@ -201,10 +201,16 @@ pub(crate) fn expand(args: QueryArgs, mut input: ItemStruct) -> syn::Result<Toke
     let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
     let values = values(&input, !fields.is_empty());
     let bind = bind_impl(&input, &fields);
-    let (definitions, builder) = builder(&input, &fields);
+    let generic = !input.generics.params.is_empty();
+    let (methods, delegates) = if generic {
+        Default::default()
+    } else {
+        statement_methods(&input, dialect, row)
+    };
+    let (definitions, builder) = builder(&input, &fields, delegates);
     let parse_check = args.parse_check.as_ref().is_none_or(|check| check.value);
-    let test = (input.generics.params.is_empty() && parse_check).then(|| parse_test(ident));
-    let statement = input.generics.params.is_empty().then(|| {
+    let test = (!generic && parse_check).then(|| parse_test(ident));
+    let statement = (!generic).then(|| {
         let rows = row.map(|row| {
             quote! {
                 impl #krate::Rows for #ident {
@@ -212,7 +218,6 @@ pub(crate) fn expand(args: QueryArgs, mut input: ItemStruct) -> syn::Result<Toke
                 }
             }
         });
-        let methods = statement_methods(&input, dialect, row);
         quote! {
             #krate::impl_statement!(#ident);
             #rows

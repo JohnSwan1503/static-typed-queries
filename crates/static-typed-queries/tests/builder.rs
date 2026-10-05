@@ -1,5 +1,6 @@
 use std::marker::PhantomData;
 
+use sqlx::{Connection, Row, SqliteConnection};
 use static_typed_queries::prelude::*;
 
 #[table(Postgres, name = "orders")]
@@ -202,4 +203,173 @@ fn statements_and_transactions_build_their_fields() {
     assert_eq!(nightly.count.count.of.org_id, 1);
     assert_eq!((nightly.search.since, nightly.search.until), (1, 2));
     assert_eq!(nightly.search.status, "paid");
+}
+
+#[table(Sqlite, name = "events")]
+pub struct Events;
+
+#[query(
+    Sqlite,
+    sql = "
+    SELECT count(*) AS n FROM {Events}
+    WHERE kind = {kind} AND at BETWEEN {since} AND {until}"
+)]
+pub struct CountEvents {
+    pub kind: String,
+    pub since: i64,
+    pub until: i64,
+}
+
+#[query(Sqlite, sql = "UPDATE counters SET n = n + 1 WHERE name = {name}")]
+pub struct Bump {
+    pub name: String,
+}
+
+#[query(Sqlite, sql = "INSERT INTO audit (note) VALUES ({note})")]
+pub struct Note {
+    pub note: String,
+}
+
+#[query(Sqlite, sql = "INSERT INTO audit (note) VALUES ('read')")]
+pub struct Audit;
+
+#[table(Sqlite, name = "events", before(Bump), after(Note))]
+pub struct CountedEvents;
+
+#[table(Sqlite, name = "events", after(Audit))]
+pub struct AuditedEvents;
+
+#[derive(sqlx::FromRow, Debug, PartialEq)]
+pub struct Event {
+    pub kind: String,
+    pub at: i64,
+}
+
+#[query(
+    Sqlite,
+    row = Event,
+    sql = "SELECT kind, at FROM {CountedEvents} WHERE at >= {since} ORDER BY at"
+)]
+pub struct EventsSince {
+    pub since: i64,
+}
+
+#[query(
+    Sqlite,
+    sql = "SELECT count(*) FROM {AuditedEvents} WHERE kind = {kind}"
+)]
+pub struct AuditedCount {
+    pub kind: String,
+}
+
+#[query(
+    Sqlite,
+    sql = "INSERT INTO {CountedEvents} (kind, at) VALUES ({kind}, {at})"
+)]
+pub struct AddEvent {
+    pub kind: String,
+    pub at: i64,
+}
+
+#[transaction(Sqlite, steps(add, list))]
+pub struct AddAndList {
+    pub add: AddEvent,
+    pub list: EventsSince,
+}
+
+async fn connect() -> sqlx::Result<SqliteConnection> {
+    let mut conn = SqliteConnection::connect("sqlite::memory:").await?;
+    sqlx::raw_sql(
+        "CREATE TABLE events (kind TEXT, at INTEGER);
+         CREATE TABLE counters (name TEXT PRIMARY KEY, n INTEGER);
+         CREATE TABLE audit (note TEXT);
+         INSERT INTO events VALUES ('a', 1), ('a', 5), ('b', 5), ('a', 9);
+         INSERT INTO counters VALUES ('reads', 0);",
+    )
+    .execute(&mut conn)
+    .await?;
+    Ok(conn)
+}
+
+async fn reads(conn: &mut SqliteConnection) -> sqlx::Result<(i64, i64)> {
+    let (n,): (i64,) = sqlx::query_as("SELECT n FROM counters")
+        .fetch_one(&mut *conn)
+        .await?;
+    let (audits,): (i64,) = sqlx::query_as("SELECT count(*) FROM audit")
+        .fetch_one(&mut *conn)
+        .await?;
+    Ok((n, audits))
+}
+
+#[tokio::test]
+async fn complete_builders_bind_their_values() -> sqlx::Result<()> {
+    let mut conn = connect().await?;
+    let row = CountEvents::builder()
+        .kind("a".to_owned())
+        .since(2)
+        .until(9)
+        .query()?
+        .fetch_one(&mut conn)
+        .await?;
+    assert_eq!(row.get::<i64, _>("n"), 2);
+
+    let (n,): (i64,) = CountEvents::builder()
+        .until(10)
+        .since(0)
+        .kind("b".to_owned())
+        .query_as()?
+        .fetch_one(&mut conn)
+        .await?;
+    assert_eq!(n, 1);
+    Ok(())
+}
+
+#[tokio::test]
+async fn complete_builders_run_with_their_hooks() -> sqlx::Result<()> {
+    let mut conn = connect().await?;
+    let events = EventsSince::builder()
+        .since(6)
+        .with(Bump {
+            name: "reads".to_owned(),
+        })
+        .with(Note {
+            note: "since".to_owned(),
+        })
+        .run(&mut conn)
+        .await?;
+    assert_eq!(
+        events,
+        [Event {
+            kind: "a".to_owned(),
+            at: 9
+        }]
+    );
+    assert_eq!(reads(&mut conn).await?, (1, 1));
+
+    let counts: Vec<(i64,)> = AuditedCount::builder()
+        .kind("a".to_owned())
+        .run_as(&mut conn)
+        .await?;
+    assert_eq!(counts, [(3,)]);
+    assert_eq!(reads(&mut conn).await?, (1, 2));
+
+    let (added, listed) = AddAndList::builder()
+        .list()
+        .since(9)
+        .add()
+        .kind("c".to_owned())
+        .add()
+        .at(10)
+        .with(Bump {
+            name: "reads".to_owned(),
+        })
+        .with(Note {
+            note: "add".to_owned(),
+        })
+        .run(&mut conn)
+        .await?;
+    assert_eq!(added, 1);
+    assert_eq!(listed.len(), 2);
+    assert_eq!(reads(&mut conn).await?, (2, 3));
+    Ok(())
 }

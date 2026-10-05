@@ -108,7 +108,6 @@ pub(crate) fn expand(args: StatementArgs, mut input: ItemStruct) -> syn::Result<
     );
     let values = values(&input, !fields.is_empty());
     let bind = bind_impl(&input, &fields);
-    let (definitions, builder) = builder(&input, &fields);
     let row = args.row.as_ref();
     let rows = row.map(|row| {
         quote! {
@@ -117,7 +116,8 @@ pub(crate) fn expand(args: StatementArgs, mut input: ItemStruct) -> syn::Result<
             }
         }
     });
-    let methods = statement_methods(&input, &dialect, row);
+    let (methods, delegates) = statement_methods(&input, &dialect, row);
+    let (definitions, builder) = builder(&input, &fields, delegates);
     let step = step_impl(&input, row);
     let fmt = fmt(args.display.as_ref(), args.debug.as_ref(), &input, true)?;
     let parse_check = args.parse_check.as_ref().is_none_or(|check| check.value);

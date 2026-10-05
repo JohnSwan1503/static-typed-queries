@@ -116,7 +116,7 @@ pub(crate) fn expand(args: TableArgs, input: ItemStruct) -> syn::Result<TokenStr
         parse_quote!(__V: #krate::Provides<#hook, #index>)
     });
     let values = values(&input, false);
-    let (_, built) = builder(&input, &[]);
+    let (_, built) = builder(&input, &[], TokenStream::new());
     let step = step_impl(&input, None);
     let fmt = fmt(args.display.as_ref(), args.debug.as_ref(), &input, false)?;
     let mut documented = input.clone();

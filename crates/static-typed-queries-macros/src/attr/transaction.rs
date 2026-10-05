@@ -130,8 +130,8 @@ pub(crate) fn expand(args: TransactionArgs, mut input: ItemStruct) -> syn::Resul
     });
     let values = values(&input, !fields.is_empty());
     let bind = bind_impl(&input, &fields);
-    let (definitions, builder) = builder(&input, &fields);
-    let methods = transaction_methods(&input, dialect, &typed(steps, &fields));
+    let (methods, delegates) = transaction_methods(&input, dialect, &typed(steps, &fields));
+    let (definitions, builder) = builder(&input, &fields, delegates);
     let mut documented = input.clone();
     documented
         .attrs

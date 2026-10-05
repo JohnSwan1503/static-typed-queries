@@ -67,14 +67,13 @@ assert_eq!(
 );
 
 async fn open_orders(conn: &mut sqlx::PgConnection) -> sqlx::Result<u64> {
-    ByStatus {
-        status: "open".to_owned(),
-    }
-    .with(SetTenant {
-        tenant: "acme".to_owned(),
-    })
-    .run(conn)
-    .await
+    ByStatus::builder()
+        .status("open".to_owned())
+        .with(SetTenant {
+            tenant: "acme".to_owned(),
+        })
+        .run(conn)
+        .await
 }
 ```
 

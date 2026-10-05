@@ -35,8 +35,9 @@ assert_eq!(query.org_id, 7);
 
 The builder checks at compile time that each field is set exactly once.
 The struct literal, `UsersByOrg { org_id: 7, pattern: .. }`, is the same
-value. With a database feature enabled, `query.query()?` binds the values
-to the SQL as a `sqlx` query.
+value. With a database feature enabled, `query()` on the struct or on the
+complete builder binds the values to the SQL as a `sqlx` query:
+`UsersByOrg::builder().org_id(7).pattern(..).query()?`.
 
 # Arguments
 
@@ -145,10 +146,12 @@ For `struct Name`, the macro implements `Sql` and generates:
   Its methods follow its state: each field has a setter, named after it,
   while it is unset, and each field that holds an item has a method that
   moves to the item's builder while the item has fields left to set.
-  `build()` appears once everything is set and returns the struct. Each
-  setter has its field's visibility, so a struct with private fields is
-  built only where its literal could be written. A struct without fields
-  gets no builder struct.
+  `build()` appears once everything is set and returns the struct, and
+  the complete builder also has the struct's `query()`, `with()` and
+  `run()` methods below, which build it first. Each setter has its
+  field's visibility, so a struct with private fields is built only where
+  its literal could be written. A struct without fields gets no builder
+  struct.
 - A `Statement` impl and an inherent `Name::SQL` constant holding the
   rendered SQL, for non-generic queries.
 - With a database feature enabled, `query()` and `query_as::<T>()` on the

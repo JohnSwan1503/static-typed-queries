@@ -5,19 +5,95 @@ use syn::{Ident, ItemStruct, Type};
 use crate::args::{Fetch, Step};
 use crate::emit::{doc, docs, krate};
 
-// A statement binds itself with `query` when it has no hooks, and otherwise runs with its hooks
-// in one transaction through `with` and `run`; `Single` and `Hooked` keep the wrong set out.
+// The methods that bind or run a statement exist twice: on the struct, and on its complete
+// builder, which builds the struct first.
+enum Receiver<'a> {
+    Struct,
+    Builder(&'a Ident),
+}
+
+impl Receiver<'_> {
+    fn subject(&self) -> TokenStream {
+        match self {
+            Receiver::Struct => quote!(Self),
+            Receiver::Builder(ident) => quote!(#ident),
+        }
+    }
+
+    // The receiver of a method that only reads the values, and the struct it reads.
+    fn borrowed(&self) -> (TokenStream, TokenStream) {
+        let krate = krate();
+        match self {
+            Receiver::Struct => (quote!(&self), quote!(self)),
+            Receiver::Builder(_) => (quote!(self), quote!(&#krate::Finish::finish(self))),
+        }
+    }
+
+    fn owned(&self) -> TokenStream {
+        let krate = krate();
+        match self {
+            Receiver::Struct => quote!(self),
+            Receiver::Builder(_) => quote!(#krate::Finish::finish(self)),
+        }
+    }
+}
+
+// Returns the struct's methods and impls, and the methods of its complete builder.
 pub(crate) fn statement_methods(
     input: &ItemStruct,
     dialect: &Type,
     row: Option<&Type>,
-) -> TokenStream {
+) -> (TokenStream, TokenStream) {
     let krate = krate();
     let ident = &input.ident;
+    let driver = quote!(#krate::driver);
+    let error = quote!(#krate::sqlx::Error);
+    let methods = statement_api(dialect, row, &Receiver::Struct);
+    let output = match row {
+        Some(row) => quote!(::std::vec::Vec<#row>),
+        None => quote!(u64),
+    };
+    let fetch = match row {
+        Some(row) => quote!(#krate::run::AllRows<#row>),
+        None => quote!(#krate::run::Affected),
+    };
+    let impls = quote! {
+        #krate::__if_sqlx! {
+            impl #ident {
+                #methods
+            }
+
+            impl #krate::Run for #ident {
+                type Output = #output;
+                const BEFORE: &'static [#krate::Hook] = <Self as #krate::Statement>::BEFORE;
+                const AFTER: &'static [#krate::Hook] = <Self as #krate::Statement>::AFTER;
+
+                async fn run(
+                    self,
+                    conn: &mut #driver::Connection<#dialect>,
+                ) -> ::core::result::Result<#output, #error> {
+                    #krate::run::statement::<#dialect, #fetch, Self>(&self, conn).await
+                }
+            }
+        }
+    };
+    (
+        impls,
+        statement_api(dialect, row, &Receiver::Builder(ident)),
+    )
+}
+
+// A statement binds itself with `query` when it has no hooks, and otherwise runs with its hooks
+// in one transaction through `with` and `run`; `Single` and `Hooked` keep the wrong set out.
+fn statement_api(dialect: &Type, row: Option<&Type>, receiver: &Receiver) -> TokenStream {
+    let krate = krate();
     let driver = quote!(#krate::driver);
     let sqlx = quote!(#krate::sqlx);
     let error = quote!(#sqlx::Error);
     let acquire = quote!(impl #sqlx::Acquire<'c, Database = #driver::Database<#dialect>>);
+    let subject = receiver.subject();
+    let (borrowed, statement) = receiver.borrowed();
+    let owned = receiver.owned();
     let query = match row {
         Some(row) => {
             let doc = doc(&format!(
@@ -27,24 +103,24 @@ pub(crate) fn statement_methods(
             quote! {
                 #doc
                 pub fn query<'q, __I>(
-                    &self,
+                    #borrowed,
                 ) -> ::core::result::Result<#driver::QueryAs<'q, #dialect, #row>, #error>
                 where
-                    Self: #krate::Single<__I>,
+                    #subject: #krate::Single<__I>,
                 {
-                    #krate::query_as::<Self, #row, __I>(self)
+                    #krate::query_as::<#subject, #row, __I>(#statement)
                 }
             }
         }
         None => quote! {
             /// Binds the values to the SQL as a `sqlx` query.
             pub fn query<'q, __I>(
-                &self,
+                #borrowed,
             ) -> ::core::result::Result<#driver::Query<'q, #dialect>, #error>
             where
-                Self: #krate::Single<__I>,
+                #subject: #krate::Single<__I>,
             {
-                #krate::query::<Self, __I>(self)
+                #krate::query::<#subject, __I>(#statement)
             }
         },
     };
@@ -63,134 +139,129 @@ pub(crate) fn statement_methods(
             ),
         ),
     };
-    let fetch = match row {
-        Some(row) => quote!(#krate::run::AllRows<#row>),
-        None => quote!(#krate::run::Affected),
-    };
     quote! {
-        #krate::__if_sqlx! {
-            impl #ident {
-                #query
+        #query
 
-                /// Binds the values to the SQL as a `sqlx` query that reads each row as `O`.
-                pub fn query_as<'q, O, __I>(
-                    &self,
-                ) -> ::core::result::Result<#driver::QueryAs<'q, #dialect, O>, #error>
-                where
-                    O: for<'r> #sqlx::FromRow<'r, #driver::Row<#dialect>>,
-                    Self: #krate::Single<__I>,
-                {
-                    #krate::query_as::<Self, O, __I>(self)
-                }
+        /// Binds the values to the SQL as a `sqlx` query that reads each row as `O`.
+        pub fn query_as<'q, O, __I>(
+            #borrowed,
+        ) -> ::core::result::Result<#driver::QueryAs<'q, #dialect, O>, #error>
+        where
+            O: for<'r> #sqlx::FromRow<'r, #driver::Row<#dialect>>,
+            #subject: #krate::Single<__I>,
+        {
+            #krate::query_as::<#subject, O, __I>(#statement)
+        }
 
-                /// Gives the values of a hook with parameters. Each hook takes its values once and runs once.
-                pub fn with<__H, __G, __I>(
-                    self,
-                    values: __H,
-                ) -> #krate::With<Self, (#krate::HookValues<__H>, ())>
-                where
-                    Self: #krate::Hooked<__G>,
-                    __H: #krate::Values,
-                    (#krate::HookValues<__H>, ()): #krate::Provides<__H, __I>,
-                {
-                    #krate::With::new(self).with(values)
-                }
+        /// Gives the values of a hook with parameters. Each hook takes its values once and runs once.
+        pub fn with<__H, __G, __I>(
+            self,
+            values: __H,
+        ) -> #krate::With<#subject, (#krate::HookValues<__H>, ())>
+        where
+            #subject: #krate::Hooked<__G>,
+            __H: #krate::Values,
+            (#krate::HookValues<__H>, ()): #krate::Provides<__H, __I>,
+        {
+            #krate::With::new(#owned).with(values)
+        }
 
-                #run_doc
-                pub async fn run<'c, __G, __I>(
-                    self,
-                    conn: #acquire,
-                ) -> ::core::result::Result<#output, #error>
-                where
-                    Self: #krate::Hooked<__G> + #krate::HookNeeds<(), __I>,
-                {
-                    #krate::With::new(self).run(conn).await
-                }
+        #run_doc
+        pub async fn run<'c, __G, __I>(
+            self,
+            conn: #acquire,
+        ) -> ::core::result::Result<#output, #error>
+        where
+            #subject: #krate::Hooked<__G> + #krate::HookNeeds<(), __I>,
+        {
+            #krate::With::new(#owned).run(conn).await
+        }
 
-                /// Runs the statement and its hooks in one transaction, and reads each row of the statement as `O`.
-                pub async fn run_as<'c, O, __G, __I>(
-                    self,
-                    conn: #acquire,
-                ) -> ::core::result::Result<::std::vec::Vec<O>, #error>
-                where
-                    O: for<'r> #sqlx::FromRow<'r, #driver::Row<#dialect>>
-                        + ::core::marker::Send
-                        + ::core::marker::Unpin,
-                    Self: #krate::Hooked<__G> + #krate::HookNeeds<(), __I>,
-                {
-                    #krate::With::new(self).run_as(conn).await
-                }
-            }
-
-            impl #krate::Run for #ident {
-                type Output = #output;
-                const BEFORE: &'static [#krate::Hook] = <Self as #krate::Statement>::BEFORE;
-                const AFTER: &'static [#krate::Hook] = <Self as #krate::Statement>::AFTER;
-
-                async fn run(
-                    self,
-                    conn: &mut #driver::Connection<#dialect>,
-                ) -> ::core::result::Result<#output, #error> {
-                    #krate::run::statement::<#dialect, #fetch, Self>(&self, conn).await
-                }
-            }
+        /// Runs the statement and its hooks in one transaction, and reads each row of the statement as `O`.
+        pub async fn run_as<'c, O, __G, __I>(
+            self,
+            conn: #acquire,
+        ) -> ::core::result::Result<::std::vec::Vec<O>, #error>
+        where
+            O: for<'r> #sqlx::FromRow<'r, #driver::Row<#dialect>>
+                + ::core::marker::Send
+                + ::core::marker::Unpin,
+            #subject: #krate::Hooked<__G> + #krate::HookNeeds<(), __I>,
+        {
+            #krate::With::new(#owned).run_as(conn).await
         }
     }
 }
 
+// Returns the struct's methods and impls, and the methods of its complete builder.
 pub(crate) fn transaction_methods(
     input: &ItemStruct,
     dialect: &Type,
     steps: &[Step],
-) -> TokenStream {
+) -> (TokenStream, TokenStream) {
     let krate = krate();
     let ident = &input.ident;
     let driver = quote!(#krate::driver);
-    let sqlx = quote!(#krate::sqlx);
-    let error = quote!(#sqlx::Error);
     let transaction = quote!(<#ident as #krate::Transaction>);
     let conn = format_ident!("conn");
     let (runs, names, outputs) = run_steps(ident, steps, dialect, &conn, &mut (0, 0));
-    quote! {
+    let output = quote!((#(#outputs,)*));
+    let methods = transaction_api(dialect, &output, &Receiver::Struct);
+    let impls = quote! {
         #krate::__if_sqlx! {
             impl #ident {
-                /// Gives the values of a hook with parameters. Each hook takes its values once and runs once.
-                pub fn with<__H, __I>(
-                    self,
-                    values: __H,
-                ) -> #krate::With<Self, (#krate::HookValues<__H>, ())>
-                where
-                    __H: #krate::Values,
-                    (#krate::HookValues<__H>, ()): #krate::Provides<__H, __I>,
-                {
-                    #krate::With::new(self).with(values)
-                }
-
-                /// Runs the steps in order in one transaction, with each hook once around them, and returns the output of each step.
-                pub async fn run<'c, __I>(
-                    self,
-                    conn: impl #sqlx::Acquire<'c, Database = #driver::Database<#dialect>>,
-                ) -> ::core::result::Result<(#(#outputs,)*), #error>
-                where
-                    Self: #krate::HookNeeds<(), __I>,
-                {
-                    #krate::With::new(self).run(conn).await
-                }
+                #methods
             }
 
             impl #krate::Run for #ident {
-                type Output = (#(#outputs,)*);
+                type Output = #output;
                 const BEFORE: &'static [#krate::Hook] = #transaction::BEFORE;
                 const AFTER: &'static [#krate::Hook] = #transaction::AFTER;
 
                 async fn run(
                     self,
                     conn: &mut #driver::Connection<#dialect>,
-                ) -> ::core::result::Result<(#(#outputs,)*), #error> {
+                ) -> ::core::result::Result<#output, #krate::sqlx::Error> {
                     #(#runs)*
                     ::core::result::Result::Ok((#(#names,)*))
                 }
             }
+        }
+    };
+    (
+        impls,
+        transaction_api(dialect, &output, &Receiver::Builder(ident)),
+    )
+}
+
+fn transaction_api(dialect: &Type, output: &TokenStream, receiver: &Receiver) -> TokenStream {
+    let krate = krate();
+    let driver = quote!(#krate::driver);
+    let sqlx = quote!(#krate::sqlx);
+    let subject = receiver.subject();
+    let owned = receiver.owned();
+    quote! {
+        /// Gives the values of a hook with parameters. Each hook takes its values once and runs once.
+        pub fn with<__H, __I>(
+            self,
+            values: __H,
+        ) -> #krate::With<#subject, (#krate::HookValues<__H>, ())>
+        where
+            __H: #krate::Values,
+            (#krate::HookValues<__H>, ()): #krate::Provides<__H, __I>,
+        {
+            #krate::With::new(#owned).with(values)
+        }
+
+        /// Runs the steps in order in one transaction, with each hook once around them, and returns the output of each step.
+        pub async fn run<'c, __I>(
+            self,
+            conn: impl #sqlx::Acquire<'c, Database = #driver::Database<#dialect>>,
+        ) -> ::core::result::Result<#output, #sqlx::Error>
+        where
+            #subject: #krate::HookNeeds<(), __I>,
+        {
+            #krate::With::new(#owned).run(conn).await
         }
     }
 }
