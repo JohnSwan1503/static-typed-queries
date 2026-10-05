@@ -23,7 +23,6 @@ pub trait Statement: Sql {
     const AFTER: &'static [Hook];
 }
 
-#[doc(hidden)]
 pub trait SingleRef {}
 
 impl<S: Single> SingleRef for &S {}

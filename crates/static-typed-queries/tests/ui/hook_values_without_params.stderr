@@ -10,11 +10,6 @@ help: the trait `static_typed_queries::Values` is not implemented for `Audit`
  4 | pub struct Audit;
    | ^^^^^^^^^^^^^^^^
    = note: only a hook with values takes them through `with`
-help: the trait `static_typed_queries::Values` is implemented for `OrderById`
-  --> tests/ui/hook_values_without_params.rs:9:1
-   |
- 9 | #[query(Postgres, sql = "SELECT id FROM {Orders} WHERE id = {id}")]
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 note: required by a bound in `_::<impl OrderById>::with`
   --> tests/ui/hook_values_without_params.rs:9:1
    |

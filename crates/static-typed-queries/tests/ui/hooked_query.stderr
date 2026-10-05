@@ -4,14 +4,9 @@ error[E0277]: this statement runs `before` or `after` hooks, so it can't run as 
 15 |     let _ = OrderById { id: 1 }.query();
    |                                 ^^^^^ has hooks
    |
-   = help: the trait `static_typed_queries::__private::hooks::Unhooked` is not implemented for `WithHooks`
+   = help: the trait `Unhooked` is not implemented for `WithHooks`
    = note: run it with `run`, which wraps the hooks and the statement in a transaction
-help: the trait `static_typed_queries::__private::hooks::Unhooked` is implemented for `NoHooks`
-  --> $WORKSPACE/crates/static-typed-queries-core/src/hooks.rs
-   |
-   | impl Unhooked for NoHooks {}
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^
-   = note: required for `OrderById` to implement `static_typed_queries::__private::hooks::Single`
+   = note: required for `OrderById` to implement `Single`
 note: required by a bound in `_::<impl OrderById>::query`
   --> tests/ui/hooked_query.rs:9:1
    |

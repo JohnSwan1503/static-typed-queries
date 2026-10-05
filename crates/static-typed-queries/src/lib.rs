@@ -18,6 +18,23 @@ pub use static_typed_queries_core::check;
 pub mod state {
     pub use static_typed_queries_core::builder::{Built, Filled, Missing, Open};
     pub use static_typed_queries_core::hooks::{NoHooks, WithHooks};
+
+    // Not for use, but reachable outside `__private`, so rustc prints these short in errors.
+    #[doc(hidden)]
+    pub use static_typed_queries_core::embed::{Checked, checked, embeds};
+    #[doc(hidden)]
+    pub use static_typed_queries_core::hooks::{
+        Free, HasHooks, Here, HookNeeds, Hooked, Provides, Single, There, Unhooked,
+    };
+    #[doc(hidden)]
+    pub use static_typed_queries_core::render::Render;
+    #[doc(hidden)]
+    pub use static_typed_queries_core::statement::SingleRef;
+    #[cfg(any(feature = "mysql", feature = "postgres", feature = "sqlite"))]
+    #[doc(hidden)]
+    pub use static_typed_queries_core::statement::run::rows;
+    #[doc(hidden)]
+    pub use static_typed_queries_core::values::valueless;
 }
 
 pub mod bind {

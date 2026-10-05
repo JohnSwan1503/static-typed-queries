@@ -10,14 +10,7 @@ help: the trait `Valueless` is not implemented for `ActiveUsers`
  9 | pub struct ActiveUsers {
    | ^^^^^^^^^^^^^^^^^^^^^^
    = note: add a field such as `#[subquery] name: ActiveUsers` and write `{name}` in the template
-   = help: the following other types implement trait `Valueless`:
-             ByType
-             CountOf<T>
-             Counted
-             Run
-             Steps
-             Users
-note: required by a bound in `static_typed_queries::__private::values::valueless`
+note: required by a bound in `valueless`
   --> $WORKSPACE/crates/static-typed-queries-core/src/values.rs
    |
    | pub const fn valueless<T: Valueless>() {}
@@ -36,21 +29,19 @@ help: the trait `Valueless` is not implemented for `ActiveUsers`
  9 | pub struct ActiveUsers {
    | ^^^^^^^^^^^^^^^^^^^^^^
    = note: add a field such as `#[subquery] name: ActiveUsers` and write `{name}` in the template
-   = help: the following other types implement trait `Valueless`:
-             ByType
-             CountOf<T>
-             Counted
-             Run
-             Steps
-             Users
-note: required for `CountOf<ActiveUsers>` to implement `static_typed_queries::__private::embed::Checked`
+help: the trait `Checked` is conditionally implemented for `CountOf<T>`
+  --> tests/ui/item_holds_values.rs:16:1
+   |
+16 | #[query(T::Dialect, sql = "SELECT count(*) FROM {T}")]
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unsatisfied requirement introduced here: `_: Valueless`
+note: required for `CountOf<ActiveUsers>` to implement `Checked`
   --> tests/ui/item_holds_values.rs:16:1
    |
 16 | #[query(T::Dialect, sql = "SELECT count(*) FROM {T}")]
    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unsatisfied trait bound introduced here
 17 | pub struct CountOf<T: Sql>(PhantomData<T>);
    |            ^^^^^^^^^^^^^^^
-note: required by a bound in `static_typed_queries::__private::embed::checked`
+note: required by a bound in `checked`
   --> $WORKSPACE/crates/static-typed-queries-core/src/embed.rs
    |
    | pub const fn checked<T: Checked>() {}
@@ -69,14 +60,7 @@ help: the trait `Valueless` is not implemented for `ActiveUsers`
  9 | pub struct ActiveUsers {
    | ^^^^^^^^^^^^^^^^^^^^^^
    = note: add a field such as `#[subquery] name: ActiveUsers` and write `{name}` in the template
-   = help: the following other types implement trait `Valueless`:
-             ByType
-             CountOf<T>
-             Counted
-             Run
-             Steps
-             Users
-note: required by a bound in `static_typed_queries::__private::values::valueless`
+note: required by a bound in `valueless`
   --> $WORKSPACE/crates/static-typed-queries-core/src/values.rs
    |
    | pub const fn valueless<T: Valueless>() {}
@@ -94,14 +78,7 @@ help: the trait `Valueless` is not implemented for `ActiveUsers`
  9 | pub struct ActiveUsers {
    | ^^^^^^^^^^^^^^^^^^^^^^
    = note: add a field such as `#[subquery] name: ActiveUsers` and write `{name}` in the template
-   = help: the following other types implement trait `Valueless`:
-             ByType
-             CountOf<T>
-             Counted
-             Run
-             Steps
-             Users
-note: required by a bound in `static_typed_queries::__private::values::valueless`
+note: required by a bound in `valueless`
   --> $WORKSPACE/crates/static-typed-queries-core/src/values.rs
    |
    | pub const fn valueless<T: Valueless>() {}

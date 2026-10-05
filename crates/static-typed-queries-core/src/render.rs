@@ -43,7 +43,6 @@ impl Offsets {
     };
 }
 
-#[doc(hidden)]
 pub trait Render {
     const SIZE: Size;
     const OUTPUT: Output;

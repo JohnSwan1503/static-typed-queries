@@ -70,6 +70,7 @@ pub(crate) fn values(item: &ItemStruct, holds_values: bool) -> TokenStream {
         quote!(Valueless)
     };
     quote! {
+        #[diagnostic::do_not_recommend]
         impl #impl_generics #krate::#marker for #ident #ty_generics #where_clause {}
     }
 }

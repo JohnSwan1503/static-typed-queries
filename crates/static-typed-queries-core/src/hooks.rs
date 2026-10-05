@@ -29,6 +29,7 @@ impl HookState for HookFlag<true> {
 )]
 pub trait Unhooked {}
 
+#[diagnostic::do_not_recommend]
 impl Unhooked for NoHooks {}
 
 #[diagnostic::on_unimplemented(
@@ -38,6 +39,7 @@ impl Unhooked for NoHooks {}
 )]
 pub trait HasHooks {}
 
+#[diagnostic::do_not_recommend]
 impl HasHooks for WithHooks {}
 
 // `I` is inferred at each call, so a method on a concrete statement can carry the bound to its

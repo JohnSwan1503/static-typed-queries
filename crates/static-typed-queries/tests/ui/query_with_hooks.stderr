@@ -6,15 +6,15 @@ error[E0277]: this statement runs `before` or `after` hooks, so it can't run as 
    |             |
    |             required by a bound introduced by this call
    |
-   = help: the trait `static_typed_queries::__private::hooks::Unhooked` is not implemented for `WithHooks`
+   = help: the trait `Unhooked` is not implemented for `WithHooks`
    = note: run it with `run`, which wraps the hooks and the statement in a transaction
-help: the trait `static_typed_queries::__private::hooks::Unhooked` is implemented for `NoHooks`
-  --> $WORKSPACE/crates/static-typed-queries-core/src/hooks.rs
+help: the trait `SqlSafeStr` is conditionally implemented for `OrderCount`
+  --> tests/ui/query_with_hooks.rs:9:1
    |
-   | impl Unhooked for NoHooks {}
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^
-   = note: required for `OrderCount` to implement `static_typed_queries::__private::hooks::Single`
-   = note: required for `&OrderCount` to implement `static_typed_queries::__private::statement::SingleRef`
+ 9 | #[query(Postgres, sql = "SELECT count(*) FROM {Orders}")]
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unsatisfied requirement introduced here: `&OrderCount: SingleRef`
+   = note: required for `OrderCount` to implement `Single`
+   = note: required for `&OrderCount` to implement `SingleRef`
 note: required for `OrderCount` to implement `SqlSafeStr`
   --> tests/ui/query_with_hooks.rs:9:1
    |

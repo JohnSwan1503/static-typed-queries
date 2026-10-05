@@ -4,14 +4,14 @@ error[E0277]: no values for the hook `Note`
 34 |         .run(conn)
    |          ^^^ `Note` has values
    |
-   = help: the trait `static_typed_queries::__private::hooks::Provides<Note, _>` is not implemented for `(HookValues<Bump>, ())`
+   = help: the trait `Provides<Note, _>` is not implemented for `(HookValues<Bump>, ())`
    = note: give them with `.with(Note { .. })`
-help: the trait `static_typed_queries::__private::hooks::HookNeeds<__V, (__I0,)>` is conditionally implemented for `Pricey`
+help: the trait `HookNeeds<__V, (__I0,)>` is conditionally implemented for `Pricey`
   --> tests/ui/hook_values_missing.rs:18:1
    |
 18 | #[query(Sqlite, sql = "SELECT id FROM {Items} WHERE price > {price}")]
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unsatisfied requirement introduced here: `Items: static_typed_queries::__private::hooks::HookNeeds<_, _>`
-note: required for `Items` to implement `static_typed_queries::__private::hooks::HookNeeds<(HookValues<Bump>, ()), (static_typed_queries::__private::hooks::Here, _)>`
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unsatisfied requirement introduced here: `Items: HookNeeds<_, _>`
+note: required for `Items` to implement `HookNeeds<(HookValues<Bump>, ()), (Here, _)>`
   --> tests/ui/hook_values_missing.rs:15:1
    |
 15 | #[table(Sqlite, name = "items", before(Bump), after(Note))]
@@ -19,7 +19,7 @@ note: required for `Items` to implement `static_typed_queries::__private::hooks:
 16 | pub struct Items;
    |            ^^^^^
    = note: 1 redundant requirement hidden
-   = note: required for `Pricey` to implement `static_typed_queries::__private::hooks::HookNeeds<(HookValues<Bump>, ()), ((static_typed_queries::__private::hooks::Here, _),)>`
+   = note: required for `Pricey` to implement `HookNeeds<(HookValues<Bump>, ()), ((Here, _),)>`
 note: required by a bound in `With::<S, V>::run`
   --> $WORKSPACE/crates/static-typed-queries-core/src/with.rs
    |
@@ -41,14 +41,14 @@ error[E0277]: no values for the hook `Note`
 34 | |         .run(conn)
    | |__________________^ `Note` has values
    |
-   = help: the trait `static_typed_queries::__private::hooks::Provides<Note, _>` is not implemented for `(HookValues<Bump>, ())`
+   = help: the trait `Provides<Note, _>` is not implemented for `(HookValues<Bump>, ())`
    = note: give them with `.with(Note { .. })`
-help: the trait `static_typed_queries::__private::hooks::HookNeeds<__V, (__I0,)>` is conditionally implemented for `Pricey`
+help: the trait `HookNeeds<__V, (__I0,)>` is conditionally implemented for `Pricey`
   --> tests/ui/hook_values_missing.rs:18:1
    |
 18 | #[query(Sqlite, sql = "SELECT id FROM {Items} WHERE price > {price}")]
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unsatisfied requirement introduced here: `Items: static_typed_queries::__private::hooks::HookNeeds<_, _>`
-note: required for `Items` to implement `static_typed_queries::__private::hooks::HookNeeds<(HookValues<Bump>, ()), (static_typed_queries::__private::hooks::Here, _)>`
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unsatisfied requirement introduced here: `Items: HookNeeds<_, _>`
+note: required for `Items` to implement `HookNeeds<(HookValues<Bump>, ()), (Here, _)>`
   --> tests/ui/hook_values_missing.rs:15:1
    |
 15 | #[table(Sqlite, name = "items", before(Bump), after(Note))]
@@ -56,7 +56,7 @@ note: required for `Items` to implement `static_typed_queries::__private::hooks:
 16 | pub struct Items;
    |            ^^^^^
    = note: 1 redundant requirement hidden
-   = note: required for `Pricey` to implement `static_typed_queries::__private::hooks::HookNeeds<(HookValues<Bump>, ()), ((static_typed_queries::__private::hooks::Here, _),)>`
+   = note: required for `Pricey` to implement `HookNeeds<(HookValues<Bump>, ()), ((Here, _),)>`
 note: required by a bound in `With::<S, V>::run`
   --> $WORKSPACE/crates/static-typed-queries-core/src/with.rs
    |
@@ -74,14 +74,14 @@ error[E0277]: no values for the hook `Note`
 35 |         .await
    |          ^^^^^ `Note` has values
    |
-   = help: the trait `static_typed_queries::__private::hooks::Provides<Note, _>` is not implemented for `(HookValues<Bump>, ())`
+   = help: the trait `Provides<Note, _>` is not implemented for `(HookValues<Bump>, ())`
    = note: give them with `.with(Note { .. })`
-help: the trait `static_typed_queries::__private::hooks::HookNeeds<__V, (__I0,)>` is conditionally implemented for `Pricey`
+help: the trait `HookNeeds<__V, (__I0,)>` is conditionally implemented for `Pricey`
   --> tests/ui/hook_values_missing.rs:18:1
    |
 18 | #[query(Sqlite, sql = "SELECT id FROM {Items} WHERE price > {price}")]
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unsatisfied requirement introduced here: `Items: static_typed_queries::__private::hooks::HookNeeds<_, _>`
-note: required for `Items` to implement `static_typed_queries::__private::hooks::HookNeeds<(HookValues<Bump>, ()), (static_typed_queries::__private::hooks::Here, _)>`
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unsatisfied requirement introduced here: `Items: HookNeeds<_, _>`
+note: required for `Items` to implement `HookNeeds<(HookValues<Bump>, ()), (Here, _)>`
   --> tests/ui/hook_values_missing.rs:15:1
    |
 15 | #[table(Sqlite, name = "items", before(Bump), after(Note))]
@@ -89,7 +89,7 @@ note: required for `Items` to implement `static_typed_queries::__private::hooks:
 16 | pub struct Items;
    |            ^^^^^
    = note: 1 redundant requirement hidden
-   = note: required for `Pricey` to implement `static_typed_queries::__private::hooks::HookNeeds<(HookValues<Bump>, ()), ((static_typed_queries::__private::hooks::Here, _),)>`
+   = note: required for `Pricey` to implement `HookNeeds<(HookValues<Bump>, ()), ((Here, _),)>`
 note: required by a bound in `With::<S, V>::run`
   --> $WORKSPACE/crates/static-typed-queries-core/src/with.rs
    |
@@ -107,14 +107,14 @@ error[E0277]: no values for the hook `Bump`
 39 |     ItemCount.run_as(conn).await
    |               ^^^^^^ `Bump` has values
    |
-   = help: the trait `static_typed_queries::__private::hooks::Provides<Bump, _>` is not implemented for `()`
+   = help: the trait `Provides<Bump, _>` is not implemented for `()`
    = note: give them with `.with(Bump { .. })`
-help: the trait `static_typed_queries::__private::hooks::HookNeeds<__V, (__I0,)>` is conditionally implemented for `ItemCount`
+help: the trait `HookNeeds<__V, (__I0,)>` is conditionally implemented for `ItemCount`
   --> tests/ui/hook_values_missing.rs:26:1
    |
 26 | #[statement(CountOf<Items>)]
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unsatisfied requirement introduced here: `CountOf<Items>: static_typed_queries::__private::hooks::HookNeeds<_, _>`
-note: required for `Items` to implement `static_typed_queries::__private::hooks::HookNeeds<(), (_, _)>`
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unsatisfied requirement introduced here: `CountOf<Items>: HookNeeds<_, _>`
+note: required for `Items` to implement `HookNeeds<(), (_, _)>`
   --> tests/ui/hook_values_missing.rs:15:1
    |
 15 | #[table(Sqlite, name = "items", before(Bump), after(Note))]
@@ -122,7 +122,7 @@ note: required for `Items` to implement `static_typed_queries::__private::hooks:
 16 | pub struct Items;
    |            ^^^^^
    = note: 2 redundant requirements hidden
-   = note: required for `ItemCount` to implement `static_typed_queries::__private::hooks::HookNeeds<(), (((_, _),),)>`
+   = note: required for `ItemCount` to implement `HookNeeds<(), (((_, _),),)>`
 note: required by a bound in `_::<impl ItemCount>::run_as`
   --> tests/ui/hook_values_missing.rs:26:1
    |
@@ -136,14 +136,14 @@ error[E0277]: no values for the hook `Bump`
 39 |     ItemCount.run_as(conn).await
    |     ^^^^^^^^^^^^^^^^^^^^^^ `Bump` has values
    |
-   = help: the trait `static_typed_queries::__private::hooks::Provides<Bump, _>` is not implemented for `()`
+   = help: the trait `Provides<Bump, _>` is not implemented for `()`
    = note: give them with `.with(Bump { .. })`
-help: the trait `static_typed_queries::__private::hooks::HookNeeds<__V, (__I0,)>` is conditionally implemented for `ItemCount`
+help: the trait `HookNeeds<__V, (__I0,)>` is conditionally implemented for `ItemCount`
   --> tests/ui/hook_values_missing.rs:26:1
    |
 26 | #[statement(CountOf<Items>)]
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unsatisfied requirement introduced here: `CountOf<Items>: static_typed_queries::__private::hooks::HookNeeds<_, _>`
-note: required for `Items` to implement `static_typed_queries::__private::hooks::HookNeeds<(), (_, _)>`
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unsatisfied requirement introduced here: `CountOf<Items>: HookNeeds<_, _>`
+note: required for `Items` to implement `HookNeeds<(), (_, _)>`
   --> tests/ui/hook_values_missing.rs:15:1
    |
 15 | #[table(Sqlite, name = "items", before(Bump), after(Note))]
@@ -151,7 +151,7 @@ note: required for `Items` to implement `static_typed_queries::__private::hooks:
 16 | pub struct Items;
    |            ^^^^^
    = note: 2 redundant requirements hidden
-   = note: required for `ItemCount` to implement `static_typed_queries::__private::hooks::HookNeeds<(), (((_, _),),)>`
+   = note: required for `ItemCount` to implement `HookNeeds<(), (((_, _),),)>`
 note: required by a bound in `_::<impl ItemCount>::run_as`
   --> tests/ui/hook_values_missing.rs:26:1
    |
@@ -165,14 +165,14 @@ error[E0277]: no values for the hook `Bump`
 39 |     ItemCount.run_as(conn).await
    |                            ^^^^^ `Bump` has values
    |
-   = help: the trait `static_typed_queries::__private::hooks::Provides<Bump, _>` is not implemented for `()`
+   = help: the trait `Provides<Bump, _>` is not implemented for `()`
    = note: give them with `.with(Bump { .. })`
-help: the trait `static_typed_queries::__private::hooks::HookNeeds<__V, (__I0,)>` is conditionally implemented for `ItemCount`
+help: the trait `HookNeeds<__V, (__I0,)>` is conditionally implemented for `ItemCount`
   --> tests/ui/hook_values_missing.rs:26:1
    |
 26 | #[statement(CountOf<Items>)]
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unsatisfied requirement introduced here: `CountOf<Items>: static_typed_queries::__private::hooks::HookNeeds<_, _>`
-note: required for `Items` to implement `static_typed_queries::__private::hooks::HookNeeds<(), (_, _)>`
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unsatisfied requirement introduced here: `CountOf<Items>: HookNeeds<_, _>`
+note: required for `Items` to implement `HookNeeds<(), (_, _)>`
   --> tests/ui/hook_values_missing.rs:15:1
    |
 15 | #[table(Sqlite, name = "items", before(Bump), after(Note))]
@@ -180,7 +180,7 @@ note: required for `Items` to implement `static_typed_queries::__private::hooks:
 16 | pub struct Items;
    |            ^^^^^
    = note: 2 redundant requirements hidden
-   = note: required for `ItemCount` to implement `static_typed_queries::__private::hooks::HookNeeds<(), (((_, _),),)>`
+   = note: required for `ItemCount` to implement `HookNeeds<(), (((_, _),),)>`
 note: required by a bound in `_::<impl ItemCount>::run_as`
   --> tests/ui/hook_values_missing.rs:26:1
    |

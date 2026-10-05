@@ -4,14 +4,9 @@ error[E0277]: this statement has no hooks, so it runs as a single query
 20 |     .run(conn)
    |      ^^^ has no hooks
    |
-   = help: the trait `static_typed_queries::__private::hooks::HasHooks` is not implemented for `NoHooks`
+   = help: the trait `HasHooks` is not implemented for `NoHooks`
    = note: bind it with `query` instead of `run`
-help: the trait `static_typed_queries::__private::hooks::HasHooks` is implemented for `WithHooks`
-  --> $WORKSPACE/crates/static-typed-queries-core/src/hooks.rs
-   |
-   | impl HasHooks for WithHooks {}
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^
-   = note: required for `ByStatus` to implement `static_typed_queries::__private::hooks::Hooked`
+   = note: required for `ByStatus` to implement `Hooked`
 note: required by a bound in `_::<impl ByStatus>::run`
   --> tests/ui/unhooked_run.rs:11:1
    |
@@ -28,14 +23,9 @@ error[E0277]: this statement has no hooks, so it runs as a single query
 20 | |     .run(conn)
    | |______________^ has no hooks
    |
-   = help: the trait `static_typed_queries::__private::hooks::HasHooks` is not implemented for `NoHooks`
+   = help: the trait `HasHooks` is not implemented for `NoHooks`
    = note: bind it with `query` instead of `run`
-help: the trait `static_typed_queries::__private::hooks::HasHooks` is implemented for `WithHooks`
-  --> $WORKSPACE/crates/static-typed-queries-core/src/hooks.rs
-   |
-   | impl HasHooks for WithHooks {}
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^
-   = note: required for `ByStatus` to implement `static_typed_queries::__private::hooks::Hooked`
+   = note: required for `ByStatus` to implement `Hooked`
 note: required by a bound in `_::<impl ByStatus>::run`
   --> tests/ui/unhooked_run.rs:11:1
    |
@@ -49,14 +39,9 @@ error[E0277]: this statement has no hooks, so it runs as a single query
 21 |     .await
    |      ^^^^^ has no hooks
    |
-   = help: the trait `static_typed_queries::__private::hooks::HasHooks` is not implemented for `NoHooks`
+   = help: the trait `HasHooks` is not implemented for `NoHooks`
    = note: bind it with `query` instead of `run`
-help: the trait `static_typed_queries::__private::hooks::HasHooks` is implemented for `WithHooks`
-  --> $WORKSPACE/crates/static-typed-queries-core/src/hooks.rs
-   |
-   | impl HasHooks for WithHooks {}
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^
-   = note: required for `ByStatus` to implement `static_typed_queries::__private::hooks::Hooked`
+   = note: required for `ByStatus` to implement `Hooked`
 note: required by a bound in `_::<impl ByStatus>::run`
   --> tests/ui/unhooked_run.rs:11:1
    |
@@ -70,14 +55,9 @@ error[E0277]: this statement has no hooks, so it runs as a single query
 28 |     .with(SetTenant {
    |      ^^^^ has no hooks
    |
-   = help: the trait `static_typed_queries::__private::hooks::HasHooks` is not implemented for `NoHooks`
+   = help: the trait `HasHooks` is not implemented for `NoHooks`
    = note: bind it with `query` instead of `run`
-help: the trait `static_typed_queries::__private::hooks::HasHooks` is implemented for `WithHooks`
-  --> $WORKSPACE/crates/static-typed-queries-core/src/hooks.rs
-   |
-   | impl HasHooks for WithHooks {}
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^
-   = note: required for `ByStatus` to implement `static_typed_queries::__private::hooks::Hooked`
+   = note: required for `ByStatus` to implement `Hooked`
 note: required by a bound in `_::<impl ByStatus>::with`
   --> tests/ui/unhooked_run.rs:11:1
    |
