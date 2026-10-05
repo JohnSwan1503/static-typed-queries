@@ -30,8 +30,8 @@ note: inside `render::renderer::Renderer::<'_, Postgres>::statement`
 note: inside `render::renderer::target`
   --> src/render/renderer.rs
    |
-   |         fail(&["`", node.name.as_str(), "` is a table, not a statement"]);
-   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |         Kind::Table => fail(&["`", node.name.as_str(), "` is a table, not a statement"]),
+   |                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 note: inside `render::error::fail`
   --> $RUST/core/src/panic.rs
    |

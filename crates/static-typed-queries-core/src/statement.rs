@@ -120,7 +120,7 @@ macro_rules! impl_statement {
                 );
                 const STATEMENTS: [$crate::statement::hook::Hook;
                     <$ty as $crate::render::Render>::SIZE.statements()] = RENDERED.statements();
-                $crate::render::Output::new(&STATEMENTS, RENDERED.before())
+                $crate::render::Output::new(&STATEMENTS, RENDERED.before(), RENDERED.steps())
             };
             type Hooks = <$crate::builder::HookFlag<
                 { $crate::render::hooked(<$ty as $crate::sql::Sql>::NODE) },

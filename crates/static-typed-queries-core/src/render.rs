@@ -14,12 +14,13 @@ pub struct Size {
     pub sql: usize,
     pub binds: usize,
     pub before: usize,
+    pub steps: usize,
     pub after: usize,
 }
 
 impl Size {
     pub const fn statements(&self) -> usize {
-        self.before + 1 + self.after
+        self.before + self.steps + self.after
     }
 }
 
@@ -52,6 +53,7 @@ pub struct Rendered<const S: usize, const B: usize, const N: usize> {
     binds: [Bind; B],
     offsets: [Offsets; N],
     before: usize,
+    steps: usize,
 }
 
 impl<const S: usize, const B: usize, const N: usize> Rendered<S, B, N> {
@@ -77,17 +79,26 @@ impl<const S: usize, const B: usize, const N: usize> Rendered<S, B, N> {
     pub const fn before(&self) -> usize {
         self.before
     }
+
+    pub const fn steps(&self) -> usize {
+        self.steps
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
 pub struct Output {
     statements: &'static [Hook],
     before: usize,
+    steps: usize,
 }
 
 impl Output {
-    pub const fn new(statements: &'static [Hook], before: usize) -> Output {
-        Output { statements, before }
+    pub const fn new(statements: &'static [Hook], before: usize, steps: usize) -> Output {
+        Output {
+            statements,
+            before,
+            steps,
+        }
     }
 
     pub const fn main(&self) -> Hook {
@@ -98,8 +109,16 @@ impl Output {
         self.statements.split_at(self.before).0
     }
 
+    pub const fn steps(&self) -> &'static [Hook] {
+        self.statements
+            .split_at(self.before + self.steps)
+            .0
+            .split_at(self.before)
+            .1
+    }
+
     pub const fn after(&self) -> &'static [Hook] {
-        self.statements.split_at(self.before + 1).1
+        self.statements.split_at(self.before + self.steps).1
     }
 }
 
@@ -126,6 +145,7 @@ pub const fn render<D: Dialect, const S: usize, const B: usize, const N: usize>(
         binds: [Bind::EMPTY; B],
         offsets: [Offsets::EMPTY; N],
         before: 0,
+        steps: 0,
     };
     let mut renderer = Renderer::<D>::new(
         &mut rendered.sql,
@@ -139,5 +159,6 @@ pub const fn render<D: Dialect, const S: usize, const B: usize, const N: usize>(
         "rendering changed between passes"
     );
     rendered.before = size.before;
+    rendered.steps = size.steps;
     rendered
 }

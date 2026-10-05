@@ -5,4 +5,5 @@ pub enum Kind {
     Dml,
     Ddl,
     Scope,
+    Transaction,
 }

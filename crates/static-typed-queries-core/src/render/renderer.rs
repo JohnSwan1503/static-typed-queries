@@ -71,6 +71,7 @@ impl<'a, D: Dialect> Renderer<'a, D> {
                 sql: 0,
                 binds: 0,
                 before: 0,
+                steps: 0,
                 after: 0,
             },
             rendered: 0,
@@ -90,14 +91,38 @@ impl<'a, D: Dialect> Renderer<'a, D> {
     }
 
     pub(super) const fn statement(&mut self, root: &'static Node) {
+        if let Kind::Transaction = root.kind {
+            self.transaction(root);
+            return;
+        }
         let (main, path) = target(root, Path::ROOT);
         self.find_hooks(main);
         self.render_hooks(false);
-        self.single(root, main, path);
+        self.single(root, root, main, path);
+        self.size.steps = 1;
+        self.render_hooks(true);
+    }
+
+    const fn transaction(&mut self, root: &'static Node) {
+        self.find_hooks(root);
+        self.render_hooks(false);
+        let parts = root.parts.0;
+        let mut i = 0;
+        while i < parts.len() {
+            if let Part::Expr(step) = parts[i] {
+                self.root = Some(root);
+                let step = step.as_ref();
+                let (node, path) = target(step, self.child_path(Path::ROOT, step));
+                self.single(root, step, node, path);
+                self.size.steps += 1;
+            }
+            i += 1;
+        }
         self.render_hooks(true);
     }
 
     const fn find_hooks(&mut self, node: &'static Node) {
+        let node = unwrap_scope(node);
         self.add_hooks(node, false);
         self.add_hooks(node, true);
         let parts = node.parts.0;
@@ -159,13 +184,19 @@ impl<'a, D: Dialect> Renderer<'a, D> {
             if let Some(hook) = self.hooks[i]
                 && hook.after == after
             {
-                self.single(hook.root, hook.node, hook.path);
+                self.single(hook.root, hook.root, hook.node, hook.path);
             }
             i += 1;
         }
     }
 
-    const fn single(&mut self, root: &'static Node, node: &'static Node, path: Path) {
+    const fn single(
+        &mut self,
+        root: &'static Node,
+        named: &'static Node,
+        node: &'static Node,
+        path: Path,
+    ) {
         self.root = Some(root);
         self.ctes = [None; MAX_CTES];
         self.cte_count = 0;
@@ -178,8 +209,8 @@ impl<'a, D: Dialect> Renderer<'a, D> {
         self.body(node, path);
         if !self.offsets.is_empty() {
             self.offsets[self.rendered] = Offsets {
-                name: root.name,
-                fingerprint: root.fingerprint,
+                name: named.name,
+                fingerprint: named.fingerprint,
                 sql: self.size.sql,
                 binds: self.size.binds,
             };
@@ -507,6 +538,7 @@ const fn placement<D: Dialect>(from: From) -> Inject {
         ]),
         (Kind::Ddl, _) => fail(&["`", name, "` is DDL, so it can't be embedded"]),
         (Kind::Scope, _) => fail(&["`", name, "` only holds values, so it can't be embedded"]),
+        (Kind::Transaction, _) => fail(&["`", name, "` is a transaction, so it can't be embedded"]),
     }
     inject
 }
@@ -557,10 +589,23 @@ const fn target(node: &'static Node, path: Path) -> (&'static Node, Path) {
         (Kind::Scope, Some(path)) => (node.items.0[0], path),
         _ => (node, path),
     };
-    if let Kind::Table = node.kind {
-        fail(&["`", node.name.as_str(), "` is a table, not a statement"]);
+    match node.kind {
+        Kind::Table => fail(&["`", node.name.as_str(), "` is a table, not a statement"]),
+        Kind::Transaction => fail(&[
+            "`",
+            node.name.as_str(),
+            "` is a transaction, so it can't be a step or a hook",
+        ]),
+        _ => {}
     }
     (node, path)
+}
+
+const fn unwrap_scope(node: &'static Node) -> &'static Node {
+    match node.kind {
+        Kind::Scope => node.items.0[0],
+        _ => node,
+    }
 }
 
 pub(super) const fn check_hooks(owner: &'static Node) {
@@ -601,13 +646,11 @@ const fn hook(owner: &'static Node, hook: &'static Node, path: Path) -> (&'stati
 }
 
 pub(super) const fn hooked(root: &'static Node) -> bool {
-    match root.kind {
-        Kind::Scope => has_hooks(root.items.0[0]),
-        _ => has_hooks(root),
-    }
+    has_hooks(root)
 }
 
 const fn has_hooks(node: &'static Node) -> bool {
+    let node = unwrap_scope(node);
     if !node.before.0.is_empty() || !node.after.0.is_empty() {
         return true;
     }

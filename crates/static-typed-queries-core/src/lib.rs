@@ -8,6 +8,7 @@ pub mod part;
 pub mod render;
 pub mod sql;
 pub mod statement;
+pub mod transaction;
 
 #[doc(hidden)]
 pub mod __private {

@@ -12,8 +12,8 @@ note: inside `static_typed_queries::__private::render::measure::<static_typed_qu
 note: inside `static_typed_queries::__private::render::renderer::Renderer::<'_, static_typed_queries::dialect::MySql>::statement`
  --> $WORKSPACE/crates/static-typed-queries-core/src/render/renderer.rs
   |
-  |         self.single(root, main, path);
-  |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |         self.single(root, root, main, path);
+  |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 note: inside `static_typed_queries::__private::render::renderer::Renderer::<'_, static_typed_queries::dialect::MySql>::single`
  --> $WORKSPACE/crates/static-typed-queries-core/src/render/renderer.rs
   |
