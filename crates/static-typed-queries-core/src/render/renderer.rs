@@ -568,6 +568,20 @@ const fn target(node: &'static Node, path: Path) -> (&'static Node, Path) {
     (node, path)
 }
 
+pub(super) const fn check_hooks(owner: &'static Node) {
+    let (before, after) = (owner.before.0, owner.after.0);
+    let mut i = 0;
+    while i < before.len() + after.len() {
+        let node = if i < before.len() {
+            before[i]
+        } else {
+            after[i - before.len()]
+        };
+        hook(owner, node, Path::ROOT);
+        i += 1;
+    }
+}
+
 const fn hook(owner: &'static Node, hook: &'static Node, path: Path) -> (&'static Node, Path) {
     if let Kind::Table = hook.kind {
         fail(&[

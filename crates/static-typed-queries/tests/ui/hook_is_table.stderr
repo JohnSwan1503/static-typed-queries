@@ -1,0 +1,37 @@
+error[E0080]: evaluation panicked: `users` is a table, so it can't be a hook of `orders`
+ --> tests/ui/hook_is_table.rs:6:1
+  |
+6 | #[table(Postgres, name = "orders", before(Users))]
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ evaluation of `_` failed inside this call
+  |
+note: inside `static_typed_queries::__private::render::check_hooks`
+ --> $WORKSPACE/crates/static-typed-queries-core/src/render.rs
+  |
+  |     renderer::check_hooks(owner);
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+note: inside `static_typed_queries::__private::render::renderer::check_hooks`
+ --> $WORKSPACE/crates/static-typed-queries-core/src/render/renderer.rs
+  |
+  |         hook(owner, node, Path::ROOT);
+  |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+note: inside `static_typed_queries::__private::render::renderer::hook`
+ --> $WORKSPACE/crates/static-typed-queries-core/src/render/renderer.rs
+  |
+  | /         fail(&[
+  | |             "`",
+  | |             hook.name.as_str(),
+  | |             "` is a table, so it can't be a hook of `",
+  | |             owner.name.as_str(),
+  | |             "`",
+  | |         ]);
+  | |__________^
+note: inside `static_typed_queries::__private::render::error::fail`
+ --> $RUST/core/src/panic.rs
+  |
+  |         $crate::panicking::panic_display(&$arg);
+  |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the failure occurred here
+  |
+ ::: $WORKSPACE/crates/static-typed-queries-core/src/render/error.rs
+  |
+  |         Ok(message) => panic!("{}", message),
+  |                        --------------------- in this macro invocation

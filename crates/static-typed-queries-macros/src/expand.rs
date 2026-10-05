@@ -64,6 +64,26 @@ pub(crate) fn table(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
         }
         parts.push(quote!(#krate::part::ident::Ident::part(#segment)));
     }
+    let before = hooks(args.before.as_deref())?;
+    let after = hooks(args.after.as_deref())?;
+    let mut items = Vec::new();
+    for ty in before.iter().chain(&after) {
+        add_item(ty, &item.generics, &[], &mut items);
+    }
+    let template = Template {
+        segments: Vec::new(),
+        params: Vec::new(),
+        children: Vec::new(),
+    };
+    let analysis = Analysis {
+        kind: Kind::Query,
+        returns_rows: false,
+        refs: Vec::new(),
+        names: Vec::new(),
+    };
+    let mut params = Params::new(&template, &analysis, &items, &item, name)?;
+    params.runs = false;
+    let fields: Vec<Type> = items.iter().map(|(ty, _)| ty.clone()).collect();
     let node_name = table.rsplit('.').next().unwrap_or(&table);
     let ident = &item.ident;
     let dialect = &args.dialect;
@@ -73,31 +93,99 @@ pub(crate) fn table(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
         quote!(Table),
         quote!(#krate::node::inject::Inject::Ident),
         parts,
-        &[],
+        &fields,
+        [&before, &after],
     );
+    let hooked = !before.is_empty() || !after.is_empty();
+    let check = hooked.then(|| {
+        quote! {
+            const _: () = #krate::render::check_hooks(<#ident as #krate::sql::Sql>::NODE);
+        }
+    });
+    let params_ty = params.ty();
+    let params_struct = params.definition();
+    let derives = params.derives();
+    let bind_params = params.bind_impl();
+    let builder = params.builder(dialect, None);
+    let embed_checks = embeds(&item, &fields, dialect);
+    let hooked = self::hooked(&item, &fields, hooked);
     let fmt = fmt(&args, &item, false)?;
+    let mut documented = item.clone();
+    documented
+        .attrs
+        .extend(params.item_docs(Source::Table(&before, &after)));
 
     Ok(quote! {
-        #item
+        #documented
+
+        #params_struct
+        #derives
 
         impl #krate::sql::Sql for #ident {
             type Dialect = #dialect;
-            type Params = ();
+            type Params = #params_ty;
             const NODE: &'static #krate::node::Node = #node;
         }
 
-        impl #krate::builder::Build for #ident {
-            type Builder = #krate::builder::NoParams;
-
-            fn builder() -> Self::Builder {
-                #krate::builder::NoParams
-            }
-        }
-
-        impl #krate::embed::Checked for #ident {}
-
+        #check
+        #embed_checks
+        #hooked
+        #bind_params
+        #builder
         #fmt
     })
+}
+
+fn hooks(types: Option<&[Type]>) -> syn::Result<Vec<Type>> {
+    let mut hooks: Vec<Type> = Vec::new();
+    for ty in types.unwrap_or_default() {
+        if hooks.iter().any(|other| type_key(other) == type_key(ty)) {
+            return Err(syn::Error::new_spanned(
+                ty,
+                format!("`{}` is listed twice", docs::type_string(ty)),
+            ));
+        }
+        hooks.push(ty.clone());
+    }
+    Ok(hooks)
+}
+
+fn no_hooks(args: &Args) -> syn::Result<()> {
+    match args.before.iter().chain(&args.after).flatten().next() {
+        Some(ty) => Err(syn::Error::new_spanned(
+            ty,
+            "only tables take `before` and `after`",
+        )),
+        None => Ok(()),
+    }
+}
+
+fn hooked(item: &ItemStruct, items: &[Type], own: bool) -> TokenStream {
+    let krate = krate();
+    let b = quote!(#krate::builder);
+    let ident = &item.ident;
+    let mut generics = item.generics.clone();
+    let generic = !generics.params.is_empty();
+    let clause = generics.make_where_clause();
+    let mut out = quote!(#b::NoHooks);
+    if own {
+        out = quote!(#b::WithHooks);
+    } else {
+        for ty in items.iter().rev() {
+            let flag = quote!(<#ty as #b::Hooked>::Out);
+            if generic {
+                clause.predicates.push(parse_quote!(#ty: #b::Hooked));
+                clause.predicates.push(parse_quote!(#flag: #b::Or<#out>));
+            }
+            out = quote!(<#flag as #b::Or<#out>>::Out);
+        }
+    }
+    let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
+    quote! {
+        impl #impl_generics #b::Hooked for #ident #ty_generics #where_clause {
+            type Out = #out;
+        }
+    }
 }
 
 pub(crate) fn query(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
@@ -117,6 +205,7 @@ pub(crate) fn query(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
         .sql
         .as_ref()
         .ok_or_else(|| syn::Error::new(Span::call_site(), "queries need `sql = \"...\"`"))?;
+    no_hooks(&args)?;
     let template = template::parse(sql)?;
     let engine = Engine::of(&args.dialect, args.grammar.as_ref(), &item.generics)?;
     let analysis = analyze::analyze(&template, engine, sql)?;
@@ -165,6 +254,7 @@ pub(crate) fn query(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
         inject,
         parts(&template, &analysis, &params),
         &fields,
+        [&[], &[]],
     );
     let wrappers = wrappers
         .iter()
@@ -211,9 +301,12 @@ pub(crate) fn query(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
             #test
         }
     });
+    let hooked = hooked(&item, &fields, false);
     let fmt = fmt(&args, &item, true)?;
     let mut documented = item.clone();
-    documented.attrs.extend(params.item_docs(Ok(sql)));
+    documented
+        .attrs
+        .extend(params.item_docs(Source::Template(sql)));
 
     Ok(quote! {
         #documented
@@ -228,6 +321,7 @@ pub(crate) fn query(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
         }
 
         #embed_checks
+        #hooked
         #bind_params
         #builder
         #statement
@@ -365,6 +459,7 @@ fn wrapper(
     };
     let mut params = Params::new(&template, &analysis, &items, item, sql)?;
     params.synthetic = true;
+    params.runs = false;
     let ident = &item.ident;
     let fields: Vec<Type> = items.iter().map(|(ty, _)| ty.clone()).collect();
     let node = node(
@@ -374,6 +469,7 @@ fn wrapper(
         quote!(#krate::node::inject::Inject::Subquery),
         Vec::new(),
         &fields,
+        [&[], &[]],
     );
     let params_ty = params.ty();
     let params_struct = params.definition();
@@ -381,6 +477,7 @@ fn wrapper(
     let bind_params = params.bind_impl();
     let builder = params.builder(dialect, None);
     let embed_checks = embeds(item, &fields, dialect);
+    let hooked = hooked(item, &fields, false);
     Ok(quote! {
         #item
 
@@ -394,6 +491,7 @@ fn wrapper(
         }
 
         #embed_checks
+        #hooked
 
         #bind_params
         #builder
@@ -420,6 +518,7 @@ pub(crate) fn statement(args: Args, item: ItemStruct) -> syn::Result<TokenStream
             ));
         }
     }
+    no_hooks(&args)?;
     if !item.generics.params.is_empty() {
         return Err(syn::Error::new_spanned(
             &item.generics,
@@ -451,6 +550,7 @@ pub(crate) fn statement(args: Args, item: ItemStruct) -> syn::Result<TokenStream
         quote!(#krate::node::inject::Inject::Subquery),
         Vec::new(),
         &fields,
+        [&[], &[]],
     );
     let params_ty = params.ty();
     let params_struct = params.definition();
@@ -458,6 +558,7 @@ pub(crate) fn statement(args: Args, item: ItemStruct) -> syn::Result<TokenStream
     let bind_params = params.bind_impl();
     let builder = params.builder(&dialect, args.row.as_ref());
     let embed_checks = embeds(&item, &fields, &dialect);
+    let hooked = hooked(&item, &fields, false);
     let fmt = fmt(&args, &item, true)?;
     let rows = args.row.as_ref().map(|row| {
         quote! {
@@ -480,7 +581,9 @@ pub(crate) fn statement(args: Args, item: ItemStruct) -> syn::Result<TokenStream
         }
     });
     let mut documented = item.clone();
-    documented.attrs.extend(params.item_docs(Err(target)));
+    documented
+        .attrs
+        .extend(params.item_docs(Source::Statement(target)));
     Ok(quote! {
         #documented
 
@@ -494,6 +597,7 @@ pub(crate) fn statement(args: Args, item: ItemStruct) -> syn::Result<TokenStream
         }
 
         #embed_checks
+        #hooked
         #bind_params
         #builder
 
@@ -551,6 +655,7 @@ fn node(
     inject: TokenStream,
     parts: Vec<TokenStream>,
     items: &[Type],
+    [before, after]: [&[Type]; 2],
 ) -> TokenStream {
     let krate = krate();
     quote! {
@@ -560,8 +665,8 @@ fn node(
             kind: #krate::node::kind::Kind::#kind,
             inject: #inject,
             parts: #krate::part::Parts(&[#(#parts),*]),
-            before: #krate::node::hooks::Hooks(&[]),
-            after: #krate::node::hooks::Hooks(&[]),
+            before: #krate::node::hooks::Hooks(&[#(<#before as #krate::sql::Sql>::NODE),*]),
+            after: #krate::node::hooks::Hooks(&[#(<#after as #krate::sql::Sql>::NODE),*]),
             items: #krate::node::items::Items(&[#(<#items as #krate::sql::Sql>::NODE),*]),
         }
     }
@@ -652,6 +757,12 @@ struct Child {
     state: Ident,
 }
 
+enum Source<'a> {
+    Template(&'a LitStr),
+    Statement(&'a Type),
+    Table(&'a [Type], &'a [Type]),
+}
+
 struct Params<'a> {
     item: &'a ItemStruct,
     ident: Ident,
@@ -659,6 +770,7 @@ struct Params<'a> {
     groups: Vec<Group>,
     children: Vec<Child>,
     synthetic: bool,
+    runs: bool,
 }
 
 impl<'a> Params<'a> {
@@ -782,6 +894,7 @@ impl<'a> Params<'a> {
             groups,
             children,
             synthetic: false,
+            runs: true,
         })
     }
 
@@ -839,7 +952,7 @@ impl<'a> Params<'a> {
         docs::link(ty, &self.item_args())
     }
 
-    fn item_docs(&self, source: Result<&LitStr, &Type>) -> Vec<syn::Attribute> {
+    fn item_docs(&self, source: Source) -> Vec<syn::Attribute> {
         let mut lines = Vec::new();
         if self
             .item
@@ -850,14 +963,33 @@ impl<'a> Params<'a> {
             lines.push(String::new());
         }
         match source {
-            Ok(sql) => {
+            Source::Template(sql) => {
                 lines.push("# Template".to_owned());
                 lines.push(String::new());
                 lines.push("```sql".to_owned());
                 lines.extend(docs::template(&sql.value()));
                 lines.push("```".to_owned());
             }
-            Err(target) => lines.push(format!("Runs {} as a statement.", self.link(target))),
+            Source::Statement(target) => {
+                lines.push(format!("Runs {} as a statement.", self.link(target)))
+            }
+            Source::Table(before, after) => {
+                let list = |hooks: &[Type]| {
+                    let links: Vec<String> = hooks.iter().map(|ty| self.link(ty)).collect();
+                    links.join(", ")
+                };
+                let runs = match (before.is_empty(), after.is_empty()) {
+                    (true, true) => return Vec::new(),
+                    (false, true) => format!("{} before it", list(before)),
+                    (true, false) => format!("{} after it", list(after)),
+                    (false, false) => {
+                        format!("{} before it and {} after it", list(before), list(after))
+                    }
+                };
+                lines.push("# Hooks".to_owned());
+                lines.push(String::new());
+                lines.push(format!("Every statement that uses this table runs {runs}."));
+            }
         }
         if !self.is_empty() {
             lines.push(String::new());
@@ -1130,16 +1262,15 @@ impl<'a> Params<'a> {
             .collect()
     }
 
-    fn builder_ty(&self, states: &[TokenStream]) -> TokenStream {
+    fn builder_in(
+        &self,
+        states: &[TokenStream],
+        hooked: &TokenStream,
+        parent: &TokenStream,
+    ) -> TokenStream {
         let builder = &self.builder;
         let args = self.item_args();
-        quote!(#builder<#(#args,)* #(#states),*>)
-    }
-
-    fn builder_in(&self, states: &[TokenStream], parent: &TokenStream) -> TokenStream {
-        let builder = &self.builder;
-        let args = self.item_args();
-        quote!(#builder<#(#args,)* #(#states,)* #parent>)
+        quote!(#builder<#(#args,)* #(#states,)* #hooked, #parent>)
     }
 
     fn generics(&self, extra: &[TokenStream]) -> Generics {
@@ -1186,6 +1317,7 @@ impl<'a> Params<'a> {
         let fields = self.fields();
         let root = quote!(#b::Root);
         let parent = quote!(__K);
+        let hooked = quote!(__H);
         let except = |slot: usize, extra: &[TokenStream]| {
             let mut params: Vec<TokenStream> = states
                 .iter()
@@ -1194,6 +1326,7 @@ impl<'a> Params<'a> {
                 .map(|(_, state)| state.clone())
                 .collect();
             params.extend(extra.iter().cloned());
+            params.push(hooked.clone());
             self.generics(&params)
         };
         let mut out = TokenStream::new();
@@ -1216,6 +1349,7 @@ impl<'a> Params<'a> {
         });
 
         let mut struct_params = states.clone();
+        struct_params.push(quote!(__H = #b::NoHooks));
         struct_params.push(quote!(__K = #root));
         let generics = self.generics(&struct_params);
         let where_clause = &generics.where_clause;
@@ -1248,11 +1382,15 @@ impl<'a> Params<'a> {
                 #(#group_fields,)*
                 #(#child_fields,)*
                 __parent: __K,
-                __state: ::core::marker::PhantomData<fn() -> (#(#group_states,)* #(#args,)*)>,
+                __state: ::core::marker::PhantomData<fn() -> (#(#group_states,)* #(#args,)* __H)>,
             }
         });
 
-        let generics = self.generics(&states);
+        let generics = self.generics(&{
+            let mut params = states.clone();
+            params.push(hooked.clone());
+            params
+        });
         let mut ready_generics = generics.clone();
         let ready_clause = ready_generics.make_where_clause();
         let outs: Vec<TokenStream> = states
@@ -1272,7 +1410,7 @@ impl<'a> Params<'a> {
             all = quote!(<#out as #b::And<#all>>::Out);
         }
         let (impl_generics, _, where_clause) = ready_generics.split_for_impl();
-        let rooted = self.builder_in(&states, &root);
+        let rooted = self.builder_in(&states, &hooked, &root);
         out.extend(quote! {
             impl #impl_generics #b::Ready for #rooted #where_clause {
                 type Out = #all;
@@ -1281,10 +1419,11 @@ impl<'a> Params<'a> {
         let generics = self.generics(&{
             let mut params = states.clone();
             params.push(parent.clone());
+            params.push(hooked.clone());
             params
         });
         let (impl_generics, _, where_clause) = generics.split_for_impl();
-        let scoped = self.builder_in(&states, &parent);
+        let scoped = self.builder_in(&states, &hooked, &parent);
         out.extend(quote! {
             impl #impl_generics #b::Scope<__K> for #rooted #where_clause {
                 type Scoped = #scoped;
@@ -1306,14 +1445,14 @@ impl<'a> Params<'a> {
             current[index] = quote!(#module::#marker<#b::Missing<__Rest>>);
             let mut next = states.clone();
             next[index] = quote!(#module::#marker<__Rest>);
-            let next = self.builder_in(&next, &root);
+            let next = self.builder_in(&next, &hooked, &root);
             let mut generics = except(index, &[quote!(__Rest: #b::Remaining), parent.clone()]);
             generics
                 .make_where_clause()
                 .predicates
                 .push(parse_quote!(__K: #b::Fill<#next>));
             let (impl_generics, _, where_clause) = generics.split_for_impl();
-            let current = self.builder_in(&current, &parent);
+            let current = self.builder_in(&current, &hooked, &parent);
             let others = fields.iter().filter(|other| **other != field);
             let origins = docs::origins(&group.origins);
             let doc = doc(&match group.slots.len() {
@@ -1347,10 +1486,10 @@ impl<'a> Params<'a> {
             let others: Vec<&&Ident> = fields.iter().filter(|other| **other != field).collect();
             let mut vacant = states.clone();
             vacant[slot] = quote!(());
-            let vacant = self.builder_in(&vacant, &parent);
+            let vacant = self.builder_in(&vacant, &hooked, &parent);
             let mut current = states.clone();
             current[slot] = quote!(#b::Open<__B>);
-            let current = self.builder_in(&current, &parent);
+            let current = self.builder_in(&current, &hooked, &parent);
             let generics = except(slot, &[quote!(__B), parent.clone()]);
             let (impl_generics, _, where_clause) = generics.split_for_impl();
             let doc = doc(&format!(
@@ -1379,7 +1518,7 @@ impl<'a> Params<'a> {
 
             let mut filled = states.clone();
             filled[slot] = quote!(<__Item as #b::Settled>::Slot);
-            let filled = self.builder_in(&filled, &root);
+            let filled = self.builder_in(&filled, &hooked, &root);
             let mut generics = except(slot, &[parent.clone(), quote!(__Item)]);
             let clause = generics.make_where_clause();
             clause.predicates.push(parse_quote!(__Item: #b::Settled));
@@ -1414,8 +1553,10 @@ impl<'a> Params<'a> {
                 quote!(#b::Built<<#ty as #krate::sql::Sql>::Params>)
             }))
             .collect();
-        let complete = self.builder_in(&complete, &root);
-        let (impl_generics, _, where_clause) = self.item.generics.split_for_impl();
+        let unhooked = self.builder_in(&complete, &quote!(#b::NoHooks), &root);
+        let complete = self.builder_in(&complete, &hooked, &root);
+        let generics = self.generics(&[hooked.clone()]);
+        let (impl_generics, _, where_clause) = generics.split_for_impl();
         let params_ident = &self.ident;
         let extract_groups = self.groups.iter().map(|group| {
             let (name, field) = (&group.name, &group.field);
@@ -1451,7 +1592,7 @@ impl<'a> Params<'a> {
                 }
             }
         });
-        if self.item.generics.params.is_empty() && !self.synthetic {
+        if self.item.generics.params.is_empty() && self.runs {
             let driver = quote!(#krate::dialect::driver);
             let error = quote!(#krate::__private::sqlx::Error);
             let statement = quote!(#krate::statement::Statement);
@@ -1481,7 +1622,7 @@ impl<'a> Params<'a> {
             };
             out.extend(quote! {
                 #krate::__if_sqlx! {
-                    impl #complete {
+                    impl #unhooked {
                         #query
 
                         /// Binds the parameters to the SQL as a `sqlx` query that reads each row as `O`.
@@ -1512,8 +1653,18 @@ impl<'a> Params<'a> {
                 quote!(<<#ty as #b::Build>::Builder as #b::Settled>::Slot)
             }))
             .collect();
-        let initial = self.builder_ty(&initial);
+        let initial = self.builder_in(
+            &initial,
+            &quote!(<#ident #ty_generics as #b::Hooked>::Out),
+            &root,
+        );
         let mut generics = self.item.generics.clone();
+        if !generics.params.is_empty() {
+            generics
+                .make_where_clause()
+                .predicates
+                .push(parse_quote!(#ident #ty_generics: #b::Hooked));
+        }
         for child in &self.children {
             let ty = &child.ty;
             let clause = generics.make_where_clause();

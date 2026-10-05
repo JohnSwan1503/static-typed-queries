@@ -1,0 +1,5 @@
+error: only tables take `before` and `after`
+ --> tests/ui/hooks_on_query.rs:6:26
+  |
+6 | #[query(Postgres, before(Ping), sql = "SELECT 2")]
+  |                          ^^^^

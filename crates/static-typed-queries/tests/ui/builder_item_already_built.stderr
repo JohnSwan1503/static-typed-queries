@@ -7,4 +7,4 @@ error[E0599]: no method named `active_users` found for struct `CountBuilder<Buil
 13 |     let _ = Count::builder().active_users().org_id(1).active_users();
    |                                                       ^^^^^^^^^^^^ method not found in `CountBuilder<Built<ActiveUsersParams>>`
    |
-   = note: the method was found for `CountBuilder<Open<__B>, __K>`
+   = note: the method was found for `CountBuilder<Open<__B>, __H, __K>`

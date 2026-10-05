@@ -99,6 +99,10 @@ impl Output {
     }
 }
 
+pub const fn check_hooks(owner: &'static Node) {
+    renderer::check_hooks(owner);
+}
+
 pub const fn measure<D: Dialect>(root: &'static Node) -> Size {
     let (mut sql, mut binds, mut offsets) = ([], [], []);
     let mut renderer = Renderer::<D>::new(&mut sql, &mut binds, &mut offsets);

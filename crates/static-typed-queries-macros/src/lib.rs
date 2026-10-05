@@ -31,14 +31,51 @@ use syn::{ItemStruct, parse_macro_input};
 /// - `name = "..."` (required): the table's name in the database. Write a
 ///   schema-qualified name with dots; each segment is quoted on its own using
 ///   the dialect's identifier quotes.
+/// - `before(Type, ...)` and `after(Type, ...)`: hooks, statements that run
+///   before and after every statement that uses the table.
 /// - `display = name`: implements `Display`, writing the unqualified table name.
 /// - `debug = tree`: implements `Debug`, writing the table's node tree.
 ///
+/// ## Hooks
+///
+/// A statement that uses a table with hooks, directly or through the items it
+/// embeds, renders them as statements of their own in its `BEFORE` and `AFTER`
+/// lists, each hook once per set of values. Its builder has no `query()` or
+/// `query_as()`, since one query would skip the hooks.
+///
+/// ```
+/// # use static_typed_queries::prelude::*;
+/// #[query(Postgres, sql = "SELECT set_config('app.tenant', {tenant: String}, true)")]
+/// pub struct SetTenant;
+///
+/// #[table(Postgres, name = "orders", before(SetTenant))]
+/// pub struct Orders;
+///
+/// #[query(Postgres, sql = "SELECT id FROM {Orders} WHERE status = {_: String}")]
+/// pub struct ByStatus;
+///
+/// assert_eq!(
+///     ByStatus::BEFORE[0].sql(),
+///     "SELECT set_config('app.tenant', $1, true)"
+/// );
+/// let params = ByStatus::builder()
+///     .status("open".to_owned())
+///     .orders()
+///     .set_tenant()
+///     .tenant("acme".to_owned())
+///     .build();
+/// assert_eq!(params.orders.set_tenant.tenant, "acme");
+/// ```
+///
+/// Hooks can't be tables, and they can't use tables with hooks of their own.
+///
 /// ## Generated items
 ///
-/// The struct implements `Sql` with no parameters, and `Build` with a builder
-/// that has nothing to set, so queries that reference it never need a builder
-/// call for it.
+/// The struct implements `Sql` and `Build`. A table's items are its hooks:
+/// without hooks it has no parameters and a builder with nothing to set, so
+/// queries that reference it never need a builder call for it. With hooks it
+/// gets a params struct and a builder like a query's, and the parameters of
+/// its hooks are set through the queries that use it.
 ///
 /// A table has no SQL of its own: it doesn't implement `Statement`, and it is
 /// always rendered as its name, so `{Table as cte}` and `{Table as subquery}`
@@ -195,6 +232,7 @@ pub fn table(args: TokenStream, item: TokenStream) -> TokenStream {
 ///   such as tables, have no method. Once everything is set, the builder has
 ///   only `build()`, which returns `NameParams`, and, with a database feature
 ///   enabled, `query()`, which returns a `sqlx` query with everything bound.
+///   A query that uses a table with hooks has no `query()`; see [`table`].
 /// - A `Statement` impl and an inherent `Name::SQL` constant holding the
 ///   rendered SQL.
 /// - With the `parse-check` feature, a `#[cfg(test)]` test named

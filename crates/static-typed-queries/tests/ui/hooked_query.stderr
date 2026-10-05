@@ -1,0 +1,29 @@
+error[E0599]: no method named `query` found for struct `OrderByIdBuilder<Id<Filled>, Built<OrdersParams>, WithHooks>` in the current scope
+  --> tests/ui/hooked_query.rs:13:40
+   |
+ 9 | #[query(Postgres, sql = "SELECT id FROM {Orders} WHERE id = {_: i64}")]
+   | ----------------------------------------------------------------------- method `query` not found for this struct
+...
+13 |     let _ = OrderById::builder().id(1).query();
+   |             --------------------       ^^^^^ this is an associated function, not a method
+   |             |
+   |             method `query` is available on `OrderByIdBuilder<Id<Missing<Filled>>, Built<OrdersParams>, WithHooks>`
+   |
+   = note: found the following associated functions; to be used as methods, functions must have a `self` parameter
+note: the candidate is defined in the trait `static_typed_queries::Statement`
+  --> $WORKSPACE/crates/static-typed-queries-core/src/statement.rs
+   |
+   | /     fn query<'q>(params: &Self::Params) -> Result<Query<'q, Self::Dialect>, sqlx::Error>
+   | |     where
+   | |         Self::Dialect: Driver,
+   | |         Self::Params: BindParams<Database<Self::Dialect>>,
+   | |         Arguments<Self::Dialect>: sqlx::IntoArguments<Database<Self::Dialect>>,
+   | |_______________________________________________________________________________^
+   = help: items from traits can only be used if the trait is implemented and in scope
+   = note: the following trait defines an item `query`, perhaps you need to implement it:
+           candidate #1: `static_typed_queries::__private::__private::sqlx::Statement`
+help: use associated function syntax instead
+   |
+13 -     let _ = OrderById::builder().id(1).query();
+13 +     let _ = OrderByIdBuilder::<Id<Filled>, Built<OrdersParams>, WithHooks>::query();
+   |

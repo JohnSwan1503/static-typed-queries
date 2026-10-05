@@ -7,4 +7,4 @@ error[E0599]: no method named `orders` found for struct `ByStatusBuilder<Status<
 10 |     let _ = ByStatus::builder().orders();
    |                                 ^^^^^^ method not found in `ByStatusBuilder<Status<Missing<Filled>>, Built<()>>`
    |
-   = note: the method was found for `ByStatusBuilder<ParamStatus, Open<__B>, __K>`
+   = note: the method was found for `ByStatusBuilder<ParamStatus, Open<__B>, __H, __K>`

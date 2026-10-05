@@ -62,6 +62,26 @@ impl<B> And<B> for False {
     type Out = False;
 }
 
+pub struct NoHooks;
+
+pub struct WithHooks;
+
+pub trait Hooked {
+    type Out;
+}
+
+pub trait Or<B> {
+    type Out;
+}
+
+impl<B> Or<B> for NoHooks {
+    type Out = B;
+}
+
+impl<B> Or<B> for WithHooks {
+    type Out = WithHooks;
+}
+
 pub trait Build: Sql {
     type Builder;
 

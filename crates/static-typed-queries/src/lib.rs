@@ -8,7 +8,9 @@ pub use static_typed_queries_macros::{query, statement, table};
 pub use static_typed_queries_core::check;
 
 pub mod state {
-    pub use static_typed_queries_core::builder::{Built, Filled, Missing, Open};
+    pub use static_typed_queries_core::builder::{
+        Built, Filled, Missing, NoHooks, Open, WithHooks,
+    };
 }
 
 pub mod bind {
