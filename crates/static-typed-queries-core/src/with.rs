@@ -12,18 +12,20 @@ use crate::statement::params::{BindHooks, BindParams};
 use crate::statement::run::{self, AllRows, Fetch, Step, hooks, step};
 use crate::values::Values;
 
-// `run` returns this rather than an `impl Future`, which carries the method's bounds and has a
-// missing hook value reported three times: at the call, the method and the `.await`.
+/// The future `run` and `run_as` return. It is boxed rather than an `impl Future`, which would
+/// carry their bounds and have a missing hook value reported three times: at the call, the
+/// method and the `.await`.
 pub type Running<'c, T> = Pin<Box<dyn Future<Output = Result<T, sqlx::Error>> + Send + 'c>>;
 
-// A statement or transaction together with the values of its hooks, which `with` adds one hook
-// at a time; `run` needs every reachable hook with values to be present.
+/// A statement or transaction with the values of its hooks, which `with` adds one hook at a
+/// time.
 pub struct With<S, V> {
     statement: S,
     values: V,
 }
 
 impl<S> With<S, ()> {
+    #[doc(hidden)]
     pub fn new(statement: S) -> Self {
         With {
             statement,
@@ -33,6 +35,8 @@ impl<S> With<S, ()> {
 }
 
 impl<S, V> With<S, V> {
+    /// Adds the values of another hook, as a value of the hook or its complete builder. Each hook
+    /// takes its values once.
     pub fn with<B, H, I>(self, values: B) -> With<S, (HookValues<H>, V)>
     where
         B: Finish<Output = H>,
@@ -45,6 +49,8 @@ impl<S, V> With<S, V> {
         }
     }
 
+    /// Runs the statement or transaction with its hooks in one transaction and commits it. It
+    /// compiles once every hook it reaches has values here, and none is left over.
     pub fn run<'c, I, W>(
         self,
         conn: impl Acquire<'c, Database = Database<S::Dialect>> + Send + 'c,
@@ -59,6 +65,7 @@ impl<S, V> With<S, V> {
         Box::pin(self.transaction(conn, async |statement, conn| statement.run(conn).await))
     }
 
+    /// Runs like [`run`](With::run), and reads the statement's rows as `O`.
     pub fn run_as<'c, O, I, W>(
         self,
         conn: impl Acquire<'c, Database = Database<S::Dialect>> + Send + 'c,
@@ -103,12 +110,16 @@ impl<S, V> With<S, V> {
     }
 }
 
+/// A statement or transaction that runs on a connection.
 pub trait Run: Sql + Render
 where
     Self::Dialect: Driver,
 {
+    /// What it returns: the rows, read as the statement's `row`, or the number of rows affected;
+    /// for a transaction, a tuple with each step's.
     type Output;
 
+    /// Runs without the hooks, on a connection that is already in a transaction.
     fn run(
         self,
         conn: &mut Connection<Self::Dialect>,

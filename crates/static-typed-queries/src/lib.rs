@@ -17,6 +17,7 @@ pub use static_typed_queries_macros::__query_sql;
 #[cfg(feature = "parse-check")]
 pub use static_typed_queries_core::check;
 
+/// The states that builders and statements carry in their types, which compile errors name.
 pub mod state {
     pub use static_typed_queries_core::builder::{Built, Filled, Missing, Open};
     pub use static_typed_queries_core::hooks::{NoHooks, WithHooks};
@@ -40,12 +41,14 @@ pub mod state {
     pub use static_typed_queries_core::values::valueless;
 }
 
+/// What the parameters of a statement bind.
 pub mod bind {
     pub use static_typed_queries_core::statement::bind::Bind;
     pub use static_typed_queries_core::statement::bind::path::Path;
     pub use static_typed_queries_core::statement::bind::slot::Slot;
 }
 
+/// The SQL dialects, each behind the feature of the same name.
 pub mod dialect {
     pub use static_typed_queries_core::dialect::Dialect;
     #[cfg(feature = "mysql")]
@@ -57,6 +60,7 @@ pub mod dialect {
     pub use static_typed_queries_core::embed::EmbedsIn;
 }
 
+/// The attributes, the dialects and the traits most code names.
 pub mod prelude {
     #[cfg(feature = "mysql")]
     pub use crate::dialect::MySql;

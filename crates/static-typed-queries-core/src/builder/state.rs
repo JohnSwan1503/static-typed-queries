@@ -1,11 +1,15 @@
 use crate::sql::Sql;
 
+/// A builder's field that isn't set yet.
 pub struct Missing;
 
+/// A builder's field that is set.
 pub struct Filled;
 
+/// A builder's item field whose own builder still has fields to set.
 pub struct Open<B>(pub B);
 
+/// A builder's item field that is complete, or the builder of an item without fields.
 pub struct Built<T>(pub T);
 
 pub struct True;

@@ -18,6 +18,7 @@ macro_rules! dialect {
             use crate::dialect::params::ParamStyle;
             use crate::dialect::quote::Quote;
 
+            #[doc = concat!("The ", $name, " dialect.")]
             #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
             pub struct $ty;
 

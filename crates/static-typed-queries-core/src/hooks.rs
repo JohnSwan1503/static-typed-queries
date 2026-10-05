@@ -4,8 +4,10 @@ use crate::render::Render;
 use crate::sql::Sql;
 use crate::values::Valueless;
 
+/// A statement without hooks, which binds as one query through `query()`.
 pub struct NoHooks;
 
+/// A statement with hooks, which runs through `run()` with them in one transaction.
 pub struct WithHooks;
 
 pub struct HookFlag<const HOOKED: bool>;
@@ -52,6 +54,7 @@ pub trait Hooked<I = ()> {}
 
 impl<S: Render> Hooked for S where S::Hooks: HasHooks {}
 
+/// The values of the hook `H`, given to `with`.
 pub struct HookValues<H>(pub H);
 
 pub struct Here;

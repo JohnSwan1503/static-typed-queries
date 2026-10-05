@@ -1,5 +1,6 @@
 use crate::dialect::Dialect;
 
+/// The dialects whose items embed into statements of `D`: each dialect embeds into itself only.
 #[diagnostic::on_unimplemented(
     message = "{Self} SQL can't be embedded in a {D} statement",
     label = "this item is written for {Self}"

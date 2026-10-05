@@ -1,5 +1,7 @@
 const MAX_DEPTH: usize = 16;
 
+/// The fields that lead from a statement to an item it embeds, each as its index among the fields
+/// that hold items.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Path {
     steps: [u16; MAX_DEPTH],
@@ -7,11 +9,13 @@ pub struct Path {
 }
 
 impl Path {
+    /// The statement itself.
     pub const ROOT: Path = Path {
         steps: [0; MAX_DEPTH],
         len: 0,
     };
 
+    #[doc(hidden)]
     pub const fn new(steps: &[u16]) -> Path {
         assert!(
             steps.len() <= MAX_DEPTH,
@@ -25,6 +29,7 @@ impl Path {
         path
     }
 
+    /// The indices, outermost first.
     pub const fn steps(&self) -> &[u16] {
         self.steps.split_at(self.len as usize).0
     }

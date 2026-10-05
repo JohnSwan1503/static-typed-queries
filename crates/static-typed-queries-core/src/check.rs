@@ -1,8 +1,12 @@
+//! Checks that rendered SQL parses with its dialect's grammar, behind the `parse-check` feature.
+
 use sqlparser::parser::Parser;
 
 use crate::dialect::Dialect;
 use crate::statement::Statement;
 
+/// Parses the SQL of `S` and of its hooks with its dialect's grammar, and panics if any doesn't
+/// parse as one statement. The tests `parse-check` generates call it.
 pub fn parse<S: Statement>() {
     let name = S::NODE.name.as_str();
     statement::<S::Dialect>(&format!("`{name}`"), S::SQL);
