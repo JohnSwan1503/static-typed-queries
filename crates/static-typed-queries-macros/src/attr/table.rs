@@ -5,7 +5,7 @@ use syn::{Fields, Ident, ItemStruct, LitStr, Type, parse_quote};
 
 use crate::args::{self, Keys};
 use crate::emit::builder::builder;
-use crate::emit::checks::{CteRule, cte_in, embeds, hook_needs, step_impl, values};
+use crate::emit::checks::{Item, embeds, hook_needs, markers, runnable, step_impl, values};
 use crate::emit::docs::{self, item_docs};
 use crate::emit::fmt::fmt;
 use crate::emit::node::node;
@@ -95,7 +95,8 @@ pub(crate) fn expand(args: TableArgs, input: ItemStruct) -> syn::Result<TokenStr
     let dialect = &args.dialect;
     let hook_types: Vec<&Type> = before.iter().chain(&after).collect();
     let embeds = embeds(&input, &hook_types, &[], &[], dialect);
-    let cte_in = cte_in(&input, CteRule::Any);
+    let markers = markers(&input, Item::Table);
+    let (checks, runnable) = (embeds.node, runnable(&hook_types));
     let node = node(
         &input,
         node_name,
@@ -103,7 +104,7 @@ pub(crate) fn expand(args: TableArgs, input: ItemStruct) -> syn::Result<TokenStr
         parts,
         &[],
         [&before, &after],
-        embeds.node,
+        quote!(#checks #runnable),
     );
     let checked = embeds.checked;
     let check = (!before.is_empty() || !after.is_empty()).then(|| {
@@ -138,7 +139,7 @@ pub(crate) fn expand(args: TableArgs, input: ItemStruct) -> syn::Result<TokenStr
         #values
         #built
         #checked
-        #cte_in
+        #markers
         #hook_needs
         #step
         #fmt

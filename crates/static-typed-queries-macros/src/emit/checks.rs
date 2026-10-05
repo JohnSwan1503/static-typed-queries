@@ -71,35 +71,53 @@ pub(crate) fn embeds(
     }
 }
 
-// The dialects an item can be a CTE in: any, those that run data-modifying CTEs, or those its
-// target can be one in.
-pub(crate) enum CteRule<'a> {
-    Any,
-    Modifies,
-    Like(&'a Type),
+// What an item is, for the marker traits checked where it is named: the dialects it can be a CTE
+// in (any, those that run data-modifying CTEs, or those its target can be one in), and whether it
+// runs as a statement.
+pub(crate) enum Item<'a> {
+    Table,
+    Query { modifies: bool },
+    Statement { target: &'a Type },
+    Transaction,
 }
 
-pub(crate) fn cte_in(item: &ItemStruct, rule: CteRule) -> TokenStream {
+pub(crate) fn markers(item: &ItemStruct, kind: Item) -> TokenStream {
     let krate = krate();
     let ident = &item.ident;
+    let (impl_generics, ty_generics, where_clause) = item.generics.split_for_impl();
     let mut generics = item.generics.clone();
-    let bound = match rule {
-        CteRule::Modifies => quote!(#krate::DmlInCte),
+    let dialect = match kind {
+        Item::Query { modifies: true } => quote!(#krate::DmlInCte),
         _ => quote!(#krate::Dialect),
     };
-    generics.params.push(parse_quote!(__D: #bound));
-    if let CteRule::Like(target) = rule {
+    generics.params.push(parse_quote!(__D: #dialect));
+    if let Item::Statement { target } = kind {
         generics
             .make_where_clause()
             .predicates
             .push(parse_quote!(#target: #krate::CteIn<__D>));
     }
-    let (impl_generics, _, where_clause) = generics.split_for_impl();
-    let (_, ty_generics, _) = item.generics.split_for_impl();
+    let (cte_generics, _, cte_where) = generics.split_for_impl();
+    let runs: &[&str] = match kind {
+        Item::Table => &["NotTransaction"],
+        Item::Transaction => &["NotTable"],
+        Item::Query { .. } | Item::Statement { .. } => &["NotTable", "NotTransaction"],
+    };
+    let runs = runs.iter().map(|marker| format_ident!("{marker}"));
     quote! {
         #[diagnostic::do_not_recommend]
-        impl #impl_generics #krate::CteIn<__D> for #ident #ty_generics #where_clause {}
+        impl #cte_generics #krate::CteIn<__D> for #ident #ty_generics #cte_where {}
+        #(
+            #[diagnostic::do_not_recommend]
+            impl #impl_generics #krate::#runs for #ident #ty_generics #where_clause {}
+        )*
     }
+}
+
+// Checks, for the item's node, that each of `types` runs as a statement.
+pub(crate) fn runnable(types: &[&Type]) -> TokenStream {
+    let krate = krate();
+    quote!(#(#krate::runnable::<#types>();)*)
 }
 
 pub(crate) fn values(item: &ItemStruct, holds_values: bool) -> TokenStream {

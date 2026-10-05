@@ -6,7 +6,7 @@ use syn::{ItemStruct, Type, parse_quote};
 use crate::args::{self, Fetch, Keys, Step};
 use crate::emit::bind::bind_impl;
 use crate::emit::builder::builder;
-use crate::emit::checks::{CteRule, cte_in, embeds, hook_needs, values};
+use crate::emit::checks::{Item, embeds, hook_needs, markers, runnable, step_impl, values};
 use crate::emit::docs::item_docs;
 use crate::emit::node::{node, target};
 use crate::emit::run::transaction_methods;
@@ -109,7 +109,10 @@ pub(crate) fn expand(args: TransactionArgs, mut input: ItemStruct) -> syn::Resul
     }
     let items: Vec<&Type> = fields.iter().map(|field| &field.ty).collect();
     let embeds = embeds(&input, &items, &types, &ctes, dialect);
-    let cte_in = cte_in(&input, CteRule::Any);
+    let markers = markers(&input, Item::Transaction);
+    let step = step_impl(&input, None);
+    let steps_run: Vec<&Type> = referenced.iter().collect();
+    let (checks, runnable) = (embeds.node, runnable(&steps_run));
     let node = node(
         &input,
         &snake_case(&ident.to_string()),
@@ -117,7 +120,7 @@ pub(crate) fn expand(args: TransactionArgs, mut input: ItemStruct) -> syn::Resul
         parts,
         &items,
         [&[], &[]],
-        embeds.node,
+        quote!(#checks #runnable),
     );
     let checked = embeds.checked;
     let hook_needs = hook_needs(&input, referenced.len(), |i, index| {
@@ -140,10 +143,11 @@ pub(crate) fn expand(args: TransactionArgs, mut input: ItemStruct) -> syn::Resul
 
         #values
         #checked
-        #cte_in
+        #markers
         #hook_needs
         #bind
         #builder
+        #step
 
         #krate::impl_transaction!(#ident);
         #methods

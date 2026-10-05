@@ -1,0 +1,35 @@
+error[E0277]: `Orders` is a table, not a statement
+ --> tests/ui/not_a_statement.rs:9:13
+  |
+9 | #[statement(Orders)]
+  |             ^^^^^^ a table
+  |
+help: the trait `NotTable` is not implemented for `Orders`
+ --> tests/ui/not_a_statement.rs:4:1
+  |
+4 | pub struct Orders;
+  | ^^^^^^^^^^^^^^^^^
+  = note: a table is embedded in a query, as `{Orders}`
+note: required by a bound in `runnable`
+ --> $WORKSPACE/crates/static-typed-queries-core/src/statement.rs
+  |
+  | pub const fn runnable<T: NotTable + NotTransaction>() {}
+  |                          ^^^^^^^^ required by this bound in `runnable`
+
+error[E0277]: `Nightly` is a transaction, not a statement
+  --> tests/ui/not_a_statement.rs:15:31
+   |
+15 | #[transaction(Postgres, steps(Nightly, Purge))]
+   |                               ^^^^^^^ a transaction
+   |
+help: the trait `NotTransaction` is not implemented for `Nightly`
+  --> tests/ui/not_a_statement.rs:13:1
+   |
+13 | pub struct Nightly;
+   | ^^^^^^^^^^^^^^^^^^
+   = note: a transaction runs on its own, through its `run`
+note: required by a bound in `runnable`
+  --> $WORKSPACE/crates/static-typed-queries-core/src/statement.rs
+   |
+   | pub const fn runnable<T: NotTable + NotTransaction>() {}
+   |                                     ^^^^^^^^^^^^^^ required by this bound in `runnable`

@@ -25,6 +25,24 @@ pub trait Statement: Sql {
 
 pub trait SingleRef {}
 
+// Steps, hooks and `#[statement]` run what they name as one statement: neither a table nor a
+// transaction.
+#[diagnostic::on_unimplemented(
+    message = "`{Self}` is a table, not a statement",
+    label = "a table",
+    note = "a table is embedded in a query, as `{{{Self}}}`"
+)]
+pub trait NotTable {}
+
+#[diagnostic::on_unimplemented(
+    message = "`{Self}` is a transaction, not a statement",
+    label = "a transaction",
+    note = "a transaction runs on its own, through its `run`"
+)]
+pub trait NotTransaction {}
+
+pub const fn runnable<T: NotTable + NotTransaction>() {}
+
 impl<S: Single> SingleRef for &S {}
 
 #[cfg(feature = "sqlx")]

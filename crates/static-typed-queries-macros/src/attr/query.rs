@@ -8,7 +8,7 @@ use syn::{
 use crate::args::{self, Keys, Sql};
 use crate::emit::bind::bind_impl;
 use crate::emit::builder::builder;
-use crate::emit::checks::{CteRule, cte_in, embeds, hook_needs, step_impl, values};
+use crate::emit::checks::{Item, embeds, hook_needs, markers, step_impl, values};
 use crate::emit::docs::item_docs;
 use crate::emit::fmt::fmt;
 use crate::emit::node::{node, parts};
@@ -174,11 +174,10 @@ pub(crate) fn expand(args: QueryArgs, mut input: ItemStruct) -> syn::Result<Toke
         .chain(&by_type)
         .collect();
     let embeds = embeds(&input, &items, &template.types, &ctes, &args.dialect);
-    let cte_in = cte_in(
+    let markers = markers(
         &input,
-        match analysis.kind {
-            Kind::Dml => CteRule::Modifies,
-            Kind::Query | Kind::Ddl => CteRule::Any,
+        Item::Query {
+            modifies: matches!(analysis.kind, Kind::Dml),
         },
     );
     let mut referenced = Vec::new();
@@ -230,7 +229,7 @@ pub(crate) fn expand(args: QueryArgs, mut input: ItemStruct) -> syn::Result<Toke
 
         #values
         #checked
-        #cte_in
+        #markers
         #hook_needs
         #bind
         #builder

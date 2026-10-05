@@ -21,7 +21,7 @@ pub use crate::part::target::Target;
 pub use crate::render::{Render, check_hooks};
 pub use crate::sql::Sql;
 pub use crate::statement::hook::Hook;
-pub use crate::statement::{Rows, Statement};
+pub use crate::statement::{NotTable, NotTransaction, Rows, Statement, runnable};
 pub use crate::transaction::Transaction;
 pub use crate::values::{Valueless, Values, valueless};
 pub use crate::{

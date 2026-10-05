@@ -6,7 +6,7 @@ use syn::{Ident, ItemStruct, LitBool, Type, parse_quote};
 use crate::args::{self, Keys};
 use crate::emit::bind::bind_impl;
 use crate::emit::builder::builder;
-use crate::emit::checks::{CteRule, cte_in, embeds, hook_needs, step_impl, values};
+use crate::emit::checks::{Item, embeds, hook_needs, markers, runnable, step_impl, values};
 use crate::emit::docs::{self, item_docs};
 use crate::emit::fmt::fmt;
 use crate::emit::node::node;
@@ -90,7 +90,8 @@ pub(crate) fn expand(args: StatementArgs, mut input: ItemStruct) -> syn::Result<
         Some(_) => embeds(&input, &[ty], &[], &[], &dialect),
         None => embeds(&input, &[], std::slice::from_ref(ty), &[], &dialect),
     };
-    let cte_in = cte_in(&input, CteRule::Like(ty));
+    let markers = markers(&input, Item::Statement { target: ty });
+    let (checks, runnable) = (embeds.node, runnable(&[ty]));
     let node = node(
         &input,
         &snake_case(&ident.to_string()),
@@ -98,7 +99,7 @@ pub(crate) fn expand(args: StatementArgs, mut input: ItemStruct) -> syn::Result<
         Vec::new(),
         &[ty],
         [&[], &[]],
-        embeds.node,
+        quote!(#checks #runnable),
     );
     let checked = embeds.checked;
     let hook_needs = hook_needs(
@@ -125,7 +126,7 @@ pub(crate) fn expand(args: StatementArgs, mut input: ItemStruct) -> syn::Result<
 
         #values
         #checked
-        #cte_in
+        #markers
         #hook_needs
         #bind
         #builder

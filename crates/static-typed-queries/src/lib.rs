@@ -28,11 +28,11 @@ pub mod state {
     };
     #[doc(hidden)]
     pub use static_typed_queries_core::render::Render;
-    #[doc(hidden)]
-    pub use static_typed_queries_core::statement::SingleRef;
     #[cfg(any(feature = "mysql", feature = "postgres", feature = "sqlite"))]
     #[doc(hidden)]
     pub use static_typed_queries_core::statement::run::rows;
+    #[doc(hidden)]
+    pub use static_typed_queries_core::statement::{NotTable, NotTransaction, SingleRef, runnable};
     #[doc(hidden)]
     pub use static_typed_queries_core::values::valueless;
 }
