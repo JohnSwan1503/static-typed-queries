@@ -8,7 +8,7 @@ use sqlparser::ast::{
 };
 use sqlparser::dialect::{Dialect, GenericDialect, MySqlDialect, PostgreSqlDialect, SQLiteDialect};
 use sqlparser::parser::Parser;
-use syn::{LitStr, Type};
+use syn::{Generics, Ident, LitStr, Type};
 
 use crate::template::{Segment, Template};
 
@@ -52,22 +52,53 @@ pub(crate) enum Engine {
 }
 
 impl Engine {
-    pub(crate) fn of(dialect: &Type) -> Engine {
-        let Type::Path(path) = dialect else {
-            return Engine::Generic;
-        };
-        match path
-            .path
-            .segments
-            .last()
-            .map(|segment| segment.ident.to_string())
-            .as_deref()
-        {
-            Some("Postgres") => Engine::Postgres,
-            Some("MySql") => Engine::MySql,
-            Some("Sqlite") => Engine::Sqlite,
-            _ => Engine::Generic,
+    pub(crate) fn of(
+        dialect: &Type,
+        grammar: Option<&Ident>,
+        generics: &Generics,
+    ) -> syn::Result<Engine> {
+        if let Some(grammar) = grammar {
+            return match grammar.to_string().as_str() {
+                "postgres" => Ok(Engine::Postgres),
+                "mysql" => Ok(Engine::MySql),
+                "sqlite" => Ok(Engine::Sqlite),
+                "generic" => Ok(Engine::Generic),
+                _ => Err(syn::Error::new(
+                    grammar.span(),
+                    "expected `postgres`, `mysql`, `sqlite` or `generic`",
+                )),
+            };
         }
+        if let Type::Path(path) = dialect
+            && path.qself.is_none()
+        {
+            let segments = &path.path.segments;
+            match segments
+                .last()
+                .map(|segment| segment.ident.to_string())
+                .as_deref()
+            {
+                Some("Postgres") => return Ok(Engine::Postgres),
+                Some("MySql") => return Ok(Engine::MySql),
+                Some("Sqlite") => return Ok(Engine::Sqlite),
+                Some("Dialect")
+                    if segments.len() == 2
+                        && generics
+                            .type_params()
+                            .any(|param| param.ident == segments[0].ident) =>
+                {
+                    return Ok(Engine::Generic);
+                }
+                _ => {}
+            }
+        }
+        Err(syn::Error::new_spanned(
+            dialect,
+            format!(
+                "can't tell which SQL grammar `{}` uses; add `grammar = postgres`, `mysql`, `sqlite` or `generic`",
+                crate::docs::type_string(dialect)
+            ),
+        ))
     }
 
     fn name(self) -> &'static str {

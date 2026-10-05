@@ -99,6 +99,10 @@ pub fn table(args: TokenStream, item: TokenStream) -> TokenStream {
 /// - `parse_check = false`: leaves the query out of the `parse-check`
 ///   feature's tests. Use it on queries defined inside functions, where rustc
 ///   can't run the generated test.
+/// - `grammar = postgres | mysql | sqlite | generic`: the SQL grammar the
+///   template is checked against. It's needed when the dialect isn't written
+///   as `Postgres`, `MySql`, `Sqlite` or `T::Dialect`, such as through a type
+///   alias, since the macro only sees the name.
 /// - `separate(Type, ...)`: gives each listed generic item its own values for
 ///   the items in its type arguments, instead of sharing the query's. With
 ///   `separate(CountOf<ActiveUsers>)`, `.active_users()` and

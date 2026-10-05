@@ -43,6 +43,7 @@ pub(crate) struct Args {
     pub debug: Option<Ident>,
     pub parse_check: Option<LitBool>,
     pub separate: Option<Vec<Type>>,
+    pub grammar: Option<Ident>,
     to_add: ToAdd,
 }
 
@@ -58,6 +59,7 @@ impl ToAdd {
             "debug" => &[5],
             "parse_check" => &[6],
             "separate" => &[7],
+            "grammar" => &[8],
             _ => return,
         };
         for &idx in slots {
@@ -80,8 +82,9 @@ impl Default for ToAdd {
                 Some("debug"),
                 Some("parse_check"),
                 Some("separate"),
+                Some("grammar"),
             ],
-            8,
+            9,
         )
     }
 }
@@ -125,6 +128,7 @@ impl Parse for Args {
             debug: None,
             parse_check: None,
             separate: None,
+            grammar: None,
             to_add: ToAdd::default(),
         };
         while !input.is_empty() {
@@ -179,6 +183,13 @@ impl Parse for Args {
                 key_str @ "separate" => set(
                     &mut args.separate,
                     types(input)?,
+                    &key,
+                    &mut args.to_add,
+                    key_str,
+                )?,
+                key_str @ "grammar" => set(
+                    &mut args.grammar,
+                    value(input)?,
                     &key,
                     &mut args.to_add,
                     key_str,

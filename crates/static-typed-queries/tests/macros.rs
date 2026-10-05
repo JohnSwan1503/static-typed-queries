@@ -118,3 +118,17 @@ fn params_derive_what_their_fields_allow() {
     let score = AboveScore::builder().score(0.5).build();
     assert_eq!(score.clone(), score);
 }
+
+pub type Db = Postgres;
+
+#[query(
+    Db,
+    grammar = postgres,
+    sql = "SELECT id FROM {Users} WHERE id = ANY({ids: Vec<i64>})"
+)]
+pub struct AnyOf;
+
+#[test]
+fn dialect_aliases_name_their_grammar() {
+    assert_eq!(AnyOf::SQL, r#"SELECT id FROM "users" WHERE id = ANY($1)"#);
+}

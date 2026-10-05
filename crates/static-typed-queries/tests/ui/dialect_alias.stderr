@@ -1,0 +1,5 @@
+error: can't tell which SQL grammar `Db` uses; add `grammar = postgres`, `mysql`, `sqlite` or `generic`
+ --> tests/ui/dialect_alias.rs:8:9
+  |
+8 | #[query(Db, sql = "SELECT id FROM {Users} WHERE tags @> ARRAY[{tag: String}]")]
+  |         ^^

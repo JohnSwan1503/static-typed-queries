@@ -1,4 +1,4 @@
-error: expected one of `cte`, `subquery`, `sql`, `name`, `display`, `debug`, `parse_check` or `separate`
+error: expected one of `cte`, `subquery`, `sql`, `name`, `display`, `debug`, `parse_check`, `separate` or `grammar`
  --> tests/ui/unknown_argument.rs:3:19
   |
 3 | #[query(Postgres, sqll = "SELECT 1")]

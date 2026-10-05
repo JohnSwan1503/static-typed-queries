@@ -34,6 +34,12 @@ pub(crate) fn table(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
             "tables have no SQL to check",
         ));
     }
+    if let Some(grammar) = &args.grammar {
+        return Err(syn::Error::new(
+            grammar.span(),
+            "tables have no SQL to check",
+        ));
+    }
     if !item.generics.params.is_empty() {
         return Err(syn::Error::new_spanned(
             &item.generics,
@@ -106,7 +112,8 @@ pub(crate) fn query(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
         .as_ref()
         .ok_or_else(|| syn::Error::new(Span::call_site(), "queries need `sql = \"...\"`"))?;
     let template = template::parse(sql)?;
-    let analysis = analyze::analyze(&template, Engine::of(&args.dialect), sql)?;
+    let engine = Engine::of(&args.dialect, args.grammar.as_ref(), &item.generics)?;
+    let analysis = analyze::analyze(&template, engine, sql)?;
     let kind = match analysis.kind {
         Kind::Query => quote!(Query),
         Kind::Dml => quote!(Dml),
