@@ -1,7 +1,9 @@
 use std::fmt::Display;
 
+use proc_macro2::Span;
 use syn::parse::{Parse, ParseStream};
-use syn::{Ident, LitBool, LitStr, Token, Type, parenthesized};
+use syn::spanned::Spanned;
+use syn::{Ident, ItemStruct, LitBool, LitStr, Path, Token, Type, parenthesized};
 
 #[derive(Clone, Copy)]
 pub(crate) enum Placement {
@@ -34,9 +36,33 @@ impl Placement {
     }
 }
 
+pub(crate) enum Sql {
+    Inline(LitStr),
+    Named(Path),
+}
+
+impl Sql {
+    pub(crate) fn span(&self) -> Span {
+        match self {
+            Sql::Inline(sql) => sql.span(),
+            Sql::Named(path) => path.span(),
+        }
+    }
+}
+
+impl Parse for Sql {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        if input.peek(LitStr) {
+            Ok(Sql::Inline(input.parse()?))
+        } else {
+            Ok(Sql::Named(input.parse()?))
+        }
+    }
+}
+
 pub(crate) struct Args {
     pub dialect: Type,
-    pub sql: Option<LitStr>,
+    pub sql: Option<Sql>,
     pub name: Option<LitStr>,
     pub placement: Option<Placement>,
     pub display: Option<Ident>,
@@ -233,6 +259,25 @@ impl Parse for Args {
             }
         }
         Ok(args)
+    }
+}
+
+pub(crate) struct NamedQuery {
+    pub sql: LitStr,
+    pub args: Args,
+    pub item: ItemStruct,
+}
+
+impl Parse for NamedQuery {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let sql = input.parse()?;
+        let content;
+        parenthesized!(content in input);
+        Ok(NamedQuery {
+            sql,
+            args: content.parse()?,
+            item: input.parse()?,
+        })
     }
 }
 

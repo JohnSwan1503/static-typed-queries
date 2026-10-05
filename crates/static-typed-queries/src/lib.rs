@@ -2,7 +2,10 @@ pub use static_typed_queries_core::builder::Build;
 pub use static_typed_queries_core::sql::Sql;
 pub use static_typed_queries_core::statement::hook::Hook;
 pub use static_typed_queries_core::statement::{Rows, Statement};
-pub use static_typed_queries_macros::{query, statement, table};
+pub use static_typed_queries_macros::{query, sql, statement, table};
+
+#[doc(hidden)]
+pub use static_typed_queries_macros::__query_sql;
 
 #[cfg(feature = "parse-check")]
 pub use static_typed_queries_core::check;
@@ -37,7 +40,7 @@ pub mod prelude {
     pub use crate::dialect::Postgres;
     #[cfg(feature = "sqlite")]
     pub use crate::dialect::Sqlite;
-    pub use crate::{Build, Sql, Statement, query, statement, table};
+    pub use crate::{Build, Sql, Statement, query, sql, statement, table};
 }
 
 #[doc(hidden)]

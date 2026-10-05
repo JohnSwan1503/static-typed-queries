@@ -6,7 +6,7 @@ mod naming;
 mod template;
 
 use proc_macro::TokenStream;
-use syn::{ItemStruct, parse_macro_input};
+use syn::{ItemConst, ItemStruct, parse_macro_input};
 
 /// Declares a database table that [`query`] templates can reference as `{Type}`.
 ///
@@ -133,7 +133,8 @@ pub fn table(args: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// The dialect type comes first, followed by any of these in any order:
 ///
-/// - `sql = "..."` (required): the template, described below.
+/// - `sql = "..."` or `sql = NAME` (required): the template, described below,
+///   written inline or taken from a constant declared with [`sql`].
 /// - `name = "..."`: the name this query goes by when another query embeds
 ///   it, as a CTE name or a subquery alias. Defaults to the struct name in
 ///   snake case.
@@ -321,9 +322,22 @@ pub fn table(args: TokenStream, item: TokenStream) -> TokenStream {
 /// ```
 #[proc_macro_attribute]
 pub fn query(args: TokenStream, item: TokenStream) -> TokenStream {
+    let tokens = proc_macro2::TokenStream::from(args.clone());
     let args = parse_macro_input!(args as args::Args);
     let item = parse_macro_input!(item as ItemStruct);
+    if let Some(args::Sql::Named(name)) = &args.sql {
+        return expand::named(name, tokens, &item).into();
+    }
     expand::query(args, item)
+        .unwrap_or_else(|error| error.to_compile_error())
+        .into()
+}
+
+#[doc(hidden)]
+#[proc_macro]
+pub fn __query_sql(input: TokenStream) -> TokenStream {
+    let named = parse_macro_input!(input as args::NamedQuery);
+    expand::named_query(named)
         .unwrap_or_else(|error| error.to_compile_error())
         .into()
 }
@@ -367,6 +381,56 @@ pub fn statement(args: TokenStream, item: TokenStream) -> TokenStream {
     let args = parse_macro_input!(args as args::Args);
     let item = parse_macro_input!(item as ItemStruct);
     expand::statement(args, item)
+        .unwrap_or_else(|error| error.to_compile_error())
+        .into()
+}
+
+/// Declares a SQL template as a `&str` constant that [`query`] takes as
+/// `sql = NAME`, so several queries can share one template, such as one per
+/// dialect.
+///
+/// ```
+/// use static_typed_queries::prelude::*;
+///
+/// #[sql]
+/// pub const BY_ORG: &str = "SELECT id FROM {Users} WHERE org_id = {org_id: i64}";
+///
+/// mod pg {
+///     use static_typed_queries::prelude::*;
+///
+///     #[table(Postgres, name = "users")]
+///     pub struct Users;
+///
+///     #[query(Postgres, sql = super::BY_ORG)]
+///     pub struct ByOrg;
+/// }
+///
+/// mod my {
+///     use static_typed_queries::prelude::*;
+///
+///     #[table(MySql, name = "users")]
+///     pub struct Users;
+///
+///     #[query(MySql, sql = super::BY_ORG)]
+///     pub struct ByOrg;
+/// }
+///
+/// # fn main() {
+/// assert_eq!(pg::ByOrg::SQL, r#"SELECT id FROM "users" WHERE org_id = $1"#);
+/// assert_eq!(my::ByOrg::SQL, "SELECT id FROM `users` WHERE org_id = ?");
+/// # }
+/// ```
+///
+/// Names in the template, such as `{Users}` above, resolve where each query
+/// is declared. The constant stays a plain `&str`. `sql = NAME` works through
+/// any path to it within the crate that declares it, such as
+/// `crate::queries::BY_ORG`, but not from other crates. A plain `const` can't
+/// be a query's template, because `#[query]` reads the template before
+/// constants have values.
+#[proc_macro_attribute]
+pub fn sql(args: TokenStream, item: TokenStream) -> TokenStream {
+    let item = parse_macro_input!(item as ItemConst);
+    expand::sql(args.into(), item)
         .unwrap_or_else(|error| error.to_compile_error())
         .into()
 }

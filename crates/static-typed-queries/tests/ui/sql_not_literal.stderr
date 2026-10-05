@@ -1,0 +1,11 @@
+error: `#[sql]` needs the template as a string literal, since `#[query]` reads it before constants have values
+ --> tests/ui/sql_not_literal.rs:4:26
+  |
+4 | pub const JOINED: &str = concat!("SELECT ", "1");
+  |                          ^^^^^^^^^^^^^^^^^^^^^^^
+
+error: `#[sql]` declares a `&str` constant
+ --> tests/ui/sql_not_literal.rs:7:18
+  |
+7 | pub const COUNT: i64 = 1;
+  |                  ^^^

@@ -1,0 +1,7 @@
+error: cannot find macro `ONE` in this scope
+ --> tests/ui/sql_plain_const.rs:5:25
+  |
+5 | #[query(Postgres, sql = ONE)]
+  |                         ^^^
+  |
+  = note: `ONE` is in scope, but it is a constant, not a macro

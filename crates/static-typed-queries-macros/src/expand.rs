@@ -1,13 +1,14 @@
 use proc_macro2::{Literal, Span, TokenStream};
 use quote::{ToTokens, format_ident, quote, quote_spanned};
+use syn::ext::IdentExt;
 use syn::spanned::Spanned;
 use syn::{
-    Field, Fields, GenericArgument, GenericParam, Generics, Ident, ItemStruct, LitStr,
-    PathArguments, Type, parse_quote,
+    Expr, ExprLit, Field, Fields, GenericArgument, GenericParam, Generics, Ident, ItemConst,
+    ItemStruct, Lit, LitStr, Path, PathArguments, Type, Visibility, parse_quote,
 };
 
 use crate::analyze::{self, Analysis, Columns, Engine, Kind};
-use crate::args::{Args, Placement};
+use crate::args::{Args, NamedQuery, Placement, Sql};
 use crate::docs;
 use crate::naming::{camel, field_name, short_name, snake_case, to_ident, unique};
 use crate::template::{self, Segment, Template};
@@ -173,10 +174,16 @@ pub(crate) fn query(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
             "only type parameters are supported on queries",
         ));
     }
-    let sql = args
-        .sql
-        .as_ref()
-        .ok_or_else(|| syn::Error::new(Span::call_site(), "queries need `sql = \"...\"`"))?;
+    let sql = match &args.sql {
+        Some(Sql::Inline(sql)) => sql,
+        Some(Sql::Named(_)) => unreachable!("named templates expand through their macro"),
+        None => {
+            return Err(syn::Error::new(
+                Span::call_site(),
+                "queries need `sql = \"...\"` or `sql = NAME`",
+            ));
+        }
+    };
     no_hooks(&args)?;
     let template = template::parse(sql)?;
     let engine = Engine::of(&args.dialect, args.grammar.as_ref(), &item.generics)?;
@@ -313,6 +320,78 @@ pub(crate) fn query(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
         #statement
         #fmt
         #(#wrappers)*
+    })
+}
+
+pub(crate) fn named(name: &Path, args: TokenStream, item: &ItemStruct) -> TokenStream {
+    quote!(#name! { (#args) #item })
+}
+
+pub(crate) fn named_query(named: NamedQuery) -> syn::Result<TokenStream> {
+    let NamedQuery {
+        sql,
+        mut args,
+        item,
+    } = named;
+    let used = match args.sql.replace(Sql::Inline(sql)) {
+        Some(Sql::Named(name)) => Some(quote!(const _: &str = #name;)),
+        _ => None,
+    };
+    let query = query(args, item)?;
+    Ok(quote!(#used #query))
+}
+
+pub(crate) fn sql(args: TokenStream, item: ItemConst) -> syn::Result<TokenStream> {
+    if !args.is_empty() {
+        return Err(syn::Error::new_spanned(args, "`#[sql]` takes no arguments"));
+    }
+    if !item.generics.params.is_empty() {
+        return Err(syn::Error::new_spanned(
+            &item.generics,
+            "`#[sql]` constants can't be generic",
+        ));
+    }
+    let is_str = matches!(
+        &*item.ty,
+        Type::Reference(reference) if reference.mutability.is_none()
+            && matches!(&*reference.elem, Type::Path(path) if path.qself.is_none() && path.path.is_ident("str"))
+    );
+    if !is_str {
+        return Err(syn::Error::new_spanned(
+            &item.ty,
+            "`#[sql]` declares a `&str` constant",
+        ));
+    }
+    let Expr::Lit(ExprLit {
+        lit: Lit::Str(sql), ..
+    }) = &*item.expr
+    else {
+        return Err(syn::Error::new_spanned(
+            &item.expr,
+            "`#[sql]` needs the template as a string literal, since `#[query]` reads it before constants have values",
+        ));
+    };
+    let ident = &item.ident;
+    let hidden = format_ident!("__stq_sql_{}", ident.unraw());
+    let vis = match &item.vis {
+        Visibility::Inherited => None,
+        Visibility::Public(_) => Some(quote!(pub(crate))),
+        Visibility::Restricted(restricted) => Some(quote!(#restricted)),
+    };
+    Ok(quote! {
+        #item
+
+        #[doc(hidden)]
+        #[allow(unused_macros)]
+        macro_rules! #hidden {
+            ($($tokens:tt)*) => {
+                ::static_typed_queries::__query_sql! { #sql $($tokens)* }
+            };
+        }
+
+        #[doc(hidden)]
+        #[allow(unused_imports)]
+        #vis use #hidden as #ident;
     })
 }
 
