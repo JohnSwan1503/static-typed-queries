@@ -2,7 +2,7 @@ use sqlx::Database;
 use sqlx::error::BoxDynError;
 
 use super::bind::Bind;
-use super::hook::Hook;
+use super::command::Command;
 use crate::dialect::driver::{self, Arguments, Driver};
 use crate::hooks::HookValues;
 use crate::sql::Sql;
@@ -27,11 +27,11 @@ impl<DB: Database, T: Valueless> BindParams<DB> for T {
 }
 
 pub trait BindHooks<DB: Database> {
-    fn values(&self, hook: &Hook) -> Option<&dyn BindParams<DB>>;
+    fn values(&self, hook: &Command) -> Option<&dyn BindParams<DB>>;
 }
 
 impl<DB: Database> BindHooks<DB> for () {
-    fn values(&self, _: &Hook) -> Option<&dyn BindParams<DB>> {
+    fn values(&self, _: &Command) -> Option<&dyn BindParams<DB>> {
         None
     }
 }
@@ -39,7 +39,7 @@ impl<DB: Database> BindHooks<DB> for () {
 impl<DB: Database, H: Sql + BindParams<DB>, Rest: BindHooks<DB>> BindHooks<DB>
     for (HookValues<H>, Rest)
 {
-    fn values(&self, hook: &Hook) -> Option<&dyn BindParams<DB>> {
+    fn values(&self, hook: &Command) -> Option<&dyn BindParams<DB>> {
         if hook.fingerprint() == H::NODE.fingerprint && hook.name() == H::NODE.name {
             Some(&self.0.0)
         } else {

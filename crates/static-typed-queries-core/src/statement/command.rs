@@ -4,21 +4,21 @@ use crate::node::name::Name;
 use super::bind::Bind;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct Hook {
+pub struct Command {
     name: Name,
     fingerprint: Fingerprint,
     sql: &'static str,
     binds: &'static [Bind],
 }
 
-impl Hook {
+impl Command {
     pub(crate) const fn new(
         name: Name,
         fingerprint: Fingerprint,
         sql: &'static str,
         binds: &'static [Bind],
-    ) -> Hook {
-        Hook {
+    ) -> Command {
+        Command {
             name,
             fingerprint,
             sql,

@@ -3,11 +3,11 @@ use core::marker::PhantomData;
 use sqlx::{FromRow, SqlStr};
 
 use super::Rows;
-use super::hook::Hook;
+use super::command::Command;
 use super::params::{BindHooks, BindParams, arguments};
 use crate::dialect::driver::{Connection, Database, Driver, Query, QueryAs, Row};
 
-pub fn query<'q, D, P>(values: &P, statement: &Hook) -> Result<Query<'q, D>, sqlx::Error>
+pub fn query<'q, D, P>(values: &P, statement: &Command) -> Result<Query<'q, D>, sqlx::Error>
 where
     D: Driver,
     P: BindParams<Database<D>> + ?Sized,
@@ -16,7 +16,10 @@ where
     Ok(sqlx::query_with(SqlStr::from_static(statement.sql()), args))
 }
 
-pub fn query_as<'q, D, O, P>(values: &P, statement: &Hook) -> Result<QueryAs<'q, D, O>, sqlx::Error>
+pub fn query_as<'q, D, O, P>(
+    values: &P,
+    statement: &Command,
+) -> Result<QueryAs<'q, D, O>, sqlx::Error>
 where
     D: Driver,
     O: for<'r> FromRow<'r, Row<D>>,
@@ -40,7 +43,7 @@ pub trait Fetch<D: Driver> {
 
     fn fetch<P: BindParams<Database<D>> + ?Sized>(
         values: &P,
-        statement: &Hook,
+        statement: &Command,
         conn: &mut Connection<D>,
     ) -> impl Future<Output = Result<Self::Output, sqlx::Error>>;
 }
@@ -50,7 +53,7 @@ impl<D: Driver> Fetch<D> for Affected {
 
     fn fetch<P: BindParams<Database<D>> + ?Sized>(
         values: &P,
-        statement: &Hook,
+        statement: &Command,
         conn: &mut Connection<D>,
     ) -> impl Future<Output = Result<u64, sqlx::Error>> {
         let query = query::<D, P>(values, statement);
@@ -67,7 +70,7 @@ where
 
     fn fetch<P: BindParams<Database<D>> + ?Sized>(
         values: &P,
-        statement: &Hook,
+        statement: &Command,
         conn: &mut Connection<D>,
     ) -> impl Future<Output = Result<Vec<T>, sqlx::Error>> {
         let query = query_as::<D, T, P>(values, statement);
@@ -86,7 +89,7 @@ where
 
     fn fetch<P: BindParams<Database<D>> + ?Sized>(
         values: &P,
-        statement: &Hook,
+        statement: &Command,
         conn: &mut Connection<D>,
     ) -> impl Future<Output = Result<T, sqlx::Error>> {
         let query = query_as::<D, T, P>(values, statement);
@@ -105,7 +108,7 @@ where
 
     fn fetch<P: BindParams<Database<D>> + ?Sized>(
         values: &P,
-        statement: &Hook,
+        statement: &Command,
         conn: &mut Connection<D>,
     ) -> impl Future<Output = Result<Option<T>, sqlx::Error>> {
         let query = query_as::<D, T, P>(values, statement);
@@ -132,7 +135,7 @@ pub type Output<S, D> = <<S as Step>::Fetch as Fetch<D>>::Output;
 
 pub async fn step<D, F, P>(
     values: &P,
-    statement: &Hook,
+    statement: &Command,
     conn: &mut Connection<D>,
 ) -> Result<F::Output, sqlx::Error>
 where
@@ -145,7 +148,7 @@ where
 
 pub async fn hooks<D, V>(
     values: &V,
-    hooks: &[Hook],
+    hooks: &[Command],
     conn: &mut Connection<D>,
 ) -> Result<(), sqlx::Error>
 where

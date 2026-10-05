@@ -21,7 +21,7 @@ use static_typed_queries_core::part::param::Param;
 use static_typed_queries_core::part::target::Target;
 use static_typed_queries_core::sql::Sql;
 use static_typed_queries_core::statement::Statement;
-use static_typed_queries_core::statement::hook::Hook;
+use static_typed_queries_core::statement::command::Command;
 use static_typed_queries_core::transaction::Transaction;
 
 const SET_TENANT: &Node = node!(
@@ -154,14 +154,14 @@ impl Sql for Report {
 
 impl_transaction!(Report);
 
-fn sql(statements: &[Hook]) -> Vec<(&str, &str)> {
+fn sql(statements: &[Command]) -> Vec<(&str, &str)> {
     statements
         .iter()
         .map(|statement| (statement.name().as_str(), statement.sql()))
         .collect()
 }
 
-fn paths(statement: &Hook) -> Vec<Vec<u16>> {
+fn paths(statement: &Command) -> Vec<Vec<u16>> {
     statement
         .binds()
         .iter()

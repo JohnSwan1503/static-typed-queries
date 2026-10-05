@@ -1,7 +1,7 @@
 pub use static_typed_queries_core::builder::{Build, Finish};
 pub use static_typed_queries_core::hooks::HookValues;
 pub use static_typed_queries_core::sql::Sql;
-pub use static_typed_queries_core::statement::hook::Hook;
+pub use static_typed_queries_core::statement::command::Command;
 pub use static_typed_queries_core::statement::{Rows, Statement};
 pub use static_typed_queries_core::transaction::Transaction;
 pub use static_typed_queries_core::values::{Valueless, Values};

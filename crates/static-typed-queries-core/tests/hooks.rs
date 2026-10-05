@@ -108,7 +108,7 @@ root!(BigOpenOrders: Postgres = node!(
     items = [OPEN_ORDERS, ORDERS]
 ));
 
-fn sql(hooks: &[static_typed_queries_core::statement::hook::Hook]) -> Vec<(&str, &str)> {
+fn sql(hooks: &[static_typed_queries_core::statement::command::Command]) -> Vec<(&str, &str)> {
     hooks
         .iter()
         .map(|hook| (hook.name().as_str(), hook.sql()))

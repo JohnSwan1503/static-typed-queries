@@ -1,10 +1,10 @@
 use crate::sql::Sql;
-use crate::statement::hook::Hook;
+use crate::statement::command::Command;
 
 pub trait Transaction: Sql {
-    const STEPS: &'static [Hook];
-    const BEFORE: &'static [Hook];
-    const AFTER: &'static [Hook];
+    const STEPS: &'static [Command];
+    const BEFORE: &'static [Command];
+    const AFTER: &'static [Command];
 }
 
 #[macro_export]
@@ -13,15 +13,15 @@ macro_rules! impl_transaction {
         $crate::impl_render!($ty);
 
         impl $crate::transaction::Transaction for $ty {
-            const STEPS: &'static [$crate::statement::hook::Hook] =
+            const STEPS: &'static [$crate::statement::command::Command] =
                 <$ty as $crate::render::Render>::OUTPUT.steps();
-            const BEFORE: &'static [$crate::statement::hook::Hook] =
+            const BEFORE: &'static [$crate::statement::command::Command] =
                 <$ty as $crate::render::Render>::OUTPUT.before();
-            const AFTER: &'static [$crate::statement::hook::Hook] =
+            const AFTER: &'static [$crate::statement::command::Command] =
                 <$ty as $crate::render::Render>::OUTPUT.after();
         }
 
-        const _: &[$crate::statement::hook::Hook] =
+        const _: &[$crate::statement::command::Command] =
             <$ty as $crate::transaction::Transaction>::STEPS;
     };
 }

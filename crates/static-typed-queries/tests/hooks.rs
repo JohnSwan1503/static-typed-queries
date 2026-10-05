@@ -90,7 +90,7 @@ fn hooks_bind_their_own_parameters() {
 
 #[test]
 fn each_hook_runs_once_per_statement() {
-    let names = |hooks: &[static_typed_queries::Hook]| -> Vec<&str> {
+    let names = |hooks: &[static_typed_queries::Command]| -> Vec<&str> {
         hooks.iter().map(|hook| hook.name().as_str()).collect()
     };
     assert_eq!(names(BigOrderRows::BEFORE), ["set_tenant"]);

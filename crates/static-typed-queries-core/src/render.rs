@@ -6,7 +6,7 @@ use crate::node::Node;
 use crate::node::fingerprint::Fingerprint;
 use crate::node::name::Name;
 use crate::statement::bind::Bind;
-use crate::statement::hook::Hook;
+use crate::statement::command::Command;
 use renderer::Renderer;
 
 pub use renderer::{check_hooks, hooked};
@@ -58,8 +58,8 @@ pub struct Rendered<const S: usize, const B: usize, const N: usize> {
 }
 
 impl<const S: usize, const B: usize, const N: usize> Rendered<S, B, N> {
-    pub const fn statements(&'static self) -> [Hook; N] {
-        let mut statements = [Hook::new(Name::EMPTY, Fingerprint::EMPTY, "", &[]); N];
+    pub const fn statements(&'static self) -> [Command; N] {
+        let mut statements = [Command::new(Name::EMPTY, Fingerprint::EMPTY, "", &[]); N];
         let mut start = Offsets::EMPTY;
         let mut i = 0;
         while i < N {
@@ -70,7 +70,7 @@ impl<const S: usize, const B: usize, const N: usize> Rendered<S, B, N> {
                 Err(_) => panic!("rendered SQL isn't valid UTF-8"),
             };
             let binds = self.binds.split_at(end.binds).0.split_at(start.binds).1;
-            statements[i] = Hook::new(end.name, end.fingerprint, sql, binds);
+            statements[i] = Command::new(end.name, end.fingerprint, sql, binds);
             start = end;
             i += 1;
         }
@@ -88,13 +88,13 @@ impl<const S: usize, const B: usize, const N: usize> Rendered<S, B, N> {
 
 #[derive(Clone, Copy, Debug)]
 pub struct Output {
-    statements: &'static [Hook],
+    statements: &'static [Command],
     before: usize,
     steps: usize,
 }
 
 impl Output {
-    pub const fn new(statements: &'static [Hook], before: usize, steps: usize) -> Output {
+    pub const fn new(statements: &'static [Command], before: usize, steps: usize) -> Output {
         Output {
             statements,
             before,
@@ -102,15 +102,15 @@ impl Output {
         }
     }
 
-    pub const fn main(&self) -> Hook {
+    pub const fn main(&self) -> Command {
         self.statements[self.before]
     }
 
-    pub const fn before(&self) -> &'static [Hook] {
+    pub const fn before(&self) -> &'static [Command] {
         self.statements.split_at(self.before).0
     }
 
-    pub const fn steps(&self) -> &'static [Hook] {
+    pub const fn steps(&self) -> &'static [Command] {
         self.statements
             .split_at(self.before + self.steps)
             .0
@@ -118,7 +118,7 @@ impl Output {
             .1
     }
 
-    pub const fn after(&self) -> &'static [Hook] {
+    pub const fn after(&self) -> &'static [Command] {
         self.statements.split_at(self.before + self.steps).1
     }
 }
@@ -174,7 +174,7 @@ macro_rules! impl_render {
                 > = $crate::render::render::<<$ty as $crate::sql::Sql>::Dialect, _, _, _>(
                     <$ty as $crate::sql::Sql>::NODE,
                 );
-                const STATEMENTS: [$crate::statement::hook::Hook;
+                const STATEMENTS: [$crate::statement::command::Command;
                     <$ty as $crate::render::Render>::SIZE.statements()] = RENDERED.statements();
                 $crate::render::Output::new(&STATEMENTS, RENDERED.before(), RENDERED.steps())
             };

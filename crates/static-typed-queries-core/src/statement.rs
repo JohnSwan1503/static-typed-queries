@@ -1,5 +1,5 @@
 pub mod bind;
-pub mod hook;
+pub mod command;
 #[cfg(feature = "sqlx")]
 pub mod params;
 #[cfg(feature = "sqlx")]
@@ -12,15 +12,15 @@ use crate::hooks::Single;
 use crate::render::Render;
 use crate::sql::Sql;
 use bind::Bind;
-use hook::Hook;
+use command::Command;
 #[cfg(feature = "sqlx")]
 use params::BindParams;
 
 pub trait Statement: Sql {
     const SQL: &'static str;
     const BINDS: &'static [Bind];
-    const BEFORE: &'static [Hook];
-    const AFTER: &'static [Hook];
+    const BEFORE: &'static [Command];
+    const AFTER: &'static [Command];
 }
 
 pub trait SingleRef {}
@@ -83,9 +83,9 @@ macro_rules! impl_statement {
             const SQL: &'static str = <$ty as $crate::render::Render>::OUTPUT.main().sql();
             const BINDS: &'static [$crate::statement::bind::Bind] =
                 <$ty as $crate::render::Render>::OUTPUT.main().binds();
-            const BEFORE: &'static [$crate::statement::hook::Hook] =
+            const BEFORE: &'static [$crate::statement::command::Command] =
                 <$ty as $crate::render::Render>::OUTPUT.before();
-            const AFTER: &'static [$crate::statement::hook::Hook] =
+            const AFTER: &'static [$crate::statement::command::Command] =
                 <$ty as $crate::render::Render>::OUTPUT.after();
         }
 
