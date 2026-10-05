@@ -54,7 +54,7 @@ note: erroneous constant encountered
 13 | root!(UsersStatement: Postgres = USERS);
    | --------------------------------------- in this macro invocation
    |
-   = note: this note originates in the macro `static_typed_queries_core::impl_statement` which comes from the expansion of the macro `root` (in Nightly builds, run with -Z macro-backtrace for more info)
+   = note: this note originates in the macro `$crate::impl_render` which comes from the expansion of the macro `root` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 note: erroneous constant encountered
   --> tests/ui/../support/mod.rs
@@ -67,7 +67,7 @@ note: erroneous constant encountered
 13 | root!(UsersStatement: Postgres = USERS);
    | --------------------------------------- in this macro invocation
    |
-   = note: this note originates in the macro `static_typed_queries_core::impl_statement` which comes from the expansion of the macro `root` (in Nightly builds, run with -Z macro-backtrace for more info)
+   = note: this note originates in the macro `$crate::impl_render` which comes from the expansion of the macro `root` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 note: erroneous constant encountered
   --> tests/ui/../support/mod.rs
@@ -80,7 +80,7 @@ note: erroneous constant encountered
 13 | root!(UsersStatement: Postgres = USERS);
    | --------------------------------------- in this macro invocation
    |
-   = note: this note originates in the macro `static_typed_queries_core::impl_statement` which comes from the expansion of the macro `root` (in Nightly builds, run with -Z macro-backtrace for more info)
+   = note: this note originates in the macro `$crate::impl_render` which comes from the expansion of the macro `root` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 note: erroneous constant encountered
   --> tests/ui/../support/mod.rs
@@ -93,4 +93,4 @@ note: erroneous constant encountered
 13 | root!(UsersStatement: Postgres = USERS);
    | --------------------------------------- in this macro invocation
    |
-   = note: this note originates in the macro `static_typed_queries_core::impl_statement` which comes from the expansion of the macro `root` (in Nightly builds, run with -Z macro-backtrace for more info)
+   = note: this note originates in the macro `$crate::impl_render` which comes from the expansion of the macro `root` (in Nightly builds, run with -Z macro-backtrace for more info)

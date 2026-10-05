@@ -62,26 +62,7 @@ pub trait Rows: Statement {
 #[macro_export]
 macro_rules! impl_statement {
     ($($ty:ty),+ $(,)?) => {$(
-        impl $crate::render::Render for $ty {
-            const SIZE: $crate::render::Size = $crate::render::measure::<
-                <$ty as $crate::sql::Sql>::Dialect,
-            >(<$ty as $crate::sql::Sql>::NODE);
-            const OUTPUT: $crate::render::Output = {
-                const RENDERED: $crate::render::Rendered<
-                    { <$ty as $crate::render::Render>::SIZE.sql },
-                    { <$ty as $crate::render::Render>::SIZE.binds },
-                    { <$ty as $crate::render::Render>::SIZE.statements() },
-                > = $crate::render::render::<<$ty as $crate::sql::Sql>::Dialect, _, _, _>(
-                    <$ty as $crate::sql::Sql>::NODE,
-                );
-                const STATEMENTS: [$crate::statement::hook::Hook;
-                    <$ty as $crate::render::Render>::SIZE.statements()] = RENDERED.statements();
-                $crate::render::Output::new(&STATEMENTS, RENDERED.before(), RENDERED.steps())
-            };
-            type Hooks = <$crate::hooks::HookFlag<
-                { $crate::render::hooked(<$ty as $crate::sql::Sql>::NODE) },
-            > as $crate::hooks::HookState>::Out;
-        }
+        $crate::impl_render!($ty);
 
         impl $crate::statement::Statement for $ty {
             const SQL: &'static str = <$ty as $crate::render::Render>::OUTPUT.main().sql();

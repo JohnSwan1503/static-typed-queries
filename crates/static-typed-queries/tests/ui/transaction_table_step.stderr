@@ -41,7 +41,7 @@ note: erroneous constant encountered
 6 | #[transaction(Postgres, steps(Orders))]
   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
   |
-  = note: this note originates in the macro `__stq::impl_transaction` which comes from the expansion of the attribute macro `transaction` (in Nightly builds, run with -Z macro-backtrace for more info)
+  = note: this note originates in the macro `$crate::impl_render` which comes from the expansion of the attribute macro `transaction` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 note: erroneous constant encountered
  --> tests/ui/transaction_table_step.rs:6:1
@@ -49,7 +49,7 @@ note: erroneous constant encountered
 6 | #[transaction(Postgres, steps(Orders))]
   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
   |
-  = note: this note originates in the macro `__stq::impl_transaction` which comes from the expansion of the attribute macro `transaction` (in Nightly builds, run with -Z macro-backtrace for more info)
+  = note: this note originates in the macro `$crate::impl_render` which comes from the expansion of the attribute macro `transaction` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 note: erroneous constant encountered
  --> tests/ui/transaction_table_step.rs:6:1
@@ -57,7 +57,7 @@ note: erroneous constant encountered
 6 | #[transaction(Postgres, steps(Orders))]
   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
   |
-  = note: this note originates in the macro `__stq::impl_transaction` which comes from the expansion of the attribute macro `transaction` (in Nightly builds, run with -Z macro-backtrace for more info)
+  = note: this note originates in the macro `$crate::impl_render` which comes from the expansion of the attribute macro `transaction` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 note: erroneous constant encountered
  --> tests/ui/transaction_table_step.rs:6:1
@@ -65,4 +65,4 @@ note: erroneous constant encountered
 6 | #[transaction(Postgres, steps(Orders))]
   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
   |
-  = note: this note originates in the macro `__stq::impl_transaction` which comes from the expansion of the attribute macro `transaction` (in Nightly builds, run with -Z macro-backtrace for more info)
+  = note: this note originates in the macro `$crate::impl_render` which comes from the expansion of the attribute macro `transaction` (in Nightly builds, run with -Z macro-backtrace for more info)

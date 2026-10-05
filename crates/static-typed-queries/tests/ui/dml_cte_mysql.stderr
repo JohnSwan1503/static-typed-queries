@@ -53,7 +53,7 @@ note: erroneous constant encountered
 9 | #[query(MySql, sql = "SELECT count(*) FROM {purged}")]
   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
   |
-  = note: this note originates in the macro `__stq::impl_statement` which comes from the expansion of the attribute macro `query` (in Nightly builds, run with -Z macro-backtrace for more info)
+  = note: this note originates in the macro `$crate::impl_render` which comes from the expansion of the attribute macro `query` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 note: erroneous constant encountered
  --> tests/ui/dml_cte_mysql.rs:9:1
@@ -61,7 +61,7 @@ note: erroneous constant encountered
 9 | #[query(MySql, sql = "SELECT count(*) FROM {purged}")]
   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
   |
-  = note: this note originates in the macro `__stq::impl_statement` which comes from the expansion of the attribute macro `query` (in Nightly builds, run with -Z macro-backtrace for more info)
+  = note: this note originates in the macro `$crate::impl_render` which comes from the expansion of the attribute macro `query` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 note: erroneous constant encountered
  --> tests/ui/dml_cte_mysql.rs:9:1
@@ -69,7 +69,7 @@ note: erroneous constant encountered
 9 | #[query(MySql, sql = "SELECT count(*) FROM {purged}")]
   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
   |
-  = note: this note originates in the macro `__stq::impl_statement` which comes from the expansion of the attribute macro `query` (in Nightly builds, run with -Z macro-backtrace for more info)
+  = note: this note originates in the macro `$crate::impl_render` which comes from the expansion of the attribute macro `query` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 note: erroneous constant encountered
  --> tests/ui/dml_cte_mysql.rs:9:1
@@ -77,4 +77,4 @@ note: erroneous constant encountered
 9 | #[query(MySql, sql = "SELECT count(*) FROM {purged}")]
   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
   |
-  = note: this note originates in the macro `__stq::impl_statement` which comes from the expansion of the attribute macro `query` (in Nightly builds, run with -Z macro-backtrace for more info)
+  = note: this note originates in the macro `$crate::impl_render` which comes from the expansion of the attribute macro `query` (in Nightly builds, run with -Z macro-backtrace for more info)

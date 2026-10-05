@@ -25,7 +25,8 @@ pub use crate::statement::{Rows, Statement};
 pub use crate::transaction::Transaction;
 pub use crate::values::{Valueless, Values, valueless};
 pub use crate::{
-    __if_parse_check, __if_sqlx, impl_debug, impl_display, impl_statement, impl_transaction,
+    __if_parse_check, __if_sqlx, impl_debug, impl_display, impl_render, impl_statement,
+    impl_transaction,
 };
 
 #[cfg(feature = "parse-check")]
