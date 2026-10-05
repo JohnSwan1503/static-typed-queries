@@ -9,7 +9,7 @@ use crate::emit::builder::builder;
 use crate::emit::checks::{embeds, hook_needs, step_impl, values};
 use crate::emit::docs::{self, item_docs};
 use crate::emit::fmt::fmt;
-use crate::emit::node::{fingerprint, node};
+use crate::emit::node::node;
 use crate::emit::statement::statement;
 use crate::emit::{self, krate};
 use crate::model::fields;
@@ -91,10 +91,9 @@ pub(crate) fn expand(args: StatementArgs, mut input: ItemStruct) -> syn::Result<
         None => embeds(&input, &[], std::slice::from_ref(ty), &dialect),
     };
     let node = node(
+        &input,
         &snake_case(&ident.to_string()),
-        fingerprint(ident, &input),
-        quote!(Scope),
-        quote!(#krate::Inject::Subquery),
+        "Scope",
         Vec::new(),
         &[ty],
         [&[], &[]],

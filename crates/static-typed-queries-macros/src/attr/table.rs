@@ -8,7 +8,7 @@ use crate::emit::builder::builder;
 use crate::emit::checks::{embeds, hook_needs, step_impl, values};
 use crate::emit::docs::{self, item_docs};
 use crate::emit::fmt::fmt;
-use crate::emit::node::{fingerprint, node};
+use crate::emit::node::node;
 use crate::emit::{self, krate};
 use crate::model::role::Role;
 use crate::naming::push_unique;
@@ -96,10 +96,9 @@ pub(crate) fn expand(args: TableArgs, input: ItemStruct) -> syn::Result<TokenStr
     let hook_types: Vec<&Type> = before.iter().chain(&after).collect();
     let embeds = embeds(&input, &hook_types, &[], dialect);
     let node = node(
+        &input,
         node_name,
-        fingerprint(ident, &input),
-        quote!(Table),
-        quote!(#krate::Inject::Ident),
+        "Table",
         parts,
         &[],
         [&before, &after],

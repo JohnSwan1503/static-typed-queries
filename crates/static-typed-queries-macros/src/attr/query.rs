@@ -11,7 +11,7 @@ use crate::emit::builder::builder;
 use crate::emit::checks::{embeds, hook_needs, step_impl, values};
 use crate::emit::docs::item_docs;
 use crate::emit::fmt::fmt;
-use crate::emit::node::{fingerprint, node, parts};
+use crate::emit::node::{node, parts};
 use crate::emit::statement::statement;
 use crate::emit::{self, krate};
 use crate::model::fields;
@@ -156,9 +156,9 @@ pub(crate) fn expand(args: QueryArgs, mut input: ItemStruct) -> syn::Result<Toke
     }
     let row = args.row.as_ref();
     let kind = match analysis.kind {
-        Kind::Query => quote!(Query),
-        Kind::Dml => quote!(Dml),
-        Kind::Ddl => quote!(Ddl),
+        Kind::Query => "Query",
+        Kind::Dml => "Dml",
+        Kind::Ddl => "Ddl",
     };
 
     let items: Vec<&Type> = fields
@@ -181,10 +181,9 @@ pub(crate) fn expand(args: QueryArgs, mut input: ItemStruct) -> syn::Result<Toke
         .as_ref()
         .map_or_else(|| snake_case(&ident.to_string()), LitStr::value);
     let node = node(
+        &input,
         &node_name,
-        fingerprint(ident, &input),
         kind,
-        quote!(#krate::Inject::Subquery),
         parts(&template, &analysis, &fields),
         &items,
         [&[], &[]],

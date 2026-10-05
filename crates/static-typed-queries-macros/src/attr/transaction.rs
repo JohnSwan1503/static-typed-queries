@@ -8,7 +8,7 @@ use crate::emit::bind::bind_impl;
 use crate::emit::builder::builder;
 use crate::emit::checks::{embeds, hook_needs, values};
 use crate::emit::docs::item_docs;
-use crate::emit::node::{fingerprint, node, target};
+use crate::emit::node::{node, target};
 use crate::emit::run::transaction_methods;
 use crate::emit::{self, krate};
 use crate::model::fields::{self, Field};
@@ -106,10 +106,9 @@ pub(crate) fn expand(args: TransactionArgs, mut input: ItemStruct) -> syn::Resul
     let items: Vec<&Type> = fields.iter().map(|field| &field.ty).collect();
     let embeds = embeds(&input, &items, &types, dialect);
     let node = node(
+        &input,
         &snake_case(&ident.to_string()),
-        fingerprint(ident, &input),
-        quote!(Transaction),
-        quote!(#krate::Inject::Subquery),
+        "Transaction",
         parts,
         &items,
         [&[], &[]],

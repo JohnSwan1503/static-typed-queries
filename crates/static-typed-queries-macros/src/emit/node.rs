@@ -1,6 +1,6 @@
 use proc_macro2::{Literal, TokenStream};
-use quote::quote;
-use syn::{Ident, ItemStruct, Type};
+use quote::{format_ident, quote};
+use syn::{ItemStruct, Type};
 
 use crate::args::Placement;
 use crate::emit::docs::type_string;
@@ -9,17 +9,24 @@ use crate::model::fields::{self, Field};
 use crate::sql::analyze::Analysis;
 use crate::sql::template::{Segment, Template};
 
+// `kind` names a core `Kind`. A reference by type embeds a table by its name and anything else
+// as a subquery.
 pub(crate) fn node(
+    input: &ItemStruct,
     name: &str,
-    fingerprint: TokenStream,
-    kind: TokenStream,
-    inject: TokenStream,
+    kind: &str,
     parts: Vec<TokenStream>,
     items: &[&Type],
     [before, after]: [&[Type]; 2],
     checks: TokenStream,
 ) -> TokenStream {
     let krate = krate();
+    let fingerprint = fingerprint(input);
+    let inject = match kind {
+        "Table" => quote!(#krate::Inject::Ident),
+        _ => quote!(#krate::Inject::Subquery),
+    };
+    let kind = format_ident!("{kind}");
     quote! {
         {
             #checks
@@ -37,9 +44,9 @@ pub(crate) fn node(
     }
 }
 
-pub(crate) fn fingerprint(ident: &Ident, item: &ItemStruct) -> TokenStream {
+fn fingerprint(item: &ItemStruct) -> TokenStream {
     let krate = krate();
-    let path = format!("::{ident}");
+    let path = format!("::{}", item.ident);
     let mut fingerprint = quote! {
         #krate::Fingerprint::of(
             ::core::concat!(::core::module_path!(), #path)
