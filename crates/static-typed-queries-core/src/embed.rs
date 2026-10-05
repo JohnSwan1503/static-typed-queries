@@ -10,6 +10,18 @@ impl<D: Dialect> EmbedsIn<D> for D {}
 
 pub trait Checked {}
 
+// A query that modifies data implements this only for dialects that run such a query as a CTE.
+#[diagnostic::on_unimplemented(
+    message = "`{Self}` modifies data, which {D} doesn't allow in a CTE",
+    label = "modifies data",
+    note = "run it as a step of its own in a `#[transaction]`"
+)]
+pub trait CteIn<D: Dialect> {}
+
+pub trait DmlInCte: Dialect {}
+
 pub const fn embeds<D: Dialect, E: EmbedsIn<D>>() {}
 
 pub const fn checked<T: Checked>() {}
+
+pub const fn cte<D: Dialect, T: CteIn<D>>() {}

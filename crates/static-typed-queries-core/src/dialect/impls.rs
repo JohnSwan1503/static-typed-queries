@@ -1,4 +1,8 @@
 macro_rules! dialect {
+    (@dml_in_cte true $ty:ident) => {
+        impl crate::embed::DmlInCte for $ty {}
+    };
+    (@dml_in_cte false $ty:ident) => {};
     ($module:ident::$ty:ident {
         feature: $feature:literal,
         name: $name:literal,
@@ -6,7 +10,7 @@ macro_rules! dialect {
         prefix: $prefix:literal,
         numbered: $numbered:literal,
         quote: ($open:literal, $close:literal),
-        dml_in_cte: $dml_in_cte:literal,
+        dml_in_cte: $dml_in_cte:tt,
     }) => {
         #[cfg(any(test, feature = $feature))]
         pub mod $module {
@@ -31,6 +35,8 @@ macro_rules! dialect {
                     Box::new(sqlparser::dialect::$grammar {})
                 }
             }
+
+            dialect!(@dml_in_cte $dml_in_cte $ty);
 
             // sqlx names its databases like the dialects.
             #[cfg(feature = $feature)]

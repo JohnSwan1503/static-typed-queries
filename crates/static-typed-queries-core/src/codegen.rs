@@ -1,7 +1,8 @@
 pub use crate::builder::{
     And, Build, Built, Fill, Filled, Finish, Missing, Open, Ready, Root, Scope, Settled,
 };
-pub use crate::embed::{Checked, EmbedsIn, checked, embeds};
+pub use crate::dialect::Dialect;
+pub use crate::embed::{Checked, CteIn, DmlInCte, EmbedsIn, checked, cte, embeds};
 pub use crate::hooks::{HookNeeds, HookValues, Hooked, Provides, Single};
 pub use crate::node::Node;
 pub use crate::node::fingerprint::Fingerprint;

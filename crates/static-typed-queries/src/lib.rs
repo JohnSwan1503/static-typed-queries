@@ -21,7 +21,7 @@ pub mod state {
 
     // Not for use, but reachable outside `__private`, so rustc prints these short in errors.
     #[doc(hidden)]
-    pub use static_typed_queries_core::embed::{Checked, checked, embeds};
+    pub use static_typed_queries_core::embed::{Checked, CteIn, DmlInCte, checked, cte, embeds};
     #[doc(hidden)]
     pub use static_typed_queries_core::hooks::{
         Free, HasHooks, Here, HookNeeds, Hooked, Provides, Single, There, Unhooked,

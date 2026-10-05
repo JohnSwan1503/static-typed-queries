@@ -31,6 +31,22 @@ pub(crate) struct Template {
     pub origins: Vec<Origin>,
 }
 
+impl Template {
+    // The types embedded as CTEs by `{Type as cte}`.
+    pub(crate) fn ctes(&self) -> Vec<Type> {
+        let mut ctes = Vec::new();
+        for segment in &self.segments {
+            if let Segment::Ref(item) = segment
+                && item.item.is_none()
+                && matches!(item.placement, Some(Placement::Cte { .. }))
+            {
+                push_unique(&mut ctes, &item.ty);
+            }
+        }
+        ctes
+    }
+}
+
 pub(crate) enum Origin {
     Lit(Vec<usize>),
     Placeholder(Range<usize>),

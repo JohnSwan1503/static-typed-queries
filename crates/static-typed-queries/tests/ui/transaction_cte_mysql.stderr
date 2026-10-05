@@ -1,39 +1,17 @@
-error[E0080]: evaluation panicked: `purge` modifies data, which MySQL doesn't allow in a CTE
-  --> tests/ui/transaction_cte_mysql.rs:12:1
+error[E0277]: `Purge` modifies data, which static_typed_queries::dialect::MySql doesn't allow in a CTE
+  --> tests/ui/transaction_cte_mysql.rs:12:28
    |
 12 | #[transaction(MySql, steps(Purge as cte, OrderCount))]
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ evaluation of `_::<impl static_typed_queries::__private::render::Render for Sweep>::SIZE` failed here
+   |                            ^^^^^ modifies data
    |
-   = note: this error originates in the macro `$crate::impl_render` which comes from the expansion of the attribute macro `transaction` (in Nightly builds, run with -Z macro-backtrace for more info)
-
-note: erroneous constant encountered
-  --> tests/ui/transaction_cte_mysql.rs:12:1
+help: the trait `CteIn<static_typed_queries::dialect::MySql>` is not implemented for `Purge`
+  --> tests/ui/transaction_cte_mysql.rs:7:1
    |
-12 | #[transaction(MySql, steps(Purge as cte, OrderCount))]
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ 7 | pub struct Purge;
+   | ^^^^^^^^^^^^^^^^
+   = note: run it as a step of its own in a `#[transaction]`
+note: required by a bound in `cte`
+  --> $WORKSPACE/crates/static-typed-queries-core/src/embed.rs
    |
-   = note: this note originates in the macro `$crate::impl_render` which comes from the expansion of the attribute macro `transaction` (in Nightly builds, run with -Z macro-backtrace for more info)
-
-note: erroneous constant encountered
-  --> tests/ui/transaction_cte_mysql.rs:12:1
-   |
-12 | #[transaction(MySql, steps(Purge as cte, OrderCount))]
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-   |
-   = note: this note originates in the macro `$crate::impl_render` which comes from the expansion of the attribute macro `transaction` (in Nightly builds, run with -Z macro-backtrace for more info)
-
-note: erroneous constant encountered
-  --> tests/ui/transaction_cte_mysql.rs:12:1
-   |
-12 | #[transaction(MySql, steps(Purge as cte, OrderCount))]
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-   |
-   = note: this note originates in the macro `$crate::impl_render` which comes from the expansion of the attribute macro `transaction` (in Nightly builds, run with -Z macro-backtrace for more info)
-
-note: erroneous constant encountered
-  --> tests/ui/transaction_cte_mysql.rs:12:1
-   |
-12 | #[transaction(MySql, steps(Purge as cte, OrderCount))]
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-   |
-   = note: this note originates in the macro `$crate::impl_render` which comes from the expansion of the attribute macro `transaction` (in Nightly builds, run with -Z macro-backtrace for more info)
+   | pub const fn cte<D: Dialect, T: CteIn<D>>() {}
+   |                                 ^^^^^^^^ required by this bound in `cte`

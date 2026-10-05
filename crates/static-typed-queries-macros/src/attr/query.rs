@@ -8,7 +8,7 @@ use syn::{
 use crate::args::{self, Keys, Sql};
 use crate::emit::bind::bind_impl;
 use crate::emit::builder::builder;
-use crate::emit::checks::{embeds, hook_needs, step_impl, values};
+use crate::emit::checks::{CteRule, cte_in, embeds, hook_needs, step_impl, values};
 use crate::emit::docs::item_docs;
 use crate::emit::fmt::fmt;
 use crate::emit::node::{node, parts};
@@ -166,7 +166,21 @@ pub(crate) fn expand(args: QueryArgs, mut input: ItemStruct) -> syn::Result<Toke
         .filter(|field| field.is_item())
         .map(|field| &field.ty)
         .collect();
-    let embeds = embeds(&input, &items, &template.types, &args.dialect);
+    let by_type = template.ctes();
+    let ctes: Vec<&Type> = fields
+        .iter()
+        .filter(|field| field.is_cte())
+        .map(|field| &field.ty)
+        .chain(&by_type)
+        .collect();
+    let embeds = embeds(&input, &items, &template.types, &ctes, &args.dialect);
+    let cte_in = cte_in(
+        &input,
+        match analysis.kind {
+            Kind::Dml => CteRule::Modifies,
+            Kind::Query | Kind::Ddl => CteRule::Any,
+        },
+    );
     let mut referenced = Vec::new();
     for ty in items.iter().copied().chain(&template.types) {
         push_unique(&mut referenced, ty);
@@ -216,6 +230,7 @@ pub(crate) fn expand(args: QueryArgs, mut input: ItemStruct) -> syn::Result<Toke
 
         #values
         #checked
+        #cte_in
         #hook_needs
         #bind
         #builder

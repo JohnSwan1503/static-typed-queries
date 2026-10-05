@@ -5,7 +5,7 @@ use syn::{Fields, Ident, ItemStruct, LitStr, Type, parse_quote};
 
 use crate::args::{self, Keys};
 use crate::emit::builder::builder;
-use crate::emit::checks::{embeds, hook_needs, step_impl, values};
+use crate::emit::checks::{CteRule, cte_in, embeds, hook_needs, step_impl, values};
 use crate::emit::docs::{self, item_docs};
 use crate::emit::fmt::fmt;
 use crate::emit::node::node;
@@ -94,7 +94,8 @@ pub(crate) fn expand(args: TableArgs, input: ItemStruct) -> syn::Result<TokenStr
     let ident = &input.ident;
     let dialect = &args.dialect;
     let hook_types: Vec<&Type> = before.iter().chain(&after).collect();
-    let embeds = embeds(&input, &hook_types, &[], dialect);
+    let embeds = embeds(&input, &hook_types, &[], &[], dialect);
+    let cte_in = cte_in(&input, CteRule::Any);
     let node = node(
         &input,
         node_name,
@@ -137,6 +138,7 @@ pub(crate) fn expand(args: TableArgs, input: ItemStruct) -> syn::Result<TokenStr
         #values
         #built
         #checked
+        #cte_in
         #hook_needs
         #step
         #fmt

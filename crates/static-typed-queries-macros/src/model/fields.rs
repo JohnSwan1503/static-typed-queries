@@ -30,6 +30,10 @@ impl Field {
     pub(crate) fn is_item(&self) -> bool {
         matches!(self.kind, Kind::Item(_))
     }
+
+    pub(crate) fn is_cte(&self) -> bool {
+        matches!(self.kind, Kind::Item(Some(Placement::Cte { .. })))
+    }
 }
 
 // A query's fields are its bind values, except those marked `#[cte]`, `#[cte(recursive)]` or

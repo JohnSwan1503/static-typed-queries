@@ -6,7 +6,7 @@ use syn::{ItemStruct, Type, parse_quote};
 use crate::args::{self, Fetch, Keys, Step};
 use crate::emit::bind::bind_impl;
 use crate::emit::builder::builder;
-use crate::emit::checks::{embeds, hook_needs, values};
+use crate::emit::checks::{CteRule, cte_in, embeds, hook_needs, values};
 use crate::emit::docs::item_docs;
 use crate::emit::node::{node, target};
 use crate::emit::run::transaction_methods;
@@ -70,6 +70,7 @@ pub(crate) fn expand(args: TransactionArgs, mut input: ItemStruct) -> syn::Resul
     let mut types = Vec::new();
     let mut referenced = Vec::new();
     let mut parts = Vec::new();
+    let mut ctes = Vec::new();
     for (step, fetch) in &flat {
         let (item, ty) = match fields::resolve(step, &fields) {
             Some((index, field)) => {
@@ -82,6 +83,9 @@ pub(crate) fn expand(args: TransactionArgs, mut input: ItemStruct) -> syn::Resul
             }
         };
         push_unique(&mut referenced, ty);
+        if let Fetch::Cte = fetch {
+            ctes.push(ty);
+        }
         let step = target(item, ty);
         parts.push(match fetch {
             Fetch::Cte => quote! {
@@ -104,7 +108,8 @@ pub(crate) fn expand(args: TransactionArgs, mut input: ItemStruct) -> syn::Resul
         ));
     }
     let items: Vec<&Type> = fields.iter().map(|field| &field.ty).collect();
-    let embeds = embeds(&input, &items, &types, dialect);
+    let embeds = embeds(&input, &items, &types, &ctes, dialect);
+    let cte_in = cte_in(&input, CteRule::Any);
     let node = node(
         &input,
         &snake_case(&ident.to_string()),
@@ -135,6 +140,7 @@ pub(crate) fn expand(args: TransactionArgs, mut input: ItemStruct) -> syn::Resul
 
         #values
         #checked
+        #cte_in
         #hook_needs
         #bind
         #builder

@@ -7,8 +7,9 @@ use crate::emit::{krate, krate_path};
 use crate::naming::snake_case;
 
 // Every embedded item must speak the statement's dialect and pass its own checks; one that is
-// named by type rather than held in a field must hold no values. For a concrete item the checks
-// run inside its node, so a failing one stops the node from rendering too.
+// named by type rather than held in a field must hold no values, and one placed as a CTE must be
+// allowed there. For a concrete item the checks run inside its node, so a failing one stops the
+// node from rendering too.
 pub(crate) struct Embeds {
     pub(crate) checked: TokenStream,
     pub(crate) node: TokenStream,
@@ -18,6 +19,7 @@ pub(crate) fn embeds(
     item: &ItemStruct,
     fields: &[&Type],
     types: &[Type],
+    ctes: &[&Type],
     dialect: &Type,
 ) -> Embeds {
     let krate = krate();
@@ -34,7 +36,11 @@ pub(crate) fn embeds(
         let checks = fields
             .iter()
             .map(|ty| check(ty, false))
-            .chain(types.iter().map(|ty| check(ty, true)));
+            .chain(types.iter().map(|ty| check(ty, true)))
+            .chain(
+                ctes.iter()
+                    .map(|ty| quote!(#krate::cte::<#dialect, #ty>();)),
+            );
         return Embeds {
             checked: quote!(impl #krate::Checked for #ident {}),
             node: quote!(#(#checks)*),
@@ -51,12 +57,48 @@ pub(crate) fn embeds(
     for ty in types {
         clause.predicates.push(parse_quote!(#ty: #krate::Valueless));
     }
+    for ty in ctes {
+        clause
+            .predicates
+            .push(parse_quote!(#ty: #krate::CteIn<#dialect>));
+    }
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
     Embeds {
         checked: quote! {
             impl #impl_generics #krate::Checked for #ident #ty_generics #where_clause {}
         },
         node: TokenStream::new(),
+    }
+}
+
+// The dialects an item can be a CTE in: any, those that run data-modifying CTEs, or those its
+// target can be one in.
+pub(crate) enum CteRule<'a> {
+    Any,
+    Modifies,
+    Like(&'a Type),
+}
+
+pub(crate) fn cte_in(item: &ItemStruct, rule: CteRule) -> TokenStream {
+    let krate = krate();
+    let ident = &item.ident;
+    let mut generics = item.generics.clone();
+    let bound = match rule {
+        CteRule::Modifies => quote!(#krate::DmlInCte),
+        _ => quote!(#krate::Dialect),
+    };
+    generics.params.push(parse_quote!(__D: #bound));
+    if let CteRule::Like(target) = rule {
+        generics
+            .make_where_clause()
+            .predicates
+            .push(parse_quote!(#target: #krate::CteIn<__D>));
+    }
+    let (impl_generics, _, where_clause) = generics.split_for_impl();
+    let (_, ty_generics, _) = item.generics.split_for_impl();
+    quote! {
+        #[diagnostic::do_not_recommend]
+        impl #impl_generics #krate::CteIn<__D> for #ident #ty_generics #where_clause {}
     }
 }
 

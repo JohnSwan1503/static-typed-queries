@@ -12,4 +12,19 @@ pub struct PurgeCount {
     pub purged: Purged,
 }
 
+#[query(MySql, sql = "SELECT count(*) FROM {Purged as cte}")]
+pub struct ByType;
+
+#[query(T::Dialect, sql = "SELECT count(*) FROM {of}")]
+pub struct CountOf<T: Sql> {
+    #[cte]
+    pub of: T,
+}
+
+#[query(MySql, sql = "SELECT {count} AS n")]
+pub struct Counted {
+    #[subquery]
+    pub count: CountOf<Purged>,
+}
+
 fn main() {}
