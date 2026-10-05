@@ -10,7 +10,7 @@ use sqlparser::dialect::{Dialect, GenericDialect, MySqlDialect, PostgreSqlDialec
 use sqlparser::parser::Parser;
 use syn::{Generics, Ident, LitStr, Type};
 
-use crate::template::{Segment, Template};
+use crate::sql::template::{Segment, Template};
 
 const PARAM: &str = "__stq_p";
 const REF: &str = "__stq_r";
@@ -104,7 +104,7 @@ impl Engine {
             dialect,
             format!(
                 "can't tell which SQL grammar `{}` uses; add `grammar = postgres`, `mysql`, `sqlite` or `generic`",
-                crate::docs::type_string(dialect)
+                crate::emit::docs::type_string(dialect)
             ),
         ))
     }
