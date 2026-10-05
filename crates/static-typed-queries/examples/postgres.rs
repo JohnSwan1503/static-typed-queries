@@ -58,9 +58,7 @@ pub struct RecentActivity;
 
 fn main() {
     println!("-- a DELETE ... RETURNING embedded as a CTE:\n{PurgeSummary}\n");
-    let size = SubtreeSize {
-        tree: Subtree { root: 1 },
-    };
+    let size = SubtreeSize::builder().tree().root(1).build();
     println!("-- a recursive CTE with a parameter:\n{size}\n");
     println!("-- one generic CTE, instantiated twice and renamed:\n{RecentActivity}");
 }

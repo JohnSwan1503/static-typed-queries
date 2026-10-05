@@ -64,11 +64,12 @@ async fn main() -> Result<(), sqlx::Error> {
     let mut conn = SqliteConnection::connect("sqlite::memory:").await?;
     sqlx::raw_sql(SCHEMA).execute(&mut conn).await?;
 
-    let report = UserReport {
-        big_total: 100,
-        pattern: "%@example.com".to_owned(),
-        active: ActiveUsers { org_id: 1 },
-    };
+    let report = UserReport::builder()
+        .big_total(100)
+        .pattern("%@example.com".to_owned())
+        .active()
+        .org_id(1)
+        .build();
     let rows = report.query()?.fetch_all(&mut conn).await?;
 
     println!("\n-- results of {report:?}:");
