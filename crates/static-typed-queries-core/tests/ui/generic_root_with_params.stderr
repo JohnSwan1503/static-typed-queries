@@ -17,8 +17,8 @@ note: inside `measure::<Postgres>`
 note: inside `render::renderer::Renderer::<'_, Postgres>::statement`
   --> src/render/renderer.rs
    |
-   |         self.collect(root, Path::ROOT);
-   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |         self.collect(main, path);
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^
 note: inside `render::renderer::Renderer::<'_, Postgres>::collect`
   --> src/render/renderer.rs
    |

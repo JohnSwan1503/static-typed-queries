@@ -25,7 +25,7 @@ note: inside `render::renderer::Renderer::<'_, Postgres>::statement`
    |
    | /             fail(&[
    | |                 "`",
-   | |                 root.name.as_str(),
+   | |                 main.name.as_str(),
    | |                 "` depends on `before` statements, which need a transaction (not supported yet)",
    | |             ]);
    | |______________^

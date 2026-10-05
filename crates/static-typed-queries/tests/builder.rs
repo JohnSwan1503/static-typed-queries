@@ -379,3 +379,37 @@ async fn rows_are_typed_by_row_or_query_as() -> sqlx::Result<()> {
     assert_eq!(n, 1);
     Ok(())
 }
+
+#[derive(sqlx::FromRow, Debug, PartialEq)]
+pub struct Count {
+    pub n: i64,
+}
+
+#[query(Sqlite, cte, sql = "SELECT kind FROM {Events} WHERE at > {since: i64}")]
+pub struct RecentEvents;
+
+#[query(T::Dialect, sql = "SELECT count(*) AS n FROM {T}")]
+pub struct Tally<T: Sql>(PhantomData<T>);
+
+#[statement(Tally<RecentEvents>, row = Count)]
+pub struct RecentTally;
+
+#[tokio::test]
+async fn statements_run_generic_instantiations() -> sqlx::Result<()> {
+    assert_eq!(
+        RecentTally::SQL,
+        r#"WITH "recent_events" AS (SELECT kind FROM "events" WHERE at > $1) SELECT count(*) AS n FROM "recent_events""#
+    );
+    let mut conn = SqliteConnection::connect("sqlite::memory:").await?;
+    sqlx::raw_sql("CREATE TABLE events (kind TEXT, at INTEGER); INSERT INTO events VALUES ('a', 1), ('b', 5), ('c', 9);")
+        .execute(&mut conn)
+        .await?;
+    let count = RecentTally::builder()
+        .recent_events()
+        .since(4)
+        .query()?
+        .fetch_one(&mut conn)
+        .await?;
+    assert_eq!(count, Count { n: 2 });
+    Ok(())
+}

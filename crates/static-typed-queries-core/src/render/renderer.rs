@@ -65,19 +65,23 @@ impl<'a, D: Dialect> Renderer<'a, D> {
 
     pub(super) const fn statement(&mut self, root: &'static Node) {
         self.root = Some(root);
-        if let Kind::Table = root.kind {
-            fail(&["`", root.name.as_str(), "` is a table, not a statement"]);
+        let (main, path) = match (root.kind, Path::ROOT.child(0)) {
+            (Kind::Scope, Some(path)) => (root.items.0[0], path),
+            _ => (root, Path::ROOT),
+        };
+        if let Kind::Table = main.kind {
+            fail(&["`", main.name.as_str(), "` is a table, not a statement"]);
         }
-        if has_before(root) {
+        if has_before(main) {
             fail(&[
                 "`",
-                root.name.as_str(),
+                main.name.as_str(),
                 "` depends on `before` statements, which need a transaction (not supported yet)",
             ]);
         }
-        self.collect(root, Path::ROOT);
+        self.collect(main, path);
         self.with_clause();
-        self.body(root, Path::ROOT);
+        self.body(main, path);
     }
 
     const fn collect(&mut self, node: &'static Node, path: Path) {

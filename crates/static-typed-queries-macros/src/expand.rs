@@ -213,7 +213,7 @@ pub(crate) fn query(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
     });
     let fmt = fmt(&args, &item, true)?;
     let mut documented = item.clone();
-    documented.attrs.extend(params.item_docs(sql));
+    documented.attrs.extend(params.item_docs(Ok(sql)));
 
     Ok(quote! {
         #documented
@@ -397,6 +397,116 @@ fn wrapper(
 
         #bind_params
         #builder
+    })
+}
+
+pub(crate) fn statement(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
+    let krate = krate();
+    let target = &args.dialect;
+    for (present, name) in [
+        (args.sql.is_some(), "sql"),
+        (args.name.is_some(), "name"),
+        (args.placement.is_some(), "cte` or `subquery"),
+        (args.separate.is_some(), "separate"),
+        (args.grammar.is_some(), "grammar"),
+    ] {
+        if present {
+            return Err(syn::Error::new(
+                Span::call_site(),
+                format!(
+                    "statements take their SQL from `{}`, so they don't take `{name}`",
+                    docs::type_string(target)
+                ),
+            ));
+        }
+    }
+    if !item.generics.params.is_empty() {
+        return Err(syn::Error::new_spanned(
+            &item.generics,
+            "statements can't be generic; name the instantiation instead",
+        ));
+    }
+    let ident = &item.ident;
+    let dialect: Type = parse_quote!(<#target as #krate::sql::Sql>::Dialect);
+    let mut items = Vec::new();
+    add_item(target, &item.generics, &[], &mut items);
+    let source = LitStr::new(&docs::type_string(target), Span::call_site());
+    let template = Template {
+        segments: Vec::new(),
+        params: Vec::new(),
+        children: Vec::new(),
+    };
+    let analysis = Analysis {
+        kind: Kind::Query,
+        returns_rows: true,
+        refs: Vec::new(),
+        names: Vec::new(),
+    };
+    let params = Params::new(&template, &analysis, &items, &item, &source)?;
+    let fields: Vec<Type> = items.iter().map(|(ty, _)| ty.clone()).collect();
+    let node = node(
+        &snake_case(&ident.to_string()),
+        fingerprint(ident, &item),
+        quote!(Scope),
+        quote!(#krate::node::inject::Inject::Subquery),
+        Vec::new(),
+        &fields,
+    );
+    let params_ty = params.ty();
+    let params_struct = params.definition();
+    let derives = params.derives();
+    let bind_params = params.bind_impl();
+    let builder = params.builder(&dialect, args.row.as_ref());
+    let embed_checks = embeds(&item, &fields, &dialect);
+    let fmt = fmt(&args, &item, true)?;
+    let rows = args.row.as_ref().map(|row| {
+        quote! {
+            impl #krate::statement::Rows for #ident {
+                type Row = #row;
+            }
+        }
+    });
+    let parse_check = args.parse_check.as_ref().is_none_or(|check| check.value);
+    let test = parse_check.then(|| {
+        let test = format_ident!("{}_sql_parses", snake_case(&ident.to_string()));
+        quote! {
+            #krate::__if_parse_check! {
+                #[cfg(test)]
+                #[test]
+                fn #test() {
+                    #krate::check::parse::<#ident>();
+                }
+            }
+        }
+    });
+    let mut documented = item.clone();
+    documented.attrs.extend(params.item_docs(Err(target)));
+    Ok(quote! {
+        #documented
+
+        #params_struct
+        #derives
+
+        impl #krate::sql::Sql for #ident {
+            type Dialect = #dialect;
+            type Params = #params_ty;
+            const NODE: &'static #krate::node::Node = #node;
+        }
+
+        #embed_checks
+        #bind_params
+        #builder
+
+        #krate::impl_statement!(#ident);
+        #rows
+
+        impl #ident {
+            /// The SQL, rendered at compile time.
+            pub const SQL: &'static str = <Self as #krate::statement::Statement>::SQL;
+        }
+
+        #test
+        #fmt
     })
 }
 
@@ -728,7 +838,7 @@ impl<'a> Params<'a> {
         docs::link(ty, &self.item_args())
     }
 
-    fn item_docs(&self, sql: &LitStr) -> Vec<syn::Attribute> {
+    fn item_docs(&self, source: Result<&LitStr, &Type>) -> Vec<syn::Attribute> {
         let mut lines = Vec::new();
         if self
             .item
@@ -738,11 +848,16 @@ impl<'a> Params<'a> {
         {
             lines.push(String::new());
         }
-        lines.push("# Template".to_owned());
-        lines.push(String::new());
-        lines.push("```sql".to_owned());
-        lines.extend(docs::template(&sql.value()));
-        lines.push("```".to_owned());
+        match source {
+            Ok(sql) => {
+                lines.push("# Template".to_owned());
+                lines.push(String::new());
+                lines.push("```sql".to_owned());
+                lines.extend(docs::template(&sql.value()));
+                lines.push("```".to_owned());
+            }
+            Err(target) => lines.push(format!("Runs {} as a statement.", self.link(target))),
+        }
         if !self.is_empty() {
             lines.push(String::new());
             lines.push("# Parameters".to_owned());
@@ -1465,7 +1580,7 @@ fn fmt(args: &Args, item: &ItemStruct, statement: bool) -> syn::Result<TokenStre
         if !item.generics.params.is_empty() {
             return Err(syn::Error::new(
                 value.span(),
-                "generic items can't take `display`/`debug`; use the core macros on an instantiation",
+                "generic items can't take `display`/`debug`; give them to a `#[statement]` for an instantiation",
             ));
         }
         if value == "sql" && !statement {

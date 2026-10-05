@@ -1,0 +1,7 @@
+error: statements take their SQL from `CountOf<Users>`, so they don't take `sql`
+  --> tests/ui/statement_with_sql.rs:11:1
+   |
+11 | #[statement(CountOf<Users>, sql = "SELECT 1")]
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: this error originates in the attribute macro `statement` (in Nightly builds, run with -Z macro-backtrace for more info)

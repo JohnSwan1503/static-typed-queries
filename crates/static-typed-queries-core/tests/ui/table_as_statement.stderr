@@ -25,7 +25,7 @@ note: inside `measure::<Postgres>`
 note: inside `render::renderer::Renderer::<'_, Postgres>::statement`
   --> src/render/renderer.rs
    |
-   |             fail(&["`", root.name.as_str(), "` is a table, not a statement"]);
+   |             fail(&["`", main.name.as_str(), "` is a table, not a statement"]);
    |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 note: inside `render::error::fail`
   --> $RUST/core/src/panic.rs
