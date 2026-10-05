@@ -72,7 +72,12 @@ pub(crate) fn statement_methods(
                     self,
                     conn: &mut #driver::Connection<#dialect>,
                 ) -> ::core::result::Result<#output, #error> {
-                    #krate::run::statement::<#dialect, #fetch, Self>(&self, conn).await
+                    #krate::run::step::<#dialect, #fetch, Self>(
+                        &self,
+                        &<Self as #krate::Render>::OUTPUT.main(),
+                        conn,
+                    )
+                    .await
                 }
             }
         }

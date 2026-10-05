@@ -2,35 +2,47 @@ use core::marker::PhantomData;
 
 use sqlx::{Executor, FromRow, IntoArguments, SqlStr};
 
+use super::Rows;
 use super::hook::Hook;
 use super::params::{BindHooks, BindParams, arguments};
-use super::{Rows, Statement};
-use crate::dialect::driver::{Arguments, Connection, Database, Driver, Row};
+use crate::dialect::driver::{Arguments, Connection, Database, Driver, Query, QueryAs, Row};
 
-// Runs a statement's own SQL on a connection, fetching the way `F` says.
-pub async fn statement<D, F, S>(
-    statement: &S,
-    conn: &mut Connection<D>,
-) -> Result<F::Output, sqlx::Error>
+pub fn query<'q, D, P>(values: &P, statement: &Hook) -> Result<Query<'q, D>, sqlx::Error>
 where
     D: Driver,
-    F: Fetch<D>,
-    S: Statement + BindParams<Database<D>>,
+    P: BindParams<Database<D>> + ?Sized,
+    Arguments<D>: IntoArguments<Database<D>>,
 {
-    let args = arguments::<D, S>(statement, S::BINDS)?;
-    F::fetch(S::SQL, args, conn).await
+    let args = arguments::<D, P>(values, statement.binds())?;
+    Ok(sqlx::query_with(SqlStr::from_static(statement.sql()), args))
+}
+
+pub fn query_as<'q, D, O, P>(values: &P, statement: &Hook) -> Result<QueryAs<'q, D, O>, sqlx::Error>
+where
+    D: Driver,
+    O: for<'r> FromRow<'r, Row<D>>,
+    P: BindParams<Database<D>> + ?Sized,
+    Arguments<D>: IntoArguments<Database<D>>,
+{
+    let args = arguments::<D, P>(values, statement.binds())?;
+    Ok(sqlx::query_as_with(
+        SqlStr::from_static(statement.sql()),
+        args,
+    ))
 }
 
 pub struct Affected;
 
 pub struct AllRows<T>(PhantomData<T>);
 
+// Each impl binds the values before its future starts, so the future doesn't hold them: a hook's
+// values are a `dyn BindParams`, which isn't `Sync`.
 pub trait Fetch<D: Driver> {
     type Output;
 
-    fn fetch(
-        sql: &'static str,
-        args: Arguments<D>,
+    fn fetch<P: BindParams<Database<D>> + ?Sized>(
+        values: &P,
+        statement: &Hook,
         conn: &mut Connection<D>,
     ) -> impl Future<Output = Result<Self::Output, sqlx::Error>>;
 }
@@ -43,15 +55,13 @@ where
 {
     type Output = u64;
 
-    async fn fetch(
-        sql: &'static str,
-        args: Arguments<D>,
+    fn fetch<P: BindParams<Database<D>> + ?Sized>(
+        values: &P,
+        statement: &Hook,
         conn: &mut Connection<D>,
-    ) -> Result<u64, sqlx::Error> {
-        let result = sqlx::query_with(SqlStr::from_static(sql), args)
-            .execute(conn)
-            .await?;
-        Ok(D::rows_affected(&result))
+    ) -> impl Future<Output = Result<u64, sqlx::Error>> {
+        let query = query::<D, P>(values, statement);
+        async move { Ok(D::rows_affected(&query?.execute(conn).await?)) }
     }
 }
 
@@ -64,14 +74,13 @@ where
 {
     type Output = Vec<T>;
 
-    async fn fetch(
-        sql: &'static str,
-        args: Arguments<D>,
+    fn fetch<P: BindParams<Database<D>> + ?Sized>(
+        values: &P,
+        statement: &Hook,
         conn: &mut Connection<D>,
-    ) -> Result<Vec<T>, sqlx::Error> {
-        sqlx::query_as_with(SqlStr::from_static(sql), args)
-            .fetch_all(conn)
-            .await
+    ) -> impl Future<Output = Result<Vec<T>, sqlx::Error>> {
+        let query = query_as::<D, T, P>(values, statement);
+        async move { query?.fetch_all(conn).await }
     }
 }
 
@@ -86,14 +95,13 @@ where
 {
     type Output = T;
 
-    async fn fetch(
-        sql: &'static str,
-        args: Arguments<D>,
+    fn fetch<P: BindParams<Database<D>> + ?Sized>(
+        values: &P,
+        statement: &Hook,
         conn: &mut Connection<D>,
-    ) -> Result<T, sqlx::Error> {
-        sqlx::query_as_with(SqlStr::from_static(sql), args)
-            .fetch_one(conn)
-            .await
+    ) -> impl Future<Output = Result<T, sqlx::Error>> {
+        let query = query_as::<D, T, P>(values, statement);
+        async move { query?.fetch_one(conn).await }
     }
 }
 
@@ -108,14 +116,13 @@ where
 {
     type Output = Option<T>;
 
-    async fn fetch(
-        sql: &'static str,
-        args: Arguments<D>,
+    fn fetch<P: BindParams<Database<D>> + ?Sized>(
+        values: &P,
+        statement: &Hook,
         conn: &mut Connection<D>,
-    ) -> Result<Option<T>, sqlx::Error> {
-        sqlx::query_as_with(SqlStr::from_static(sql), args)
-            .fetch_optional(conn)
-            .await
+    ) -> impl Future<Output = Result<Option<T>, sqlx::Error>> {
+        let query = query_as::<D, T, P>(values, statement);
+        async move { query?.fetch_optional(conn).await }
     }
 }
 
@@ -137,7 +144,7 @@ pub const fn rows<S: Rows>() {}
 pub type Output<S, D> = <<S as Step>::Fetch as Fetch<D>>::Output;
 
 pub async fn step<D, F, P>(
-    params: &P,
+    values: &P,
     statement: &Hook,
     conn: &mut Connection<D>,
 ) -> Result<F::Output, sqlx::Error>
@@ -146,8 +153,7 @@ where
     F: Fetch<D>,
     P: BindParams<Database<D>>,
 {
-    let args = arguments::<D, P>(params, statement.binds())?;
-    F::fetch(statement.sql(), args, conn).await
+    F::fetch(values, statement, conn).await
 }
 
 pub async fn hooks<D, V>(
@@ -162,13 +168,8 @@ where
     for<'e> &'e mut Connection<D>: Executor<'e, Database = Database<D>>,
 {
     for hook in hooks {
-        let args = match values.values(hook) {
-            Some(params) => arguments::<D, _>(params, hook.binds())?,
-            None => arguments::<D, _>(&(), hook.binds())?,
-        };
-        sqlx::query_with(SqlStr::from_static(hook.sql()), args)
-            .execute(&mut *conn)
-            .await?;
+        let values = values.values(hook).unwrap_or(&());
+        <Affected as Fetch<D>>::fetch(values, hook, &mut *conn).await?;
     }
     Ok(())
 }

@@ -259,3 +259,25 @@ async fn a_failing_hook_rolls_back_the_whole_run() -> sqlx::Result<()> {
     assert_eq!(price, 10);
     Ok(())
 }
+
+#[test]
+fn runs_are_send() {
+    fn send<T: Send>(_: T) {}
+    let bump = || Bump {
+        name: "reads".to_owned(),
+    };
+    let note = || Note {
+        note: "send".to_owned(),
+    };
+    let _ = |conn: &mut sqlx::SqliteConnection| {
+        send(Double { price: 0 }.with(bump()).with(note()).run(conn))
+    };
+    let _ = |conn: &mut sqlx::SqliteConnection| {
+        send(
+            Tagged
+                .with(bump())
+                .with(note())
+                .run_as::<(i64,), _, _>(conn),
+        )
+    };
+}

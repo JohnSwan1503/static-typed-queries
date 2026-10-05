@@ -8,6 +8,8 @@ pub mod run;
 #[cfg(feature = "sqlx")]
 use crate::dialect::driver::{Arguments, Database, Driver, Query, QueryAs, Row};
 use crate::hooks::Single;
+#[cfg(feature = "sqlx")]
+use crate::render::Render;
 use crate::sql::Sql;
 use bind::Bind;
 use hook::Hook;
@@ -30,25 +32,23 @@ impl<S: Single> SingleRef for &S {}
 #[doc(hidden)]
 pub fn query<'q, S, I>(statement: &S) -> Result<Query<'q, S::Dialect>, sqlx::Error>
 where
-    S: Statement + Single<I> + BindParams<Database<S::Dialect>>,
+    S: Statement + Render + Single<I> + BindParams<Database<S::Dialect>>,
     S::Dialect: Driver,
     Arguments<S::Dialect>: sqlx::IntoArguments<Database<S::Dialect>>,
 {
-    let args = params::arguments::<S::Dialect, S>(statement, S::BINDS)?;
-    Ok(sqlx::query_with(sqlx::SqlStr::from_static(S::SQL), args))
+    run::query::<S::Dialect, S>(statement, &S::OUTPUT.main())
 }
 
 #[cfg(feature = "sqlx")]
 #[doc(hidden)]
 pub fn query_as<'q, S, O, I>(statement: &S) -> Result<QueryAs<'q, S::Dialect, O>, sqlx::Error>
 where
-    S: Statement + Single<I> + BindParams<Database<S::Dialect>>,
+    S: Statement + Render + Single<I> + BindParams<Database<S::Dialect>>,
     S::Dialect: Driver,
     Arguments<S::Dialect>: sqlx::IntoArguments<Database<S::Dialect>>,
     O: for<'r> sqlx::FromRow<'r, Row<S::Dialect>>,
 {
-    let args = params::arguments::<S::Dialect, S>(statement, S::BINDS)?;
-    Ok(sqlx::query_as_with(sqlx::SqlStr::from_static(S::SQL), args))
+    run::query_as::<S::Dialect, O, S>(statement, &S::OUTPUT.main())
 }
 
 #[diagnostic::on_unimplemented(
