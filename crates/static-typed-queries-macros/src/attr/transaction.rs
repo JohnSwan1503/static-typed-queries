@@ -5,6 +5,7 @@ use syn::{ItemStruct, Type, parse_quote};
 
 use crate::args::{self, Fetch, Keys, Step};
 use crate::emit::bind::bind_impl;
+use crate::emit::builder::builder;
 use crate::emit::checks::{embeds, hook_needs, values};
 use crate::emit::docs::item_docs;
 use crate::emit::node::{fingerprint, node, target};
@@ -129,6 +130,7 @@ pub(crate) fn expand(args: TransactionArgs, mut input: ItemStruct) -> syn::Resul
     });
     let values = values(&input, !fields.is_empty());
     let bind = bind_impl(&input, &fields);
+    let (definitions, builder) = builder(&input, &fields);
     let methods = transaction_methods(&input, dialect, &typed(steps, &fields));
     let mut documented = input.clone();
     documented
@@ -144,12 +146,14 @@ pub(crate) fn expand(args: TransactionArgs, mut input: ItemStruct) -> syn::Resul
         #checked
         #hook_needs
         #bind
+        #builder
 
         #krate::impl_transaction!(#ident);
         #methods
     });
     Ok(quote! {
         #documented
+        #definitions
         #impls
     })
 }

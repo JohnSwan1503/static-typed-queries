@@ -31,13 +31,10 @@ assert_eq!(
     OrgSize::SQL,
     r#"WITH "org_users" AS (SELECT id FROM "users" WHERE org_id = $1) SELECT count(*) FROM "org_users""#
 );
-let size = OrgSize {
-    count: CountOf {
-        of: OrgUsers { org_id: 7 },
-    },
-};
+let size = OrgSize::builder().count().of().org_id(7).build();
 assert_eq!(size.count.of.org_id, 7);
 ```
 
 It takes `display`, `debug`, `row` and `parse_check` like [`query`]. The
-struct's only field, if any, is the one the attribute names.
+struct's only field, if any, is the one the attribute names. Its builder
+reaches the item's fields through the field's method, as a query's does.

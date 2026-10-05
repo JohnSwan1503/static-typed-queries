@@ -5,6 +5,7 @@ use syn::{Ident, ItemStruct, LitBool, Type, parse_quote};
 
 use crate::args::{self, Keys};
 use crate::emit::bind::bind_impl;
+use crate::emit::builder::builder;
 use crate::emit::checks::{embeds, hook_needs, parse_test, step_impl, values};
 use crate::emit::docs::{self, item_docs};
 use crate::emit::fmt::fmt;
@@ -107,6 +108,7 @@ pub(crate) fn expand(args: StatementArgs, mut input: ItemStruct) -> syn::Result<
     );
     let values = values(&input, !fields.is_empty());
     let bind = bind_impl(&input, &fields);
+    let (definitions, builder) = builder(&input, &fields);
     let row = args.row.as_ref();
     let rows = row.map(|row| {
         quote! {
@@ -134,6 +136,7 @@ pub(crate) fn expand(args: StatementArgs, mut input: ItemStruct) -> syn::Result<
         #checked
         #hook_needs
         #bind
+        #builder
 
         #krate::impl_statement!(#ident);
         #rows
@@ -149,6 +152,7 @@ pub(crate) fn expand(args: StatementArgs, mut input: ItemStruct) -> syn::Result<
     });
     Ok(quote! {
         #documented
+        #definitions
         #test
         #impls
     })

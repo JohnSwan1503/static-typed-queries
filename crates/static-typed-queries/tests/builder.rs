@@ -104,6 +104,25 @@ pub struct AtLeast<T: Sql> {
     _of: PhantomData<T>,
 }
 
+#[statement(count)]
+pub struct ActiveCount {
+    pub count: Tally<ActiveUsers>,
+}
+
+#[statement(count)]
+pub struct UserCount {
+    pub count: Tally<Users>,
+}
+
+#[query(Postgres, sql = "SELECT 1")]
+pub struct One;
+
+#[transaction(Postgres, steps(search, count, One))]
+pub struct Nightly {
+    pub search: Search,
+    pub count: ActiveCount,
+}
+
 #[test]
 fn setters_take_any_order_and_build_the_struct() {
     let search = Search::builder()
@@ -160,4 +179,27 @@ fn items_without_values_start_built() {
 fn phantom_fields_need_no_setter() {
     let at_least = AtLeast::<Users>::builder().min(5).build();
     assert_eq!(at_least.min, 5);
+}
+
+#[test]
+fn statements_and_transactions_build_their_fields() {
+    let active = ActiveCount::builder().count().of().org_id(7).build();
+    assert_eq!(active.count.of.org_id, 7);
+    let Tally { of: Users } = UserCount::builder().build().count;
+
+    let nightly = Nightly::builder()
+        .count()
+        .count()
+        .of()
+        .org_id(1)
+        .search()
+        .since(1)
+        .search()
+        .until(2)
+        .search()
+        .status("paid".to_owned())
+        .build();
+    assert_eq!(nightly.count.count.of.org_id, 1);
+    assert_eq!((nightly.search.since, nightly.search.until), (1, 2));
+    assert_eq!(nightly.search.status, "paid");
 }

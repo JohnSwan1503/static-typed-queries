@@ -27,9 +27,7 @@ assert_eq!(
     r#"DELETE FROM "orders" WHERE created_at < $1"#
 );
 assert_eq!(Nightly::STEPS[1].sql(), r#"SELECT count(*) FROM "orders""#);
-let nightly = Nightly {
-    archive: Archive { before: 1 },
-};
+let nightly = Nightly::builder().archive().before(1).build();
 assert_eq!(nightly.archive.before, 1);
 ```
 
@@ -68,4 +66,6 @@ with values from `with` as for a single statement.
 
 The struct implements `Sql` and `Transaction`, whose `STEPS` holds each
 step's SQL and binds, and with a database feature enabled has `with` and
-`run`. Every field must be a step. The struct can't be generic.
+`run`. `Name::builder()` returns its builder, which has a method per field
+that moves to the step's builder, as a [`query`]'s does. Every field must
+be a step. The struct can't be generic.

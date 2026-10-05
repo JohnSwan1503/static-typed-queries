@@ -171,7 +171,7 @@ or be embedded by type with `{T}` when it holds no values. A generic query
 isn't a `Statement` on its own; it is rendered as part of the queries that
 embed it, or named as a [`statement`]. It also can't take `display`,
 `debug` or `row`. Its builder needs the item a field holds to implement
-`Build`, as every table and query does.
+`Build`, as every table, query and statement does.
 
 ```
 # use static_typed_queries::prelude::*;
