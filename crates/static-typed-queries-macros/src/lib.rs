@@ -135,6 +135,9 @@ pub fn table(args: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// - `sql = "..."` or `sql = NAME` (required): the template, described below,
 ///   written inline or taken from a constant declared with [`sql`].
+/// - `sql_file = "path"`: reads the template from a file instead, relative to
+///   the directory of the crate's `Cargo.toml`. The query is rebuilt when the
+///   file changes.
 /// - `name = "..."`: the name this query goes by when another query embeds
 ///   it, as a CTE name or a subquery alias. Defaults to the struct name in
 ///   snake case.

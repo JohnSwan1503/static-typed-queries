@@ -1,0 +1,11 @@
+error: can't read `tests/templates/missing.sql` from the crate's directory: No such file or directory (os error 2)
+ --> tests/ui/sql_file.rs:3:30
+  |
+3 | #[query(Postgres, sql_file = "tests/templates/missing.sql")]
+  |                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: give the template once, with `sql` or with `sql_file`
+ --> tests/ui/sql_file.rs:6:48
+  |
+6 | #[query(Postgres, sql = "SELECT 1", sql_file = "tests/templates/one.sql")]
+  |                                                ^^^^^^^^^^^^^^^^^^^^^^^^^

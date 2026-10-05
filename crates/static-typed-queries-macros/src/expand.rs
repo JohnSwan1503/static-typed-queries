@@ -26,6 +26,12 @@ pub(crate) fn table(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
     if let Some(sql) = &args.sql {
         return Err(syn::Error::new(sql.span(), "tables take `name`, not `sql`"));
     }
+    if let Some(file) = &args.sql_file {
+        return Err(syn::Error::new(
+            file.span(),
+            "tables take `name`, not `sql_file`",
+        ));
+    }
     if args.placement.is_some() {
         return Err(syn::Error::new(
             Span::call_site(),
@@ -174,16 +180,28 @@ pub(crate) fn query(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
             "only type parameters are supported on queries",
         ));
     }
-    let sql = match &args.sql {
-        Some(Sql::Inline(sql)) => sql,
-        Some(Sql::Named(_)) => unreachable!("named templates expand through their macro"),
-        None => {
+    let file = match (&args.sql, &args.sql_file) {
+        (Some(_), Some(file)) => {
+            return Err(syn::Error::new(
+                file.span(),
+                "give the template once, with `sql` or with `sql_file`",
+            ));
+        }
+        (None, Some(file)) => Some(template_file(file)?),
+        _ => None,
+    };
+    let sql = match (&args.sql, &file) {
+        (Some(Sql::Inline(sql)), _) => sql,
+        (Some(Sql::Named(_)), _) => unreachable!("named templates expand through their macro"),
+        (None, Some((sql, _))) => sql,
+        (None, None) => {
             return Err(syn::Error::new(
                 Span::call_site(),
-                "queries need `sql = \"...\"` or `sql = NAME`",
+                "queries need `sql = \"...\"`, `sql = NAME` or `sql_file = \"...\"`",
             ));
         }
     };
+    let track = file.as_ref().map(|(_, track)| track);
     no_hooks(&args)?;
     let template = template::parse(sql)?;
     let engine = Engine::of(&args.dialect, args.grammar.as_ref(), &item.generics)?;
@@ -320,7 +338,36 @@ pub(crate) fn query(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
         #statement
         #fmt
         #(#wrappers)*
+        #track
     })
+}
+
+fn template_file(file: &LitStr) -> syn::Result<(LitStr, TokenStream)> {
+    let root = std::env::var_os("CARGO_MANIFEST_DIR").ok_or_else(|| {
+        syn::Error::new(
+            file.span(),
+            "`sql_file` is read from the crate's directory, but `CARGO_MANIFEST_DIR` isn't set",
+        )
+    })?;
+    let path = std::path::Path::new(&root).join(file.value());
+    let sql = std::fs::read_to_string(&path).map_err(|error| {
+        syn::Error::new(
+            file.span(),
+            format!(
+                "can't read `{}` from the crate's directory: {error}",
+                file.value()
+            ),
+        )
+    })?;
+    let full = path
+        .to_str()
+        .ok_or_else(|| syn::Error::new(file.span(), "the path to `sql_file` isn't valid UTF-8"))?;
+    Ok((
+        LitStr::new(&sql, file.span()),
+        quote!(
+            const _: &str = ::core::include_str!(#full);
+        ),
+    ))
 }
 
 pub(crate) fn named(name: &Path, args: TokenStream, item: &ItemStruct) -> TokenStream {
@@ -567,6 +614,7 @@ pub(crate) fn statement(args: Args, item: ItemStruct) -> syn::Result<TokenStream
     let target = &args.dialect;
     for (present, name) in [
         (args.sql.is_some(), "sql"),
+        (args.sql_file.is_some(), "sql_file"),
         (args.name.is_some(), "name"),
         (args.placement.is_some(), "cte` or `subquery"),
         (args.separate.is_some(), "separate"),

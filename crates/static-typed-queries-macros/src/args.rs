@@ -63,6 +63,7 @@ impl Parse for Sql {
 pub(crate) struct Args {
     pub dialect: Type,
     pub sql: Option<Sql>,
+    pub sql_file: Option<LitStr>,
     pub name: Option<LitStr>,
     pub placement: Option<Placement>,
     pub display: Option<Ident>,
@@ -82,16 +83,16 @@ impl ToAdd {
     fn record_set(&mut self, key: &str) {
         let slots: &[usize] = match key {
             "cte" | "subquery" => &[0, 1],
-            "sql" => &[2],
-            "name" => &[3],
-            "display" => &[4],
-            "debug" => &[5],
-            "parse_check" => &[6],
-            "separate" => &[7],
-            "grammar" => &[8],
-            "row" => &[9],
-            "before" => &[10],
-            "after" => &[11],
+            "sql" | "sql_file" => &[2, 3],
+            "name" => &[4],
+            "display" => &[5],
+            "debug" => &[6],
+            "parse_check" => &[7],
+            "separate" => &[8],
+            "grammar" => &[9],
+            "row" => &[10],
+            "before" => &[11],
+            "after" => &[12],
             _ => return,
         };
         for &idx in slots {
@@ -109,6 +110,7 @@ impl Default for ToAdd {
                 Some("cte"),
                 Some("subquery"),
                 Some("sql"),
+                Some("sql_file"),
                 Some("name"),
                 Some("display"),
                 Some("debug"),
@@ -119,7 +121,7 @@ impl Default for ToAdd {
                 Some("before"),
                 Some("after"),
             ],
-            12,
+            13,
         )
     }
 }
@@ -157,6 +159,7 @@ impl Parse for Args {
         let mut args = Args {
             dialect: input.parse()?,
             sql: None,
+            sql_file: None,
             name: None,
             placement: None,
             display: None,
@@ -185,6 +188,13 @@ impl Parse for Args {
                 )?,
                 key_str @ "sql" => set(
                     &mut args.sql,
+                    value(input)?,
+                    &key,
+                    &mut args.to_add,
+                    key_str,
+                )?,
+                key_str @ "sql_file" => set(
+                    &mut args.sql_file,
                     value(input)?,
                     &key,
                     &mut args.to_add,
