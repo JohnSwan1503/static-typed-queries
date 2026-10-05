@@ -121,6 +121,7 @@ pub(crate) fn table(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
         .map(|ty| quote!(<#ty as #krate::sql::Sql>::Params))
         .collect();
     let hook_needs = hook_needs(&item, &needs, quote!(#krate::builder::Demand));
+    let step = step_impl(&item, None);
     let fmt = fmt(&args, &item, false)?;
     let mut documented = item.clone();
     documented
@@ -140,6 +141,7 @@ pub(crate) fn table(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
         #embed_checks
         #hook_needs
         #builder
+        #step
         #fmt
     })
 }
@@ -325,6 +327,7 @@ pub(crate) fn query(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
         }
     });
     let fmt = fmt(&args, &item, true)?;
+    let step = step_impl(&item, row.as_ref());
     let mut documented = item.clone();
     documented
         .attrs
@@ -348,6 +351,7 @@ pub(crate) fn query(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
         #bind_params
         #builder
         #statement
+        #step
         #fmt
         #(#wrappers)*
         #track
@@ -699,6 +703,7 @@ pub(crate) fn statement(args: Args, item: ItemStruct) -> syn::Result<TokenStream
         }
     });
     let from_row = from_row(&item, &dialect);
+    let step = step_impl(&item, row.as_ref());
     let parse_check = args.parse_check.as_ref().is_none_or(|check| check.value);
     let test = parse_check.then(|| {
         let test = format_ident!("{}_sql_parses", snake_case(&ident.to_string()));
@@ -737,6 +742,7 @@ pub(crate) fn statement(args: Args, item: ItemStruct) -> syn::Result<TokenStream
         #krate::impl_statement!(#ident);
         #rows
         #from_row
+        #step
 
         impl #ident {
             /// The SQL, rendered at compile time.
@@ -813,6 +819,7 @@ pub(crate) fn transaction(args: Args, item: ItemStruct) -> syn::Result<TokenStre
     let source = LitStr::new(&ident.to_string(), Span::call_site());
     let mut params = Params::new(&template, &analysis, &items, &item, &source)?;
     params.runs = false;
+    params.steps = Some(steps);
     let parts = steps
         .iter()
         .map(|step| quote!(#krate::part::expr::Expr::part(<#step as #krate::sql::Sql>::NODE)))
@@ -1007,6 +1014,24 @@ fn embeds(item: &ItemStruct, items: &[Type], dialect: &Type) -> TokenStream {
     }
 }
 
+fn step_impl(item: &ItemStruct, row: Option<&Type>) -> TokenStream {
+    let krate = krate();
+    let run = quote!(#krate::statement::run);
+    let fetch = match row {
+        Some(row) => quote!(#run::AllRows<#row>),
+        None => quote!(#run::Affected),
+    };
+    let ident = &item.ident;
+    let (impl_generics, ty_generics, where_clause) = item.generics.split_for_impl();
+    quote! {
+        #krate::__if_sqlx! {
+            impl #impl_generics #run::Step for #ident #ty_generics #where_clause {
+                type Fetch = #fetch;
+            }
+        }
+    }
+}
+
 fn hook_needs(item: &ItemStruct, needs: &[TokenStream], bound: TokenStream) -> TokenStream {
     let krate = krate();
     let ident = &item.ident;
@@ -1153,6 +1178,7 @@ struct Params<'a> {
     children: Vec<Child>,
     synthetic: bool,
     runs: bool,
+    steps: Option<&'a [Type]>,
 }
 
 impl<'a> Params<'a> {
@@ -1277,6 +1303,7 @@ impl<'a> Params<'a> {
             children,
             synthetic: false,
             runs: true,
+            steps: None,
         })
     }
 
@@ -1692,6 +1719,68 @@ impl<'a> Params<'a> {
             .map(|group| &group.field)
             .chain(self.children.iter().map(|child| &child.field))
             .collect()
+    }
+
+    fn transaction_run(
+        &self,
+        steps: &[Type],
+        dialect: &Type,
+        complete: &TokenStream,
+        finish: &TokenStream,
+    ) -> TokenStream {
+        let krate = krate();
+        let ident = &self.item.ident;
+        let b = quote!(#krate::builder);
+        let run = quote!(#krate::statement::run);
+        let driver = quote!(#krate::dialect::driver);
+        let sqlx = quote!(#krate::__private::sqlx);
+        let transaction = quote!(<#ident as #krate::transaction::Transaction>);
+        let outputs = steps
+            .iter()
+            .map(|step| quote!(#run::Output<#step, #dialect>));
+        let names: Vec<Ident> = (0..steps.len())
+            .map(|i| format_ident!("__step{i}"))
+            .collect();
+        let runs = steps
+            .iter()
+            .zip(&names)
+            .enumerate()
+            .map(|(i, (step, name))| {
+                let i = Literal::usize_unsuffixed(i);
+                quote! {
+                    let #name = #run::step::<#dialect, <#step as #run::Step>::Fetch, _>(
+                        &params,
+                        &#transaction::STEPS[#i],
+                        &mut tx,
+                    )
+                    .await?;
+                }
+            });
+        let generics = self.generics(&[quote!(__H), quote!(__V)]);
+        let (impl_generics, _, where_clause) = generics.split_for_impl();
+        quote! {
+            #krate::__if_sqlx! {
+                impl #impl_generics #complete #where_clause {
+                    /// Runs the steps in order in one transaction, with each hook once around them, and returns the output of each step.
+                    pub async fn run<'c, __I>(
+                        self,
+                        conn: impl #sqlx::Acquire<'c, Database = #driver::Database<#dialect>>,
+                    ) -> ::core::result::Result<(#(#outputs,)*), #sqlx::Error>
+                    where
+                        #ident: #b::HookNeeds<__V, __I>,
+                        __V: #krate::statement::params::BindHooks<#driver::Database<#dialect>>,
+                    {
+                        let params = #finish;
+                        let mut tx = #sqlx::Acquire::begin(conn).await?;
+                        #run::hooks::<#dialect, __V>(&self.__values, #transaction::BEFORE, &mut tx).await?;
+                        #(#runs)*
+                        #run::hooks::<#dialect, __V>(&self.__values, #transaction::AFTER, &mut tx).await?;
+                        tx.commit().await?;
+                        ::core::result::Result::Ok((#(#names,)*))
+                    }
+                }
+            }
+        }
     }
 
     fn builder(&self, dialect: &Type, row: Option<&Type>) -> TokenStream {
@@ -2117,6 +2206,9 @@ impl<'a> Params<'a> {
                     }
                 }
             });
+        }
+
+        if self.statement() || self.steps.is_some() {
             let mut params = states.clone();
             params.push(values.clone());
             let generics = self.generics(&params);
@@ -2130,7 +2222,7 @@ impl<'a> Params<'a> {
             );
             out.extend(quote! {
                 impl #impl_generics #open #where_clause {
-                    /// Gives the values of a hook with parameters, from its complete builder. Each hook takes its values once and runs once per statement.
+                    /// Gives the values of a hook with parameters, from its complete builder. Each hook takes its values once and runs once.
                     pub fn with<__B, __Hook, __Once>(self, values: __B) -> #given
                     where
                         __B: #b::Finish,
@@ -2163,7 +2255,11 @@ impl<'a> Params<'a> {
                 quote!(<<#ty as #b::Build>::Builder as #b::Settled>::Slot)
             }))
             .collect();
-        let hooks = if self.statement() {
+        if let Some(steps) = self.steps {
+            out.extend(self.transaction_run(steps, dialect, &complete, &finish));
+        }
+
+        let hooks = if self.statement() || self.steps.is_some() {
             quote!(<#ident as #krate::render::Render>::Hooks)
         } else {
             quote!(#b::NoHooks)

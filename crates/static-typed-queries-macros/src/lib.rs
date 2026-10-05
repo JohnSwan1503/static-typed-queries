@@ -81,7 +81,8 @@ use syn::{ItemConst, ItemStruct, parse_macro_input};
 /// }
 /// ```
 ///
-/// Hooks can't be tables, and they can't use tables with hooks of their own.
+/// In a [`transaction`], each hook runs once around all of its steps. Hooks
+/// can't be tables, and they can't use tables with hooks of their own.
 ///
 /// ## Generated items
 ///
@@ -470,6 +471,18 @@ pub fn sql(args: TokenStream, item: TokenStream) -> TokenStream {
 /// The first argument is the dialect, followed by `steps(Type, ...)`: the
 /// statements to run, in order. A step is a [`query`], a [`statement`], or an
 /// instantiation of a generic query such as `CountOf<Orders>`.
+///
+/// ## Running
+///
+/// The complete builder's `run(conn)` takes anything that implements
+/// `sqlx::Acquire`, runs the steps in order in one transaction and commits
+/// them together. If a step fails, every step rolls back. It returns a tuple
+/// with one element per step: a `Vec` of the step's row type when it has one,
+/// and otherwise the number of rows the step affected.
+///
+/// The hooks of the tables the steps use run once for the whole transaction,
+/// `before` hooks ahead of the first step and `after` hooks after the last,
+/// with values from `with` as for a single statement.
 ///
 /// ## Generated items
 ///

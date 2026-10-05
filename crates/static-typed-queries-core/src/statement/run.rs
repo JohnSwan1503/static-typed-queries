@@ -1,3 +1,5 @@
+use core::marker::PhantomData;
+
 use sqlx::{Acquire, Executor, FromRow, IntoArguments, SqlStr};
 
 use super::Statement;
@@ -54,7 +56,81 @@ where
     Ok(rows)
 }
 
-async fn hooks<D, V>(
+pub struct Affected;
+
+pub struct AllRows<T>(PhantomData<T>);
+
+pub trait Fetch<D: Driver> {
+    type Output;
+
+    fn fetch(
+        sql: &'static str,
+        args: Arguments<D>,
+        conn: &mut Connection<D>,
+    ) -> impl Future<Output = Result<Self::Output, sqlx::Error>>;
+}
+
+impl<D> Fetch<D> for Affected
+where
+    D: Driver,
+    Arguments<D>: IntoArguments<Database<D>>,
+    for<'e> &'e mut Connection<D>: Executor<'e, Database = Database<D>>,
+{
+    type Output = u64;
+
+    async fn fetch(
+        sql: &'static str,
+        args: Arguments<D>,
+        conn: &mut Connection<D>,
+    ) -> Result<u64, sqlx::Error> {
+        let result = sqlx::query_with(SqlStr::from_static(sql), args)
+            .execute(conn)
+            .await?;
+        Ok(D::rows_affected(&result))
+    }
+}
+
+impl<D, T> Fetch<D> for AllRows<T>
+where
+    D: Driver,
+    T: for<'r> FromRow<'r, Row<D>> + Send + Unpin,
+    Arguments<D>: IntoArguments<Database<D>>,
+    for<'e> &'e mut Connection<D>: Executor<'e, Database = Database<D>>,
+{
+    type Output = Vec<T>;
+
+    async fn fetch(
+        sql: &'static str,
+        args: Arguments<D>,
+        conn: &mut Connection<D>,
+    ) -> Result<Vec<T>, sqlx::Error> {
+        sqlx::query_as_with(SqlStr::from_static(sql), args)
+            .fetch_all(conn)
+            .await
+    }
+}
+
+pub trait Step {
+    type Fetch;
+}
+
+pub type Output<S, D> = <<S as Step>::Fetch as Fetch<D>>::Output;
+
+pub async fn step<D, F, P>(
+    params: &P,
+    statement: &Hook,
+    conn: &mut Connection<D>,
+) -> Result<F::Output, sqlx::Error>
+where
+    D: Driver,
+    F: Fetch<D>,
+    P: BindParams<Database<D>>,
+{
+    let args = arguments::<D, P>(params, statement.binds())?;
+    F::fetch(statement.sql(), args, conn).await
+}
+
+pub async fn hooks<D, V>(
     values: &V,
     hooks: &[Hook],
     conn: &mut Connection<D>,
