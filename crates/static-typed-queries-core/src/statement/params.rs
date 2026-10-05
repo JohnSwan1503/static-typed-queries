@@ -3,16 +3,24 @@ use sqlx::error::BoxDynError;
 
 use super::bind::Bind;
 use super::hook::Hook;
-use crate::builder::HookValues;
 use crate::dialect::driver::{self, Arguments, Driver};
+use crate::hooks::HookValues;
 use crate::sql::Sql;
+use crate::values::Valueless;
 
-// Path steps index a node's distinct referenced items in order of first appearance.
+// Path steps index a node's items, its item fields in order; the slot is a field of the node the
+// path leads to.
 pub trait BindParams<DB: Database> {
     fn bind(&self, path: &[u16], slot: u16, args: &mut DB::Arguments) -> Result<(), BoxDynError>;
 }
 
 impl<DB: Database> BindParams<DB> for () {
+    fn bind(&self, path: &[u16], slot: u16, _: &mut DB::Arguments) -> Result<(), BoxDynError> {
+        Err(unknown(path, slot))
+    }
+}
+
+impl<DB: Database, T: Valueless> BindParams<DB> for T {
     fn bind(&self, path: &[u16], slot: u16, _: &mut DB::Arguments) -> Result<(), BoxDynError> {
         Err(unknown(path, slot))
     }
@@ -28,9 +36,8 @@ impl<DB: Database> BindHooks<DB> for () {
     }
 }
 
-impl<DB: Database, H: Sql, Rest: BindHooks<DB>> BindHooks<DB> for (HookValues<H>, Rest)
-where
-    H::Params: BindParams<DB>,
+impl<DB: Database, H: Sql + BindParams<DB>, Rest: BindHooks<DB>> BindHooks<DB>
+    for (HookValues<H>, Rest)
 {
     fn values(&self, hook: &Hook) -> Option<&dyn BindParams<DB>> {
         if hook.fingerprint() == H::NODE.fingerprint && hook.name() == H::NODE.name {

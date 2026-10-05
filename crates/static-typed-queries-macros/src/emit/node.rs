@@ -3,9 +3,9 @@ use quote::quote;
 use syn::{Ident, ItemStruct, Type};
 
 use crate::args::Placement;
+use crate::emit::docs::type_string;
 use crate::emit::krate;
-use crate::model::item::Item;
-use crate::naming::type_key;
+use crate::model::fields::Field;
 use crate::sql::analyze::Analysis;
 use crate::sql::template::{Segment, Template};
 
@@ -15,20 +15,24 @@ pub(crate) fn node(
     kind: TokenStream,
     inject: TokenStream,
     parts: Vec<TokenStream>,
-    items: &[Type],
+    items: &[&Type],
     [before, after]: [&[Type]; 2],
+    checks: TokenStream,
 ) -> TokenStream {
     let krate = krate();
     quote! {
-        &#krate::Node {
-            name: #krate::Name::new(#name),
-            fingerprint: #fingerprint,
-            kind: #krate::Kind::#kind,
-            inject: #inject,
-            parts: #krate::Parts(&[#(#parts),*]),
-            before: #krate::Hooks(&[#(<#before as #krate::Sql>::NODE),*]),
-            after: #krate::Hooks(&[#(<#after as #krate::Sql>::NODE),*]),
-            items: #krate::Items(&[#(<#items as #krate::Sql>::NODE),*]),
+        {
+            #checks
+            &#krate::Node {
+                name: #krate::Name::new(#name),
+                fingerprint: #fingerprint,
+                kind: #krate::Kind::#kind,
+                inject: #inject,
+                parts: #krate::Parts(&[#(#parts),*]),
+                before: #krate::Hooks(&[#(<#before as #krate::Sql>::NODE),*]),
+                after: #krate::Hooks(&[#(<#after as #krate::Sql>::NODE),*]),
+                items: #krate::Items(&[#(<#items as #krate::Sql>::NODE),*]),
+            }
         }
     }
 }
@@ -56,16 +60,13 @@ pub(crate) fn placement(placement: Placement) -> TokenStream {
     }
 }
 
-// A reference to a listed item points at its index; a bare type parameter has no entry, so it is
-// referenced by node and resolved by the queries that name it.
-pub(crate) fn target(ty: &Type, items: &[(Type, Type)]) -> TokenStream {
+// An item field is referenced by its index among the item fields; a type holds no values and is
+// referenced by its node.
+pub(crate) fn target(item: Option<u16>, ty: &Type) -> TokenStream {
     let krate = krate();
-    match items
-        .iter()
-        .position(|(_, named)| type_key(named) == type_key(ty))
-    {
+    match item {
         Some(index) => {
-            let index = Literal::u16_unsuffixed(index as u16);
+            let index = Literal::u16_unsuffixed(index);
             quote!(#krate::Target::Item(#index))
         }
         None => quote!(#krate::Target::Node(<#ty as #krate::Sql>::NODE)),
@@ -75,10 +76,10 @@ pub(crate) fn target(ty: &Type, items: &[(Type, Type)]) -> TokenStream {
 pub(crate) fn parts(
     template: &Template,
     analysis: &Analysis,
-    item: &Item,
-    items: &[(Type, Type)],
+    fields: &[Field],
 ) -> Vec<TokenStream> {
     let krate = krate();
+    let values: Vec<&Field> = fields.iter().filter(|field| !field.is_item()).collect();
     let mut positions = analysis.refs.iter();
     template
         .segments
@@ -86,15 +87,19 @@ pub(crate) fn parts(
         .map(|segment| match segment {
             Segment::Lit(text) => quote!(#krate::Lit::part(#text)),
             Segment::Param(slot) => {
-                let (field, ty) = item.describe(*slot);
+                let field = values[*slot as usize];
+                let (name, ty) = (
+                    field.ident.to_string().trim_start_matches("r#").to_owned(),
+                    type_string(&field.ty),
+                );
                 let slot = Literal::u16_unsuffixed(*slot);
-                quote!(#krate::Param::part(#slot, #field, #ty))
+                quote!(#krate::Param::part(#slot, #name, #ty))
             }
             Segment::Ref(item) => {
                 let position = positions.next().expect("a position for every reference");
-                let node = target(&item.ty, items);
+                let target = target(item.item, &item.ty);
                 if !position.from {
-                    return quote!(#krate::Expr::part(#node));
+                    return quote!(#krate::Expr::part(#target));
                 }
                 let rule = if position.alias.is_some() {
                     quote!(Given)
@@ -110,7 +115,7 @@ pub(crate) fn parts(
                 };
                 quote! {
                     #krate::From::part(
-                        #node,
+                        #target,
                         #krate::AliasRule::#rule,
                         #inject,
                     )

@@ -10,7 +10,7 @@ use crate::statement::bind::Bind;
 use crate::statement::bind::path::Path;
 use crate::statement::bind::slot::Slot;
 
-use super::paths::instance_path;
+use super::paths::{embedded, instance_path};
 use super::placement::placement;
 use super::{MAX_NUMBERED, Renderer};
 
@@ -30,7 +30,7 @@ impl<'a, D: Dialect> Renderer<'a, D> {
                 Part::Ident(ident) => self.quoted(ident.0, 0),
                 Part::Param(param) => self.param(node, path, param),
                 Part::Expr(expr) => {
-                    let (child, child_path) = self.embedded(node, path, expr.target());
+                    let (child, child_path) = embedded(node, path, expr.target());
                     self.push("(");
                     self.body(child, child_path);
                     self.push(")");
@@ -42,7 +42,7 @@ impl<'a, D: Dialect> Renderer<'a, D> {
     }
 
     const fn from(&mut self, node: &'static Node, path: Path, from: From) {
-        let (child, child_path) = self.embedded(node, path, from.target());
+        let (child, child_path) = embedded(node, path, from.target());
         match placement::<D>(from, child) {
             Inject::Ident => self.body(child, child_path),
             Inject::Cte { .. } => match self.cte_suffix(child, instance_path(child, child_path)) {

@@ -1,0 +1,11 @@
+error: the field `archive` isn't a step; list it in `steps(...)` or remove it
+  --> tests/ui/transaction_fields.rs:16:9
+   |
+16 |     pub archive: Archive,
+   |         ^^^^^^^
+
+error: only a query's template embeds items; a step runs on its own
+  --> tests/ui/transaction_fields.rs:21:5
+   |
+21 |     #[cte]
+   |     ^^^^^^

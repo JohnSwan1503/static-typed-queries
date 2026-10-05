@@ -6,7 +6,7 @@ dialect.
 use static_typed_queries::prelude::*;
 
 #[sql]
-pub const BY_ORG: &str = "SELECT id FROM {Users} WHERE org_id = {org_id: i64}";
+pub const BY_ORG: &str = "SELECT id FROM {Users} WHERE org_id = {org_id}";
 
 mod pg {
     use static_typed_queries::prelude::*;
@@ -15,7 +15,9 @@ mod pg {
     pub struct Users;
 
     #[query(Postgres, sql = super::BY_ORG)]
-    pub struct ByOrg;
+    pub struct ByOrg {
+        pub org_id: i64,
+    }
 }
 
 mod my {
@@ -25,7 +27,9 @@ mod my {
     pub struct Users;
 
     #[query(MySql, sql = super::BY_ORG)]
-    pub struct ByOrg;
+    pub struct ByOrg {
+        pub org_id: i64,
+    }
 }
 
 # fn main() {

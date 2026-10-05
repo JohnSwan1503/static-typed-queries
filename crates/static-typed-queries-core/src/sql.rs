@@ -3,6 +3,5 @@ use crate::node;
 
 pub trait Sql: 'static {
     type Dialect: dialect::Dialect;
-    type Params;
     const NODE: &'static node::Node;
 }

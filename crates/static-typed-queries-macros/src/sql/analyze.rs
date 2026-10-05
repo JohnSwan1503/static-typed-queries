@@ -2,9 +2,8 @@ use std::fmt::Write as _;
 use std::ops::ControlFlow;
 
 use sqlparser::ast::{
-    AssignmentTarget, BinaryOperator, Expr, Function, FunctionArg, FunctionArgExpr,
-    FunctionArguments, Ident as SqlIdent, LimitClause, ObjectName, ObjectNamePart, Query,
-    SelectItem, SetExpr, Statement, TableAlias, TableFactor, Visit, Visitor,
+    Expr, Ident as SqlIdent, ObjectName, ObjectNamePart, Query, SelectItem, SetExpr, Statement,
+    TableAlias, TableFactor, Visit, Visitor,
 };
 use sqlparser::dialect::{Dialect, GenericDialect, MySqlDialect, PostgreSqlDialect, SQLiteDialect};
 use sqlparser::parser::Parser;
@@ -27,28 +26,10 @@ pub(crate) struct Position {
     pub alias: Option<String>,
 }
 
-#[derive(Clone, Copy)]
-pub(crate) enum Origin {
-    Compared,
-    Inserted,
-    Assigned,
-    Selected,
-    Limit,
-    Offset,
-}
-
 pub(crate) struct Analysis {
     pub kind: Kind,
     pub returns_rows: bool,
-    pub columns: Columns,
     pub refs: Vec<Position>,
-    pub names: Vec<Option<(String, Origin)>>,
-}
-
-#[derive(Default)]
-pub(crate) struct Columns {
-    pub names: Vec<String>,
-    pub complete: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -115,13 +96,6 @@ impl Engine {
             Engine::MySql => "MySQL",
             Engine::Sqlite => "SQLite",
             Engine::Generic => "generic SQL",
-        }
-    }
-
-    fn column(self, ident: &SqlIdent) -> String {
-        match (self, ident.quote_style) {
-            (Engine::Postgres, None) => ident.value.to_lowercase(),
-            _ => ident.value.clone(),
         }
     }
 
@@ -194,74 +168,20 @@ pub(crate) fn analyze(template: &Template, engine: Engine, sql: &LitStr) -> syn:
         _ => false,
     };
 
-    let mut analyzer = Analyzer {
-        refs,
-        names: vec![None; template.params.len()],
-    };
+    let mut analyzer = Analyzer { refs };
     let _ = statement.visit(&mut analyzer);
     Ok(Analysis {
         kind,
         returns_rows,
-        columns: columns(statement, engine),
         refs: analyzer.refs,
-        names: analyzer.names,
     })
-}
-
-fn columns(statement: &Statement, engine: Engine) -> Columns {
-    let items = match statement {
-        Statement::Query(query) => projection(&query.body),
-        Statement::Insert(insert) => insert.returning.as_deref(),
-        Statement::Update(update) => update.returning.as_deref(),
-        Statement::Delete(delete) => delete.returning.as_deref(),
-        _ => None,
-    };
-    let mut columns = Columns {
-        names: Vec::new(),
-        complete: items.is_some(),
-    };
-    for item in items.unwrap_or_default() {
-        let ident = match item {
-            SelectItem::UnnamedExpr(Expr::Identifier(ident))
-                if !ident.value.starts_with("__stq_") =>
-            {
-                Some(ident)
-            }
-            SelectItem::UnnamedExpr(Expr::CompoundIdentifier(parts)) => parts.last(),
-            SelectItem::ExprWithAlias { alias, .. } => Some(alias),
-            _ => None,
-        };
-        match ident {
-            Some(ident) => columns.names.push(engine.column(ident)),
-            None => columns.complete = false,
-        }
-    }
-    columns
-}
-
-fn projection(body: &SetExpr) -> Option<&[SelectItem]> {
-    match body {
-        SetExpr::Select(select) => Some(&select.projection),
-        SetExpr::Query(query) => projection(&query.body),
-        SetExpr::SetOperation { left, .. } => projection(left),
-        _ => None,
-    }
 }
 
 struct Analyzer {
     refs: Vec<Position>,
-    names: Vec<Option<(String, Origin)>>,
 }
 
 impl Analyzer {
-    fn name(&mut self, expr: &Expr, origin: Origin, name: Option<String>) {
-        if let (Some(slot), Some(name)) = (param_slot(expr), name)
-            && let Some(entry @ None) = self.names.get_mut(slot)
-        {
-            *entry = Some((name, origin));
-        }
-    }
-
     fn place(&mut self, index: Option<usize>, alias: Option<&TableAlias>) {
         if let Some(position) = index.and_then(|index| self.refs.get_mut(index)) {
             *position = Position {
@@ -286,127 +206,21 @@ impl Visitor for Analyzer {
         ControlFlow::Continue(())
     }
 
-    fn pre_visit_expr(&mut self, expr: &Expr) -> ControlFlow<()> {
-        match expr {
-            Expr::BinaryOp { left, op, right } if is_comparison(op) => {
-                self.name(right, Origin::Compared, column(left));
-                self.name(left, Origin::Compared, column(right));
-            }
-            Expr::Between {
-                expr, low, high, ..
-            } => {
-                self.name(low, Origin::Compared, column(expr));
-                self.name(high, Origin::Compared, column(expr));
-            }
-            Expr::InList { expr, list, .. } => {
-                for item in list {
-                    self.name(item, Origin::Compared, column(expr));
-                }
-            }
-            Expr::Like { expr, pattern, .. } | Expr::ILike { expr, pattern, .. } => {
-                self.name(pattern, Origin::Compared, column(expr));
-            }
-            Expr::AnyOp { left, right, .. } | Expr::AllOp { left, right, .. } => {
-                self.name(right, Origin::Compared, column(left));
-            }
-            _ => {}
-        }
-        ControlFlow::Continue(())
-    }
-
     fn pre_visit_query(&mut self, query: &Query) -> ControlFlow<()> {
-        if let Some(LimitClause::LimitOffset { limit, offset, .. }) = &query.limit_clause {
-            if let Some(limit) = limit {
-                self.name(limit, Origin::Limit, Some("limit".into()));
-            }
-            if let Some(offset) = offset {
-                self.name(&offset.value, Origin::Offset, Some("offset".into()));
-            }
-        }
         if let SetExpr::Select(select) = &*query.body {
             for item in &select.projection {
-                if let SelectItem::ExprWithAlias { expr, alias } = item {
-                    self.name(expr, Origin::Selected, Some(alias.value.clone()));
-                    if let Expr::Subquery(subquery) = expr
-                        && let Some(position) =
-                            ref_marker(subquery).and_then(|index| self.refs.get_mut(index))
-                    {
-                        position.alias = Some(alias.value.clone());
-                    }
-                }
-            }
-        }
-        ControlFlow::Continue(())
-    }
-
-    fn pre_visit_statement(&mut self, statement: &Statement) -> ControlFlow<()> {
-        match statement {
-            Statement::Insert(insert) => {
-                if let Some(source) = &insert.source
-                    && let SetExpr::Values(values) = &*source.body
+                if let SelectItem::ExprWithAlias {
+                    expr: Expr::Subquery(subquery),
+                    alias,
+                } = item
+                    && let Some(position) =
+                        ref_marker(subquery).and_then(|index| self.refs.get_mut(index))
                 {
-                    for row in &values.rows {
-                        for (expr, column) in row.content.iter().zip(&insert.columns) {
-                            self.name(expr, Origin::Inserted, object_name(column));
-                        }
-                    }
+                    position.alias = Some(alias.value.clone());
                 }
             }
-            Statement::Update(update) => {
-                for assignment in &update.assignments {
-                    if let AssignmentTarget::ColumnName(column) = &assignment.target {
-                        self.name(&assignment.value, Origin::Assigned, object_name(column));
-                    }
-                }
-            }
-            _ => {}
         }
         ControlFlow::Continue(())
-    }
-}
-
-fn is_comparison(op: &BinaryOperator) -> bool {
-    matches!(
-        op,
-        BinaryOperator::Eq
-            | BinaryOperator::NotEq
-            | BinaryOperator::Lt
-            | BinaryOperator::LtEq
-            | BinaryOperator::Gt
-            | BinaryOperator::GtEq
-    )
-}
-
-fn unwrap(expr: &Expr) -> &Expr {
-    match expr {
-        Expr::Nested(inner) | Expr::Cast { expr: inner, .. } => unwrap(inner),
-        Expr::Function(function) => single_arg(function).map_or(expr, unwrap),
-        _ => expr,
-    }
-}
-
-fn single_arg(function: &Function) -> Option<&Expr> {
-    let FunctionArguments::List(list) = &function.args else {
-        return None;
-    };
-    match list.args.as_slice() {
-        [FunctionArg::Unnamed(FunctionArgExpr::Expr(expr))] => Some(expr),
-        _ => None,
-    }
-}
-
-fn param_slot(expr: &Expr) -> Option<usize> {
-    match unwrap(expr) {
-        Expr::Identifier(ident) => ident.value.strip_prefix(PARAM)?.parse().ok(),
-        _ => None,
-    }
-}
-
-fn column(expr: &Expr) -> Option<String> {
-    match unwrap(expr) {
-        Expr::Identifier(ident) if !ident.value.starts_with("__stq_") => Some(ident.value.clone()),
-        Expr::CompoundIdentifier(parts) => parts.last().map(|ident| ident.value.clone()),
-        _ => None,
     }
 }
 
@@ -415,23 +229,18 @@ fn ref_marker(query: &Query) -> Option<usize> {
         return None;
     };
     match select.projection.as_slice() {
-        [SelectItem::UnnamedExpr(Expr::Identifier(ident))] => {
-            ident.value.strip_prefix(REF)?.parse().ok()
-        }
+        [SelectItem::UnnamedExpr(Expr::Identifier(ident))] => marker(ident),
         _ => None,
     }
 }
 
 fn ref_name(name: &ObjectName) -> Option<usize> {
     match name.0.as_slice() {
-        [ObjectNamePart::Identifier(ident)] => ident.value.strip_prefix(REF)?.parse().ok(),
+        [ObjectNamePart::Identifier(ident)] => marker(ident),
         _ => None,
     }
 }
 
-fn object_name(name: &ObjectName) -> Option<String> {
-    match name.0.last()? {
-        ObjectNamePart::Identifier(ident) => Some(ident.value.clone()),
-        _ => None,
-    }
+fn marker(ident: &SqlIdent) -> Option<usize> {
+    ident.value.strip_prefix(REF)?.parse().ok()
 }

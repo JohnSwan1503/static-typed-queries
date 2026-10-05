@@ -6,9 +6,11 @@ pub struct Audit;
 #[table(Postgres, name = "orders", after(Audit))]
 pub struct Orders;
 
-#[query(Postgres, sql = "SELECT id FROM {Orders} WHERE id = {_: i64}")]
-pub struct OrderById;
+#[query(Postgres, sql = "SELECT id FROM {Orders} WHERE id = {id}")]
+pub struct OrderById {
+    pub id: i64,
+}
 
 fn main() {
-    let _ = OrderById::builder().id(1).with(Audit::builder());
+    let _ = OrderById { id: 1 }.with(Audit);
 }

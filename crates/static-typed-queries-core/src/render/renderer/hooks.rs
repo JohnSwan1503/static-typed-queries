@@ -81,7 +81,7 @@ impl<'a, D: Dialect> Renderer<'a, D> {
             if let Some(hook) = self.hooks[i]
                 && hook.after == after
             {
-                self.single(hook.root, hook.root, hook.node, hook.path);
+                self.single(hook.root, hook.node, hook.path);
             }
             i += 1;
         }

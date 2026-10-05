@@ -1,11 +1,15 @@
 #[macro_use]
 mod support;
 
+use core::marker::PhantomData;
+
 use sqlx::error::BoxDynError;
 use sqlx::{Arguments as _, Connection, Database, Encode, Row, SqliteConnection, Type};
+use static_typed_queries_core::dialect::Dialect;
 use static_typed_queries_core::dialect::mysql::MySql;
 use static_typed_queries_core::dialect::postgres::Postgres;
 use static_typed_queries_core::dialect::sqlite::Sqlite;
+use static_typed_queries_core::impl_statement;
 use static_typed_queries_core::node::Node;
 use static_typed_queries_core::node::inject::Inject;
 use static_typed_queries_core::part::expr::Expr;
@@ -15,9 +19,10 @@ use static_typed_queries_core::part::ident::Ident;
 use static_typed_queries_core::part::lit::Lit;
 use static_typed_queries_core::part::param::Param;
 use static_typed_queries_core::part::target::Target;
-use static_typed_queries_core::statement::Statement;
+use static_typed_queries_core::sql::Sql;
 use static_typed_queries_core::statement::bind::Bind;
 use static_typed_queries_core::statement::params::{BindParams, unknown};
+use static_typed_queries_core::statement::{Statement, query};
 
 const ORG_EVENTS: &Node = node!(
     "org_events",
@@ -65,22 +70,29 @@ const REPORT: &Node = node!(
     items = [KIND_COUNT, ORG_EVENTS]
 );
 
-pub struct OrgEventsParams {
+pub struct OrgEvents {
     pub org_id: i64,
 }
 
-pub struct KindCountParams {
+pub struct KindCount {
     pub kind: &'static str,
-    pub org_events: OrgEventsParams,
+    pub org_events: OrgEvents,
 }
 
-pub struct ReportParams {
+// The statement holds its values: one per value field, and one item field per embedded item.
+pub struct Report<D> {
     pub below: i64,
-    pub kind_count: KindCountParams,
-    pub org_events: OrgEventsParams,
+    pub kind_count: KindCount,
+    pub org_events: OrgEvents,
+    pub dialect: PhantomData<D>,
 }
 
-impl<DB: Database> BindParams<DB> for OrgEventsParams
+impl<D: Dialect> Sql for Report<D> {
+    type Dialect = D;
+    const NODE: &'static Node = REPORT;
+}
+
+impl<DB: Database> BindParams<DB> for OrgEvents
 where
     for<'t> i64: Encode<'t, DB> + Type<DB>,
 {
@@ -92,10 +104,10 @@ where
     }
 }
 
-impl<DB: Database> BindParams<DB> for KindCountParams
+impl<DB: Database> BindParams<DB> for KindCount
 where
     for<'t> &'static str: Encode<'t, DB> + Type<DB>,
-    OrgEventsParams: BindParams<DB>,
+    OrgEvents: BindParams<DB>,
 {
     fn bind(&self, path: &[u16], slot: u16, args: &mut DB::Arguments) -> Result<(), BoxDynError> {
         match (path, slot) {
@@ -106,11 +118,11 @@ where
     }
 }
 
-impl<DB: Database> BindParams<DB> for ReportParams
+impl<D, DB: Database> BindParams<DB> for Report<D>
 where
     for<'t> i64: Encode<'t, DB> + Type<DB>,
-    KindCountParams: BindParams<DB>,
-    OrgEventsParams: BindParams<DB>,
+    KindCount: BindParams<DB>,
+    OrgEvents: BindParams<DB>,
 {
     fn bind(&self, path: &[u16], slot: u16, args: &mut DB::Arguments) -> Result<(), BoxDynError> {
         match (path, slot) {
@@ -122,9 +134,8 @@ where
     }
 }
 
-root!(ReportPostgres: Postgres = REPORT, params = ReportParams);
-root!(ReportMySql: MySql = REPORT, params = ReportParams);
-root!(ReportSqlite: Sqlite = REPORT, params = ReportParams);
+impl_statement!(Report<Postgres>, Report<MySql>, Report<Sqlite>);
+
 root!(EventCount: Sqlite = node!(
     "event_count",
     4,
@@ -170,11 +181,11 @@ root!(SharedTwice: Postgres = node!(
 #[test]
 fn items_with_params_get_one_instance_per_path() {
     assert_eq!(
-        ReportPostgres::SQL,
+        Report::<Postgres>::SQL,
         r#"WITH "org_events" AS (SELECT id, kind FROM "events" WHERE org_id = $1), "org_events_2" AS (SELECT id, kind FROM "events" WHERE org_id = $2) SELECT (SELECT count(*) FROM "org_events" WHERE kind = $3) AS first, (SELECT max(id) FROM "org_events_2" WHERE id < $4 AND id <> $4) AS below"#
     );
     assert_eq!(
-        ReportPostgres::BINDS,
+        Report::<Postgres>::BINDS,
         [
             Bind::from_native("org_events", 1, &[0, 0], 0, "org_id", "i64"),
             Bind::from_native("org_events", 1, &[1], 0, "org_id", "i64"),
@@ -183,7 +194,7 @@ fn items_with_params_get_one_instance_per_path() {
         ]
     );
     assert_eq!(
-        ReportPostgres::BINDS[2].to_string(),
+        Report::<Postgres>::BINDS[2].to_string(),
         "kind_count.kind: &'static str"
     );
 }
@@ -191,7 +202,7 @@ fn items_with_params_get_one_instance_per_path() {
 #[test]
 fn positional_binds_repeat_for_every_placeholder() {
     assert_eq!(
-        ReportMySql::BINDS,
+        Report::<MySql>::BINDS,
         [
             Bind::from_native("org_events", 1, &[0, 0], 0, "org_id", "i64"),
             Bind::from_native("org_events", 1, &[1], 0, "org_id", "i64"),
@@ -220,21 +231,22 @@ async fn typed_params_bind_against_sqlite() -> sqlx::Result<()> {
     .execute(&mut conn)
     .await?;
 
-    let params = ReportParams {
+    let report = Report::<Sqlite> {
         below: 5,
-        kind_count: KindCountParams {
+        kind_count: KindCount {
             kind: "a",
-            org_events: OrgEventsParams { org_id: 1 },
+            org_events: OrgEvents { org_id: 1 },
         },
-        org_events: OrgEventsParams { org_id: 2 },
+        org_events: OrgEvents { org_id: 2 },
+        dialect: PhantomData,
     };
-    let row = ReportSqlite::query(&params)?.fetch_one(&mut conn).await?;
+    let row = query(&report)?.fetch_one(&mut conn).await?;
     assert_eq!(
         (row.get::<i64, _>("first"), row.get::<i64, _>("below")),
         (2, 3)
     );
 
-    let row = EventCount::query(&())?.fetch_one(&mut conn).await?;
+    let row = query(&EventCount)?.fetch_one(&mut conn).await?;
     assert_eq!(row.get::<i64, _>("n"), 5);
     let row = sqlx::query(EventCount).fetch_one(&mut conn).await?;
     assert_eq!(row.get::<i64, _>("n"), 5);

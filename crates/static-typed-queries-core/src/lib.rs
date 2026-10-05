@@ -1,16 +1,19 @@
-pub mod builder;
 #[cfg(feature = "parse-check")]
 pub mod check;
 #[doc(hidden)]
 pub mod codegen;
 pub mod dialect;
 pub mod embed;
+pub mod hooks;
 pub mod node;
 pub mod part;
 pub mod render;
 pub mod sql;
 pub mod statement;
 pub mod transaction;
+pub mod values;
+#[cfg(feature = "sqlx")]
+pub mod with;
 
 #[doc(hidden)]
 pub mod __private {

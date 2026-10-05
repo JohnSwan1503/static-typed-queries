@@ -1,16 +1,15 @@
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
 use syn::parse::{Parse, ParseStream};
-use syn::{Ident, ItemStruct, LitStr, Type};
+use syn::{Fields, Ident, ItemStruct, LitStr, Type, parse_quote};
 
 use crate::args::{self, Keys};
-use crate::emit::checks::{embeds, hook_needs, step_impl};
-use crate::emit::docs;
+use crate::emit::checks::{embeds, hook_needs, step_impl, values};
+use crate::emit::docs::{self, item_docs};
 use crate::emit::fmt::fmt;
 use crate::emit::node::{fingerprint, node};
-use crate::emit::rows::named_fields;
 use crate::emit::{self, krate};
-use crate::model::item::{Item, Role};
+use crate::model::role::Role;
 use crate::naming::type_key;
 
 pub(crate) struct TableArgs {
@@ -73,10 +72,10 @@ pub(crate) fn expand(args: TableArgs, input: ItemStruct) -> syn::Result<TokenStr
             "tables can't be generic",
         ));
     }
-    if !named_fields(&input).is_empty() {
+    if !matches!(input.fields, Fields::Unit) {
         return Err(syn::Error::new_spanned(
             &input.fields,
-            "tables can't have fields; give them to a query that selects from the table to read its rows",
+            "tables hold no values, so they can't have fields",
         ));
     }
     let name = &args.name;
@@ -93,6 +92,8 @@ pub(crate) fn expand(args: TableArgs, input: ItemStruct) -> syn::Result<TokenStr
     let node_name = table.rsplit('.').next().unwrap_or(&table);
     let ident = &input.ident;
     let dialect = &args.dialect;
+    let hook_types: Vec<&Type> = before.iter().chain(&after).collect();
+    let embeds = embeds(&input, &hook_types, &[], dialect);
     let node = node(
         node_name,
         fingerprint(ident, &input),
@@ -101,51 +102,45 @@ pub(crate) fn expand(args: TableArgs, input: ItemStruct) -> syn::Result<TokenStr
         parts,
         &[],
         [&before, &after],
+        embeds.node,
     );
+    let checked = embeds.checked;
     let check = (!before.is_empty() || !after.is_empty()).then(|| {
         quote! {
             const _: () = #krate::check_hooks(<#ident as #krate::Sql>::NODE);
         }
     });
-    let item = Item::new(
+    let hook_needs = hook_needs(&input, hook_types.len(), |i, index| {
+        let hook = hook_types[i];
+        parse_quote!(__V: #krate::Provides<#hook, #index>)
+    });
+    let values = values(&input, false);
+    let step = step_impl(&input, None);
+    let fmt = fmt(args.display.as_ref(), args.debug.as_ref(), &input, false)?;
+    let mut documented = input.clone();
+    documented.attrs.extend(item_docs(
         &input,
         Role::Table {
             before: &before,
             after: &after,
         },
-        Vec::new(),
-        Vec::new(),
-    );
-    let (definitions, builder) = item.builder(dialect, None);
-    let hook_types: Vec<Type> = before.iter().chain(&after).cloned().collect();
-    let embed_checks = embeds(&input, &hook_types, dialect);
-    let needs: Vec<TokenStream> = hook_types
-        .iter()
-        .map(|ty| quote!(<#ty as #krate::Sql>::Params))
-        .collect();
-    let hook_needs = hook_needs(&input, &needs, quote!(#krate::Demand));
-    let step = step_impl(&input, None);
-    let fmt = fmt(args.display.as_ref(), args.debug.as_ref(), &input, false)?;
-    let mut documented = input.clone();
-    documented.attrs.extend(item.item_docs());
+    ));
 
     let impls = emit::scoped(quote! {
         impl #krate::Sql for #ident {
             type Dialect = #dialect;
-            type Params = ();
             const NODE: &'static #krate::Node = #node;
         }
 
         #check
-        #embed_checks
+        #values
+        #checked
         #hook_needs
-        #builder
         #step
         #fmt
     });
     Ok(quote! {
         #documented
-        #definitions
         #impls
     })
 }

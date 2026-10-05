@@ -78,7 +78,6 @@ struct Active;
 
 impl Sql for Active {
     type Dialect = Postgres;
-    type Params = ();
     const NODE: &'static Node = node!(
         "active",
         5,
@@ -95,7 +94,6 @@ struct CountOf<T>(PhantomData<T>);
 
 impl<T: Sql> Sql for CountOf<T> {
     type Dialect = T::Dialect;
-    type Params = ();
     const NODE: &'static Node = &Node {
         name: Name::new("count_of"),
         fingerprint: Fingerprint(6).combine(T::NODE.fingerprint),
@@ -103,11 +101,11 @@ impl<T: Sql> Sql for CountOf<T> {
         inject: Inject::Subquery,
         parts: Parts(&[
             Lit::part("SELECT count(*) FROM "),
-            From::part(Target::Node(T::NODE), AliasRule::NodeName, None),
+            From::part(Target::Item(0), AliasRule::NodeName, None),
         ]),
         before: Hooks(&[]),
         after: Hooks(&[]),
-        items: Items(&[]),
+        items: Items(&[T::NODE]),
     };
 }
 
@@ -115,7 +113,6 @@ struct Nightly;
 
 impl Sql for Nightly {
     type Dialect = Postgres;
-    type Params = ();
     const NODE: &'static Node = node!(
         "nightly",
         7,
@@ -124,15 +121,10 @@ impl Sql for Nightly {
         [
             Expr::part(Target::Item(0)),
             Expr::part(Target::Item(1)),
-            Expr::part(Target::Item(3)),
+            Expr::part(Target::Node(ORDER_COUNT)),
             Expr::part(Target::Item(0)),
         ],
-        items = [
-            ARCHIVE,
-            <CountOf<Active> as Sql>::NODE,
-            <Active as Sql>::NODE,
-            ORDER_COUNT
-        ]
+        items = [ARCHIVE, <CountOf<Active> as Sql>::NODE]
     );
 }
 
@@ -151,7 +143,6 @@ struct Report;
 
 impl Sql for Report {
     type Dialect = Postgres;
-    type Params = ();
     const NODE: &'static Node = node!(
         "report",
         9,
@@ -199,7 +190,10 @@ fn each_step_renders_as_its_own_statement() {
 #[test]
 fn step_binds_are_relative_to_the_transaction() {
     let steps: Vec<_> = Nightly::STEPS.iter().map(paths).collect();
-    assert_eq!(steps, [vec![vec![0]], vec![vec![2]], vec![], vec![vec![0]]]);
+    assert_eq!(
+        steps,
+        [vec![vec![0]], vec![vec![1, 0]], vec![], vec![vec![0]]]
+    );
 }
 
 #[test]

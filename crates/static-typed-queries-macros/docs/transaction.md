@@ -9,33 +9,40 @@ use static_typed_queries::prelude::*;
 #[table(Postgres, name = "orders")]
 pub struct Orders;
 
-#[query(Postgres, sql = "DELETE FROM {Orders} WHERE created_at < {before: i64}")]
-pub struct Archive;
+#[query(Postgres, sql = "DELETE FROM {Orders} WHERE created_at < {before}")]
+pub struct Archive {
+    pub before: i64,
+}
 
 #[query(T::Dialect, sql = "SELECT count(*) FROM {T}")]
 pub struct CountOf<T: Sql>(PhantomData<T>);
 
-#[transaction(Postgres, steps(Archive, CountOf<Orders>))]
-pub struct Nightly;
+#[transaction(Postgres, steps(archive, CountOf<Orders>))]
+pub struct Nightly {
+    pub archive: Archive,
+}
 
 assert_eq!(
     Nightly::STEPS[0].sql(),
     r#"DELETE FROM "orders" WHERE created_at < $1"#
 );
 assert_eq!(Nightly::STEPS[1].sql(), r#"SELECT count(*) FROM "orders""#);
-let params = Nightly::builder().archive().before(1).build();
-assert_eq!(params.archive.before, 1);
+let nightly = Nightly {
+    archive: Archive { before: 1 },
+};
+assert_eq!(nightly.archive.before, 1);
 ```
 
-The first argument is the dialect, followed by `steps(Type, ...)`: the
-statements to run, in order. A step is a [`query`], a [`statement`], or an
-instantiation of a generic query such as `CountOf<Orders>`.
+The first argument is the dialect, followed by `steps(...)`: the
+statements to run, in order. A step is a field of the struct, which holds
+the values of a [`query`], a [`statement`] or an instantiation of a
+generic query, or the type of one that holds no values, such as
+`CountOf<Orders>`. Listing a field twice runs the same values twice.
 
 ## Running
 
-The complete builder's `run(conn)` takes anything that implements
-`sqlx::Acquire`, runs the steps in order in one transaction and commits
-them together. If a step outside a savepoint fails, every step rolls back.
+`run(conn)` takes anything that implements `sqlx::Acquire`, runs the
+steps in order in one transaction and commits them together. If a step outside a savepoint fails, every step rolls back.
 It returns a tuple with one element per step: a `Vec` of the step's row
 type when it has one, and otherwise the number of rows the step affected.
 `Type as one` reads exactly one row instead, failing with
@@ -58,10 +65,6 @@ with values from `with` as for a single statement.
 
 ## Generated items
 
-The struct implements `Sql`, `Build` and `Transaction`, whose `STEPS`
-holds each step's SQL and binds. Like a query, the transaction lists its
-step types once as its items, along with the types in their type
-arguments. A step listed twice shares its values, and the type arguments
-of a generic step get theirs from the transaction. `NameParams` and
-`NameBuilder` work as for [`query`]. The struct can't be generic or have
-fields.
+The struct implements `Sql` and `Transaction`, whose `STEPS` holds each
+step's SQL and binds, and with a database feature enabled has `with` and
+`run`. Every field must be a step. The struct can't be generic.

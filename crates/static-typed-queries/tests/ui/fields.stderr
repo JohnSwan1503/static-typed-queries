@@ -1,0 +1,26 @@
+error: tables hold no values, so they can't have fields
+ --> tests/ui/fields.rs:6:21
+  |
+6 |   pub struct Accounts {
+  |  _____________________^
+7 | |     pub id: i64,
+8 | | }
+  | |_^
+
+error: the field `name` isn't used in the template; write `{name}` where it goes, or remove it
+  --> tests/ui/fields.rs:16:9
+   |
+16 |     pub name: String,
+   |         ^^^^
+
+error: the fields hold the values, so they need names
+  --> tests/ui/fields.rs:20:20
+   |
+20 | pub struct Unnamed(i64);
+   |                    ^^^
+
+error: a statement holds only the values of what it runs; name this field in the attribute, as `#[statement(org_id)]`
+  --> tests/ui/fields.rs:27:9
+   |
+27 |     pub org_id: i64,
+   |         ^^^^^^

@@ -3,7 +3,6 @@ use quote::quote;
 use syn::{Ident, ItemStruct};
 
 use crate::emit::krate;
-use crate::emit::rows::named_fields;
 
 pub(crate) fn fmt(
     display: Option<&Ident>,
@@ -29,12 +28,6 @@ pub(crate) fn fmt(
             return Err(syn::Error::new(
                 value.span(),
                 "generic items can't take `display`/`debug`; give them to a `#[statement]` for an instantiation",
-            ));
-        }
-        if !named_fields(item).is_empty() {
-            return Err(syn::Error::new(
-                value.span(),
-                "a struct with fields is its own row type, so `display`/`debug` would describe each row; implement them yourself",
             ));
         }
         if value == "sql" && !statement {

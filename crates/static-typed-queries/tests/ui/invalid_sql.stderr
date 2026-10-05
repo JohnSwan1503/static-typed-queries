@@ -2,5 +2,5 @@ error: invalid SQL for PostgreSQL: sql parser error: Expected: end of statement,
          checked: SELECT id FROM (SELECT __stq_r0) WHERE org_id = __stq_p0 ORDER
  --> tests/ui/invalid_sql.rs:6:25
   |
-6 | #[query(Postgres, sql = "SELECT id FROM {Users} WHERE org_id = {org_id: i64} ORDER")]
-  |                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+6 | #[query(Postgres, sql = "SELECT id FROM {Users} WHERE org_id = {org_id} ORDER")]
+  |                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

@@ -1,7 +1,9 @@
+use syn::ext::IdentExt;
 use syn::parse::{Parse, ParseStream};
 use syn::{Ident, LitStr, Token, Type};
 
 use crate::args::Placement;
+use crate::model::fields::{Field, Kind};
 use crate::naming::type_key;
 
 pub(crate) enum Segment {
@@ -10,28 +12,32 @@ pub(crate) enum Segment {
     Ref(Box<Ref>),
 }
 
+// An embedded item: one of the item fields, by index, or a type that holds no values.
 pub(crate) struct Ref {
     pub ty: Type,
+    pub item: Option<u16>,
     pub placement: Option<Placement>,
     pub target: bool,
 }
 
-pub(crate) struct Param {
-    pub name: Option<Ident>,
-    pub ty: Type,
-}
-
 pub(crate) struct Template {
     pub segments: Vec<Segment>,
-    pub params: Vec<Param>,
-    pub children: Vec<Type>,
+    pub types: Vec<Type>,
 }
 
 enum Raw {
     Lit(String),
     Decl(Option<Ident>, Type),
-    Name(Ident, RefSyntax),
+    Name(Ident),
     Ref(RefSyntax),
+}
+
+struct AnyIdent(Ident);
+
+impl Parse for AnyIdent {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        Ok(AnyIdent(input.call(Ident::parse_any)?))
+    }
 }
 
 struct ParamDeclaration {
@@ -74,94 +80,124 @@ impl Parse for RefSyntax {
     }
 }
 
-pub(crate) fn parse(sql: &LitStr) -> syn::Result<Template> {
+// `{name}` is the field `name`: a value to bind, or an item to embed where the field is marked.
+// Every field must be used. Anything else names a type that holds no values.
+pub(crate) fn parse(sql: &LitStr, fields: &[Field]) -> syn::Result<Template> {
     let error = |message: String| syn::Error::new(sql.span(), message);
     let raw = scan(&sql.value()).map_err(error)?;
 
-    let mut declared: Vec<(Ident, Type)> = Vec::new();
-    for item in &raw {
-        if let Raw::Decl(Some(name), ty) = item {
-            if declared.iter().any(|(other, _)| other == name) {
-                return Err(error(format!(
-                    "parameter `{name}` is declared more than once; declare it once as `{{{name}: Type}}` and reuse it as `{{{name}}}`"
-                )));
-            }
-            declared.push((name.clone(), ty.clone()));
-        }
-    }
-
     let mut segments = Vec::new();
-    let mut params: Vec<Param> = Vec::new();
-    let mut children: Vec<Type> = Vec::new();
+    let mut used = vec![false; fields.len()];
+    let mut types: Vec<Type> = Vec::new();
     for (i, item) in raw.iter().enumerate() {
         match item {
             Raw::Lit(text) => segments.push(Segment::Lit(text.clone())),
-            Raw::Decl(None, ty) => {
-                params.push(Param {
-                    name: None,
-                    ty: ty.clone(),
-                });
-                segments.push(Segment::Param(params.len() as u16 - 1));
-            }
-            Raw::Decl(Some(name), _) => segments.push(named(name, &declared, &mut params)),
-            Raw::Name(name, _) if declared.iter().any(|(other, _)| other == name) => {
-                segments.push(named(name, &declared, &mut params));
-            }
-            Raw::Name(name, _) if name.to_string().starts_with(|c: char| c.is_lowercase()) => {
+            Raw::Decl(name, ty) => {
+                let (name, ty) = (
+                    name.as_ref().map_or("name".to_owned(), ToString::to_string),
+                    crate::emit::docs::type_string(ty),
+                );
                 return Err(error(format!(
-                    "parameter `{name}` isn't declared; declare it once as `{{{name}: Type}}`"
+                    "parameters are the struct's fields; add `pub {name}: {ty}` and write `{{{name}}}`"
                 )));
             }
-            Raw::Name(_, syntax) | Raw::Ref(syntax) => {
-                let previous = match i.checked_sub(1).map(|j| &raw[j]) {
-                    Some(Raw::Lit(text)) => last_words(text),
-                    _ => Vec::new(),
-                };
-                let target = matches!(
-                    previous.as_slice(),
-                    [.., "INTO" | "UPDATE" | "TABLE" | "TRUNCATE"] | [.., "DELETE", "FROM"]
-                );
-                if !children
+            Raw::Name(name)
+                if let Some(index) = fields
                     .iter()
-                    .any(|child| type_key(child) == type_key(&syntax.ty))
+                    .position(|field| field.ident.unraw() == name.unraw()) =>
+            {
+                used[index] = true;
+                let field = &fields[index];
+                segments.push(match field.kind {
+                    Kind::Value => Segment::Param(slot(fields, index)),
+                    Kind::Item(placement) => reference(
+                        &raw,
+                        i,
+                        field.ty.clone(),
+                        Some(slot(fields, index)),
+                        placement,
+                    ),
+                });
+            }
+            Raw::Name(name) if name.to_string().starts_with(|c: char| c.is_lowercase()) => {
+                return Err(error(format!(
+                    "there is no field named `{name}`; parameters are the struct's fields"
+                )));
+            }
+            Raw::Name(name) => {
+                let ty = syn::parse_quote!(#name);
+                add_type(&mut types, &ty);
+                segments.push(reference(&raw, i, ty, None, None));
+            }
+            Raw::Ref(syntax) => {
+                if let Type::Path(path) = &syntax.ty
+                    && let Some(name) = path.path.get_ident()
+                    && fields
+                        .iter()
+                        .any(|field| field.ident.unraw() == name.unraw())
                 {
-                    children.push(syntax.ty.clone());
+                    return Err(error(format!(
+                        "`{name}` is a field, so it is embedded the way the field is marked; write `{{{name}}}`"
+                    )));
                 }
-                segments.push(Segment::Ref(Box::new(Ref {
-                    ty: syntax.ty.clone(),
-                    placement: syntax.placement,
-                    target,
-                })));
+                add_type(&mut types, &syntax.ty);
+                segments.push(reference(
+                    &raw,
+                    i,
+                    syntax.ty.clone(),
+                    None,
+                    syntax.placement,
+                ));
             }
         }
     }
-    Ok(Template {
-        segments,
-        params,
-        children,
-    })
+    if let Some((field, _)) = fields.iter().zip(&used).find(|(_, used)| !**used) {
+        return Err(syn::Error::new(
+            field.ident.span(),
+            format!(
+                "the field `{}` isn't used in the template; write `{{{}}}` where it goes, or remove it",
+                field.ident, field.ident
+            ),
+        ));
+    }
+    Ok(Template { segments, types })
 }
 
-fn named(name: &Ident, declared: &[(Ident, Type)], params: &mut Vec<Param>) -> Segment {
-    let slot = match params
+// Values and items are numbered separately, each in field order.
+fn slot(fields: &[Field], index: usize) -> u16 {
+    fields[..index]
         .iter()
-        .position(|param| param.name.as_ref() == Some(name))
-    {
-        Some(slot) => slot,
-        None => {
-            let ty = declared
-                .iter()
-                .find(|(other, _)| other == name)
-                .map(|(_, ty)| ty.clone())
-                .expect("a declared parameter");
-            params.push(Param {
-                name: Some(name.clone()),
-                ty,
-            });
-            params.len() - 1
-        }
+        .filter(|field| field.is_item() == fields[index].is_item())
+        .count() as u16
+}
+
+fn add_type(types: &mut Vec<Type>, ty: &Type) {
+    if !types.iter().any(|other| type_key(other) == type_key(ty)) {
+        types.push(ty.clone());
+    }
+}
+
+fn reference(
+    raw: &[Raw],
+    i: usize,
+    ty: Type,
+    item: Option<u16>,
+    placement: Option<Placement>,
+) -> Segment {
+    let previous = match i.checked_sub(1).map(|j| &raw[j]) {
+        Some(Raw::Lit(text)) => last_words(text),
+        _ => Vec::new(),
     };
-    Segment::Param(slot as u16)
+    let target = matches!(
+        previous.as_slice(),
+        [.., "INTO" | "UPDATE" | "TABLE" | "TRUNCATE"] | [.., "DELETE", "FROM"]
+    );
+    Segment::Ref(Box::new(Ref {
+        ty,
+        item,
+        placement,
+        target,
+    }))
 }
 
 fn scan(text: &str) -> Result<Vec<Raw>, String> {
@@ -265,16 +301,12 @@ fn placeholder(content: &str) -> Result<Raw, String> {
     if let Ok(decl) = syn::parse_str::<ParamDeclaration>(content) {
         return Ok(Raw::Decl(decl.name, decl.ty));
     }
-    let syntax = syn::parse_str::<RefSyntax>(content).map_err(|_| {
-        format!(
-            "can't read placeholder `{{{content}}}`; expected `{{Item}}`, `{{name: Type}}`, `{{_: Type}}` or `{{name}}`"
-        )
-    })?;
-    if syntax.placement.is_none()
-        && let Ok(name) = syn::parse_str::<Ident>(content)
-    {
-        return Ok(Raw::Name(name, syntax));
+    if let Ok(AnyIdent(name)) = syn::parse_str::<AnyIdent>(content) {
+        return Ok(Raw::Name(name));
     }
+    let syntax = syn::parse_str::<RefSyntax>(content).map_err(|_| {
+        format!("can't read placeholder `{{{content}}}`; expected `{{field}}` or `{{Type}}`")
+    })?;
     Ok(Raw::Ref(syntax))
 }
 

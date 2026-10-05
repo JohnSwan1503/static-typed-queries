@@ -8,7 +8,7 @@ use crate::render::error::fail;
 use crate::statement::bind::path::Path;
 
 use super::names::{same_node, suffixed_eq};
-use super::paths::{instance_path, target};
+use super::paths::{embedded, instance_path, resolve, target};
 use super::placement::{attachable, placement};
 use super::{MAX_CTES, Renderer};
 
@@ -27,7 +27,7 @@ pub(super) struct Attached {
 
 impl<'a, D: Dialect> Renderer<'a, D> {
     pub(super) const fn attach(&mut self, root: &'static Node, step: Target) {
-        let (node, path) = self.resolve(root, Path::ROOT, step);
+        let (node, path) = resolve(root, Path::ROOT, step);
         let (node, path) = target(node, path);
         attachable::<D>(node);
         if self.attached_count == MAX_CTES {
@@ -54,7 +54,7 @@ impl<'a, D: Dialect> Renderer<'a, D> {
         while i < parts.len() {
             match parts[i] {
                 Part::Expr(expr) => {
-                    let (child, child_path) = self.embedded(node, path, expr.target());
+                    let (child, child_path) = embedded(node, path, expr.target());
                     if !matches!(child.kind, Kind::Query) {
                         fail(&[
                             "`",
@@ -65,7 +65,7 @@ impl<'a, D: Dialect> Renderer<'a, D> {
                     self.collect(child, child_path);
                 }
                 Part::From(from) => {
-                    let (child, child_path) = self.embedded(node, path, from.target());
+                    let (child, child_path) = embedded(node, path, from.target());
                     match placement::<D>(from, child) {
                         Inject::Cte { recursive } => {
                             self.collect(child, child_path);

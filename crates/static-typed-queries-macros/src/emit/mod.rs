@@ -1,11 +1,9 @@
 pub(crate) mod bind;
-pub(crate) mod builder;
 pub(crate) mod checks;
 pub(crate) mod docs;
 pub(crate) mod fmt;
 pub(crate) mod node;
-pub(crate) mod params;
-pub(crate) mod rows;
+pub(crate) mod run;
 
 use proc_macro2::TokenStream;
 use quote::quote;

@@ -1,16 +1,12 @@
 use std::marker::PhantomData;
 
-use sqlx::{Connection, SqliteConnection};
+use sqlx::{Connection, FromRow, SqliteConnection};
 use static_typed_queries::prelude::*;
 
 #[table(Sqlite, name = "events")]
 pub struct Events;
 
-#[query(
-    Sqlite,
-    sql = "SELECT e.kind, at FROM {Events} e WHERE at >= {_: i64} ORDER BY at"
-)]
-#[derive(Debug, PartialEq)]
+#[derive(FromRow, Debug, PartialEq)]
 pub struct Event {
     pub kind: String,
     pub at: i64,
@@ -18,28 +14,39 @@ pub struct Event {
 
 #[query(
     Sqlite,
-    sql = r#"INSERT INTO {Events} (kind, at) VALUES ({_: String}, {_: i64}) RETURNING kind AS "type", at"#
+    row = Event,
+    sql = "SELECT e.kind, at FROM {Events} e WHERE at >= {since} ORDER BY at"
 )]
-#[derive(Debug, PartialEq)]
+pub struct EventsSince {
+    pub since: i64,
+}
+
+#[derive(FromRow, Debug, PartialEq)]
 pub struct Added {
     pub r#type: String,
     pub at: i64,
 }
 
-#[query(Sqlite, sql = "SELECT * FROM {Events} WHERE kind = {_: String}")]
-#[derive(Debug, PartialEq)]
-pub struct Kinds {
+#[query(
+    Sqlite,
+    row = Added,
+    sql = r#"INSERT INTO {Events} (kind, at) VALUES ({kind}, {at}) RETURNING kind AS "type", at"#
+)]
+pub struct AddEvent {
     pub kind: String,
+    pub at: i64,
+}
+
+#[derive(FromRow, Debug, PartialEq)]
+pub struct Count {
+    pub n: i64,
 }
 
 #[query(T::Dialect, sql = "SELECT count(*) AS n FROM {T}")]
 pub struct Tally<T: Sql>(PhantomData<T>);
 
-#[statement(Tally<Events>)]
-#[derive(Debug, PartialEq)]
-pub struct EventTally {
-    pub n: i64,
-}
+#[statement(Tally<Events>, row = Count)]
+pub struct EventTally;
 
 #[query(Sqlite, sql = "INSERT INTO reads (at) VALUES (0)")]
 pub struct Read;
@@ -47,19 +54,13 @@ pub struct Read;
 #[table(Sqlite, name = "events", after(Read))]
 pub struct AuditedEvents;
 
-#[query(Sqlite, sql = "SELECT kind FROM {AuditedEvents} ORDER BY at")]
-#[derive(Debug, PartialEq)]
-pub struct AuditedKinds {
+#[derive(FromRow, Debug, PartialEq)]
+pub struct Kind {
     pub kind: String,
 }
 
-#[table(Postgres, name = "users")]
-pub struct Users;
-
-#[query(Postgres, sql = "SELECT u.Email FROM {Users} u")]
-pub struct Emails {
-    pub email: String,
-}
+#[query(Sqlite, row = Kind, sql = "SELECT kind FROM {AuditedEvents} ORDER BY at")]
+pub struct AuditedKinds;
 
 async fn connect() -> sqlx::Result<SqliteConnection> {
     let mut conn = SqliteConnection::connect("sqlite::memory:").await?;
@@ -74,14 +75,15 @@ async fn connect() -> sqlx::Result<SqliteConnection> {
 }
 
 #[tokio::test]
-async fn a_struct_with_fields_is_its_own_row() -> sqlx::Result<()> {
+async fn rows_are_read_into_the_row_type() -> sqlx::Result<()> {
     let mut conn = connect().await?;
-    let added = Added::builder()
-        .kind("c".to_owned())
-        .at(9)
-        .query()?
-        .fetch_one(&mut conn)
-        .await?;
+    let added = AddEvent {
+        kind: "c".to_owned(),
+        at: 9,
+    }
+    .query()?
+    .fetch_one(&mut conn)
+    .await?;
     assert_eq!(
         added,
         Added {
@@ -89,7 +91,10 @@ async fn a_struct_with_fields_is_its_own_row() -> sqlx::Result<()> {
             at: 9
         }
     );
-    let events = Event::builder().at(5).query()?.fetch_all(&mut conn).await?;
+    let events = EventsSince { since: 5 }
+        .query()?
+        .fetch_all(&mut conn)
+        .await?;
     assert_eq!(
         events,
         [
@@ -103,33 +108,22 @@ async fn a_struct_with_fields_is_its_own_row() -> sqlx::Result<()> {
             },
         ]
     );
-    let kinds = Kinds::builder()
-        .kind("a".to_owned())
-        .query()?
-        .fetch_all(&mut conn)
-        .await?;
-    assert_eq!(
-        kinds,
-        [Kinds {
-            kind: "a".to_owned()
-        }]
-    );
-    let tally = EventTally::builder().query()?.fetch_one(&mut conn).await?;
-    assert_eq!(tally, EventTally { n: 3 });
+    let tally = EventTally.query()?.fetch_one(&mut conn).await?;
+    assert_eq!(tally, Count { n: 3 });
     Ok(())
 }
 
 #[tokio::test]
 async fn statements_with_hooks_run_into_their_rows() -> sqlx::Result<()> {
     let mut conn = connect().await?;
-    let kinds = AuditedKinds::builder().run(&mut conn).await?;
+    let kinds = AuditedKinds.run(&mut conn).await?;
     assert_eq!(
         kinds,
         [
-            AuditedKinds {
+            Kind {
                 kind: "a".to_owned()
             },
-            AuditedKinds {
+            Kind {
                 kind: "b".to_owned()
             },
         ]
@@ -139,9 +133,4 @@ async fn statements_with_hooks_run_into_their_rows() -> sqlx::Result<()> {
         .await?;
     assert_eq!(reads, 1);
     Ok(())
-}
-
-#[test]
-fn postgres_folds_unquoted_column_names() {
-    assert_eq!(Emails::SQL, r#"SELECT u.Email FROM "users" u"#);
 }

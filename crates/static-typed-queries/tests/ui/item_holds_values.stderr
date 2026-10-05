@@ -1,0 +1,108 @@
+error[E0277]: `ActiveUsers` holds values, so it has to be a field of the query that uses it
+  --> tests/ui/item_holds_values.rs:13:1
+   |
+13 | #[query(Postgres, sql = "SELECT count(*) FROM {ActiveUsers}")]
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ holds values
+   |
+help: the trait `Valueless` is not implemented for `ActiveUsers`
+  --> tests/ui/item_holds_values.rs:9:1
+   |
+ 9 | pub struct ActiveUsers {
+   | ^^^^^^^^^^^^^^^^^^^^^^
+   = note: add a field such as `#[subquery] name: ActiveUsers` and write `{name}` in the template
+   = help: the following other types implement trait `Valueless`:
+             ByType
+             CountOf<T>
+             Counted
+             Run
+             Steps
+             Users
+note: required by a bound in `static_typed_queries::__private::values::valueless`
+  --> $WORKSPACE/crates/static-typed-queries-core/src/values.rs
+   |
+   | pub const fn valueless<T: Valueless>() {}
+   |                           ^^^^^^^^^ required by this bound in `valueless`
+   = note: this error originates in the attribute macro `query` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0277]: `ActiveUsers` holds values, so it has to be a field of the query that uses it
+  --> tests/ui/item_holds_values.rs:19:1
+   |
+19 | #[query(Postgres, sql = "SELECT {CountOf<ActiveUsers>} AS n")]
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ holds values
+   |
+help: the trait `Valueless` is not implemented for `ActiveUsers`
+  --> tests/ui/item_holds_values.rs:9:1
+   |
+ 9 | pub struct ActiveUsers {
+   | ^^^^^^^^^^^^^^^^^^^^^^
+   = note: add a field such as `#[subquery] name: ActiveUsers` and write `{name}` in the template
+   = help: the following other types implement trait `Valueless`:
+             ByType
+             CountOf<T>
+             Counted
+             Run
+             Steps
+             Users
+note: required for `CountOf<ActiveUsers>` to implement `static_typed_queries::__private::embed::Checked`
+  --> tests/ui/item_holds_values.rs:16:1
+   |
+16 | #[query(T::Dialect, sql = "SELECT count(*) FROM {T}")]
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unsatisfied trait bound introduced here
+17 | pub struct CountOf<T: Sql>(PhantomData<T>);
+   |            ^^^^^^^^^^^^^^^
+note: required by a bound in `static_typed_queries::__private::embed::checked`
+  --> $WORKSPACE/crates/static-typed-queries-core/src/embed.rs
+   |
+   | pub const fn checked<T: Checked>() {}
+   |                         ^^^^^^^ required by this bound in `checked`
+   = note: this error originates in the attribute macro `query` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0277]: `ActiveUsers` holds values, so it has to be a field of the query that uses it
+  --> tests/ui/item_holds_values.rs:22:13
+   |
+22 | #[statement(ActiveUsers)]
+   |             ^^^^^^^^^^^ holds values
+   |
+help: the trait `Valueless` is not implemented for `ActiveUsers`
+  --> tests/ui/item_holds_values.rs:9:1
+   |
+ 9 | pub struct ActiveUsers {
+   | ^^^^^^^^^^^^^^^^^^^^^^
+   = note: add a field such as `#[subquery] name: ActiveUsers` and write `{name}` in the template
+   = help: the following other types implement trait `Valueless`:
+             ByType
+             CountOf<T>
+             Counted
+             Run
+             Steps
+             Users
+note: required by a bound in `static_typed_queries::__private::values::valueless`
+  --> $WORKSPACE/crates/static-typed-queries-core/src/values.rs
+   |
+   | pub const fn valueless<T: Valueless>() {}
+   |                           ^^^^^^^^^ required by this bound in `valueless`
+
+error[E0277]: `ActiveUsers` holds values, so it has to be a field of the query that uses it
+  --> tests/ui/item_holds_values.rs:25:31
+   |
+25 | #[transaction(Postgres, steps(ActiveUsers))]
+   |                               ^^^^^^^^^^^ holds values
+   |
+help: the trait `Valueless` is not implemented for `ActiveUsers`
+  --> tests/ui/item_holds_values.rs:9:1
+   |
+ 9 | pub struct ActiveUsers {
+   | ^^^^^^^^^^^^^^^^^^^^^^
+   = note: add a field such as `#[subquery] name: ActiveUsers` and write `{name}` in the template
+   = help: the following other types implement trait `Valueless`:
+             ByType
+             CountOf<T>
+             Counted
+             Run
+             Steps
+             Users
+note: required by a bound in `static_typed_queries::__private::values::valueless`
+  --> $WORKSPACE/crates/static-typed-queries-core/src/values.rs
+   |
+   | pub const fn valueless<T: Valueless>() {}
+   |                           ^^^^^^^^^ required by this bound in `valueless`

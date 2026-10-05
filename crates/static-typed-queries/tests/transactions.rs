@@ -1,5 +1,3 @@
-use std::marker::PhantomData;
-
 use static_typed_queries::prelude::*;
 
 #[table(Postgres, name = "orders")]
@@ -7,43 +5,55 @@ pub struct Orders;
 
 #[query(
     Postgres,
-    cte,
-    sql = "SELECT id FROM {Orders} WHERE customer_id = {customer_id: i64}"
+    sql = "SELECT id FROM {Orders} WHERE customer_id = {customer_id}"
 )]
-pub struct CustomerOrders;
+pub struct CustomerOrders {
+    pub customer_id: i64,
+}
 
-#[query(T::Dialect, sql = "SELECT count(*) FROM {T}")]
-pub struct CountOf<T: Sql>(PhantomData<T>);
+#[query(T::Dialect, sql = "SELECT count(*) FROM {of}")]
+pub struct CountOf<T: Sql> {
+    #[cte]
+    pub of: T,
+}
+
+#[query(Postgres, sql = "DELETE FROM {Orders} WHERE created_at < {before}")]
+pub struct Archive {
+    pub before: i64,
+}
+
+#[statement(count)]
+pub struct OrderCount {
+    pub count: CountOf<Orders>,
+}
+
+#[transaction(Postgres, steps(archive, count, order_count, archive))]
+pub struct Nightly {
+    pub archive: Archive,
+    pub count: CountOf<CustomerOrders>,
+    pub order_count: OrderCount,
+}
 
 #[query(
     Postgres,
-    sql = "DELETE FROM {Orders} WHERE created_at < {before: i64}"
+    sql = "DELETE FROM {Orders} WHERE created_at < {before} RETURNING id"
 )]
-pub struct Archive;
-
-#[statement(CountOf<Orders>)]
-pub struct OrderCount;
-
-#[transaction(
-    Postgres,
-    steps(Archive, CountOf<CustomerOrders>, OrderCount, Archive)
-)]
-pub struct Nightly;
-
-#[query(
-    Postgres,
-    sql = "DELETE FROM {Orders} WHERE created_at < {before: i64} RETURNING id"
-)]
-pub struct ArchiveIds;
+pub struct ArchiveIds {
+    pub before: i64,
+}
 
 #[query(Postgres, sql = "SELECT count(*) FROM archive_ids")]
 pub struct Archived;
 
 #[transaction(
     Postgres,
-    steps(ArchiveIds as cte, CustomerOrders as cte, Archived, OrderCount)
+    steps(archive_ids as cte, customer_orders as cte, Archived, order_count)
 )]
-pub struct Sweep;
+pub struct Sweep {
+    pub archive_ids: ArchiveIds,
+    pub customer_orders: CustomerOrders,
+    pub order_count: OrderCount,
+}
 
 #[test]
 fn steps_render_in_order() {
@@ -66,82 +76,104 @@ fn steps_render_in_order() {
 }
 
 #[test]
-fn steps_take_their_values_from_the_transaction() {
-    let params = Nightly::builder()
-        .archive()
-        .before(10)
-        .customer_orders()
-        .customer_id(7)
-        .build();
-    assert_eq!(params.archive.before, 10);
-    assert_eq!(params.customer_orders.customer_id, 7);
+fn steps_bind_from_the_transaction_fields() {
+    let paths: Vec<Vec<Vec<u16>>> = Nightly::STEPS
+        .iter()
+        .map(|step| {
+            step.binds()
+                .iter()
+                .map(|bind| bind.path().steps().to_vec())
+                .collect()
+        })
+        .collect();
+    assert_eq!(
+        paths,
+        [vec![vec![0]], vec![vec![1, 0]], vec![], vec![vec![0]]]
+    );
 }
 
 mod lite {
     use static_typed_queries::prelude::*;
 
-    #[query(
-        Sqlite,
-        sql = "UPDATE counters SET n = n + 1 WHERE name = {name: String}"
-    )]
-    pub struct Bump;
+    #[query(Sqlite, sql = "UPDATE counters SET n = n + 1 WHERE name = {name}")]
+    pub struct Bump {
+        pub name: String,
+    }
 
-    #[query(Sqlite, sql = "INSERT INTO audit (note) VALUES ({note: String})")]
-    pub struct Note;
+    #[query(Sqlite, sql = "INSERT INTO audit (note) VALUES ({note})")]
+    pub struct Note {
+        pub note: String,
+    }
 
     #[table(Sqlite, name = "items", before(Bump), after(Note))]
     pub struct Items;
 
     #[query(
         Sqlite,
-        sql = "UPDATE {Items} SET price = price * 2 WHERE price > {_: i64}"
+        sql = "UPDATE {Items} SET price = price * 2 WHERE price > {price}"
     )]
-    pub struct Double;
+    pub struct Double {
+        pub price: i64,
+    }
 
-    #[query(
-        Sqlite,
-        sql = "INSERT INTO {Items} (id, price) VALUES ({id: i64}, {price: i64})"
-    )]
-    pub struct AddItem;
-
-    #[query(Sqlite, sql = "SELECT id, price FROM {Items} ORDER BY id")]
-    #[derive(Debug, PartialEq)]
-    pub struct Stock {
+    #[query(Sqlite, sql = "INSERT INTO {Items} (id, price) VALUES ({id}, {price})")]
+    pub struct AddItem {
         pub id: i64,
         pub price: i64,
     }
 
-    #[transaction(Sqlite, steps(Double, AddItem, Stock))]
-    pub struct Restock;
+    #[derive(sqlx::FromRow, Debug, PartialEq)]
+    pub struct Item {
+        pub id: i64,
+        pub price: i64,
+    }
 
-    #[transaction(Sqlite, steps(Double, savepoint(AddItem, Double), Stock))]
-    pub struct Careful;
+    #[query(Sqlite, row = Item, sql = "SELECT id, price FROM {Items} ORDER BY id")]
+    pub struct Stock;
 
-    #[transaction(Sqlite, steps(savepoint(Double, savepoint(AddItem)), Stock))]
-    pub struct Nested;
+    #[transaction(Sqlite, steps(double, add_item, Stock))]
+    pub struct Restock {
+        pub double: Double,
+        pub add_item: AddItem,
+    }
 
-    #[query(Sqlite, sql = "SELECT id, price FROM {Items} WHERE id = {id: i64}")]
-    #[derive(Debug, PartialEq)]
+    #[transaction(Sqlite, steps(double, savepoint(add_item, double), Stock))]
+    pub struct Careful {
+        pub double: Double,
+        pub add_item: AddItem,
+    }
+
+    #[transaction(Sqlite, steps(savepoint(double, savepoint(add_item)), Stock))]
+    pub struct Nested {
+        pub double: Double,
+        pub add_item: AddItem,
+    }
+
+    #[query(Sqlite, row = Item, sql = "SELECT id, price FROM {Items} WHERE id = {id}")]
     pub struct ItemById {
         pub id: i64,
-        pub price: i64,
     }
 
     #[query(
         Sqlite,
-        sql = "SELECT id, price FROM {Items} WHERE price < {_: i64} ORDER BY price LIMIT 1"
+        row = Item,
+        sql = "SELECT id, price FROM {Items} WHERE price < {below} ORDER BY price LIMIT 1"
     )]
-    #[derive(Debug, PartialEq)]
     pub struct Cheapest {
-        pub id: i64,
-        pub price: i64,
+        pub below: i64,
     }
 
-    #[transaction(Sqlite, steps(Double, ItemById as one, Cheapest as optional))]
-    pub struct Lookup;
+    #[transaction(Sqlite, steps(double, item as one, cheapest as optional))]
+    pub struct Lookup {
+        pub double: Double,
+        pub item: ItemById,
+        pub cheapest: Cheapest,
+    }
 }
 
-use lite::{Bump, Careful, Cheapest, ItemById, Lookup, Nested, Note, Restock, Stock};
+use lite::{
+    AddItem, Bump, Careful, Cheapest, Double, Item, ItemById, Lookup, Nested, Note, Restock,
+};
 use sqlx::{Connection, SqliteConnection};
 
 async fn connect() -> sqlx::Result<SqliteConnection> {
@@ -168,22 +200,31 @@ async fn hooks(conn: &mut SqliteConnection) -> sqlx::Result<(i64, Vec<String>)> 
     Ok((n, notes.into_iter().map(|(note,)| note).collect()))
 }
 
+fn bump() -> Bump {
+    Bump {
+        name: "runs".to_owned(),
+    }
+}
+
+fn note(note: &str) -> Note {
+    Note {
+        note: note.to_owned(),
+    }
+}
+
 async fn restock(
     conn: &mut SqliteConnection,
     id: i64,
     note: &str,
-) -> sqlx::Result<(u64, u64, Vec<Stock>)> {
-    Restock::builder()
-        .double()
-        .price(10)
-        .add_item()
-        .id(id)
-        .add_item()
-        .price(30)
-        .with(Bump::builder().name("runs".to_owned()))
-        .with(Note::builder().note(note.to_owned()))
-        .run(conn)
-        .await
+) -> sqlx::Result<(u64, u64, Vec<Item>)> {
+    Restock {
+        double: Double { price: 10 },
+        add_item: AddItem { id, price: 30 },
+    }
+    .with(bump())
+    .with(self::note(note))
+    .run(conn)
+    .await
 }
 
 #[tokio::test]
@@ -194,9 +235,9 @@ async fn run_returns_the_output_of_each_step() -> sqlx::Result<()> {
     assert_eq!(
         stock,
         [
-            Stock { id: 1, price: 5 },
-            Stock { id: 2, price: 40 },
-            Stock { id: 3, price: 30 },
+            Item { id: 1, price: 5 },
+            Item { id: 2, price: 40 },
+            Item { id: 3, price: 30 },
         ]
     );
     assert_eq!(hooks(&mut conn).await?, (1, vec!["restock".to_owned()]));
@@ -225,18 +266,15 @@ fn runs_are_send() {
 async fn careful(
     conn: &mut SqliteConnection,
     id: i64,
-) -> sqlx::Result<(u64, sqlx::Result<(u64, u64)>, Vec<Stock>)> {
-    Careful::builder()
-        .double()
-        .price(10)
-        .add_item()
-        .id(id)
-        .add_item()
-        .price(30)
-        .with(Bump::builder().name("runs".to_owned()))
-        .with(Note::builder().note("careful".to_owned()))
-        .run(conn)
-        .await
+) -> sqlx::Result<(u64, sqlx::Result<(u64, u64)>, Vec<Item>)> {
+    Careful {
+        double: Double { price: 10 },
+        add_item: AddItem { id, price: 30 },
+    }
+    .with(bump())
+    .with(note("careful"))
+    .run(conn)
+    .await
 }
 
 #[tokio::test]
@@ -248,9 +286,9 @@ async fn a_savepoint_commits_with_the_transaction() -> sqlx::Result<()> {
     assert_eq!(
         stock,
         [
-            Stock { id: 1, price: 5 },
-            Stock { id: 2, price: 80 },
-            Stock { id: 3, price: 60 },
+            Item { id: 1, price: 5 },
+            Item { id: 2, price: 80 },
+            Item { id: 3, price: 60 },
         ]
     );
     Ok(())
@@ -263,10 +301,7 @@ async fn a_failing_savepoint_rolls_back_only_its_steps() -> sqlx::Result<()> {
     assert_eq!(doubled, 1);
     let error = group.unwrap_err();
     assert!(error.to_string().contains("UNIQUE"), "{error}");
-    assert_eq!(
-        stock,
-        [Stock { id: 1, price: 5 }, Stock { id: 2, price: 40 }]
-    );
+    assert_eq!(stock, [Item { id: 1, price: 5 }, Item { id: 2, price: 40 }]);
     assert_eq!(hooks(&mut conn).await?, (1, vec!["careful".to_owned()]));
     Ok(())
 }
@@ -274,24 +309,18 @@ async fn a_failing_savepoint_rolls_back_only_its_steps() -> sqlx::Result<()> {
 #[tokio::test]
 async fn savepoints_nest() -> sqlx::Result<()> {
     let mut conn = connect().await?;
-    let (outer, stock) = Nested::builder()
-        .double()
-        .price(10)
-        .add_item()
-        .id(1)
-        .add_item()
-        .price(1)
-        .with(Bump::builder().name("runs".to_owned()))
-        .with(Note::builder().note("nested".to_owned()))
-        .run(&mut conn)
-        .await?;
+    let (outer, stock) = Nested {
+        double: Double { price: 10 },
+        add_item: AddItem { id: 1, price: 1 },
+    }
+    .with(bump())
+    .with(note("nested"))
+    .run(&mut conn)
+    .await?;
     let (doubled, inner) = outer?;
     assert_eq!(doubled, 1);
     assert!(inner.is_err());
-    assert_eq!(
-        stock,
-        [Stock { id: 1, price: 5 }, Stock { id: 2, price: 40 }]
-    );
+    assert_eq!(stock, [Item { id: 1, price: 5 }, Item { id: 2, price: 40 }]);
     Ok(())
 }
 
@@ -299,26 +328,24 @@ async fn lookup(
     conn: &mut SqliteConnection,
     id: i64,
     below: i64,
-) -> sqlx::Result<(u64, ItemById, Option<Cheapest>)> {
-    Lookup::builder()
-        .double()
-        .price(10)
-        .item_by_id()
-        .id(id)
-        .cheapest()
-        .price(below)
-        .with(Bump::builder().name("runs".to_owned()))
-        .with(Note::builder().note("lookup".to_owned()))
-        .run(conn)
-        .await
+) -> sqlx::Result<(u64, Item, Option<Item>)> {
+    Lookup {
+        double: Double { price: 10 },
+        item: ItemById { id },
+        cheapest: Cheapest { below },
+    }
+    .with(bump())
+    .with(note("lookup"))
+    .run(conn)
+    .await
 }
 
 #[tokio::test]
 async fn steps_can_read_one_row_or_an_optional_row() -> sqlx::Result<()> {
     let mut conn = connect().await?;
     let (_, item, cheapest) = lookup(&mut conn, 2, 10).await?;
-    assert_eq!(item, ItemById { id: 2, price: 40 });
-    assert_eq!(cheapest, Some(Cheapest { id: 1, price: 5 }));
+    assert_eq!(item, Item { id: 2, price: 40 });
+    assert_eq!(cheapest, Some(Item { id: 1, price: 5 }));
 
     let (_, _, none) = lookup(&mut connect().await?, 1, 1).await?;
     assert_eq!(none, None);
@@ -343,21 +370,16 @@ fn cte_steps_attach_to_the_next_step() {
         .collect();
     assert_eq!(paths, [vec![0], vec![1]]);
     assert_eq!(Sweep::STEPS[1].sql(), OrderCount::SQL);
-    let params = Sweep::builder()
-        .archive_ids()
-        .before(5)
-        .customer_orders()
-        .customer_id(7)
-        .build();
-    assert_eq!(params.archive_ids.before, 5);
 }
 
 async fn _sweep(conn: &mut sqlx::PgConnection) -> sqlx::Result<(u64, u64)> {
-    Sweep::builder()
-        .archive_ids()
-        .before(5)
-        .customer_orders()
-        .customer_id(7)
-        .run(conn)
-        .await
+    Sweep {
+        archive_ids: ArchiveIds { before: 5 },
+        customer_orders: CustomerOrders { customer_id: 7 },
+        order_count: OrderCount {
+            count: CountOf { of: Orders },
+        },
+    }
+    .run(conn)
+    .await
 }

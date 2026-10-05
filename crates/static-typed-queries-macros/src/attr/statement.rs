@@ -4,15 +4,15 @@ use syn::parse::{Parse, ParseStream};
 use syn::{Ident, ItemStruct, LitBool, Type, parse_quote};
 
 use crate::args::{self, Keys};
-use crate::emit::checks::{embeds, hook_needs, parse_test, step_impl};
-use crate::emit::docs;
+use crate::emit::bind::bind_impl;
+use crate::emit::checks::{embeds, hook_needs, parse_test, step_impl, values};
+use crate::emit::docs::{self, item_docs};
 use crate::emit::fmt::fmt;
 use crate::emit::node::{fingerprint, node};
-use crate::emit::rows::{from_row, row, row_docs};
+use crate::emit::run::statement_methods;
 use crate::emit::{self, krate};
-use crate::model::item::{Item, Role};
-use crate::model::items::add_item;
-use crate::model::params;
+use crate::model::fields;
+use crate::model::role::Role;
 use crate::naming::snake_case;
 
 pub(crate) struct StatementArgs {
@@ -41,7 +41,7 @@ impl Parse for StatementArgs {
                 "debug" => args.debug = Some(args::value(input)?),
                 "row" => args.row = Some(args::value(input)?),
                 "parse_check" => args.parse_check = Some(args::value(input)?),
-                "sql" | "sql_file" | "name" | "cte" | "subquery" | "separate" | "grammar" => {
+                "sql" | "sql_file" | "name" | "cte" | "subquery" | "grammar" => {
                     return Err(syn::Error::new(
                         key.span(),
                         format!(
@@ -59,74 +59,85 @@ impl Parse for StatementArgs {
     }
 }
 
-pub(crate) fn expand(args: StatementArgs, input: ItemStruct) -> syn::Result<TokenStream> {
+pub(crate) fn expand(args: StatementArgs, mut input: ItemStruct) -> syn::Result<TokenStream> {
     let krate = krate();
-    let target = &args.target;
     if !input.generics.params.is_empty() {
         return Err(syn::Error::new_spanned(
             &input.generics,
             "statements can't be generic; name the instantiation instead",
         ));
     }
+    let fields = fields::items(&mut input)?;
+    let target = &args.target;
+    let field = fields::resolve(target, &fields);
+    if let Some(other) = fields
+        .iter()
+        .find(|other| field.is_none_or(|(_, field)| !std::ptr::eq(field, *other)))
+    {
+        return Err(syn::Error::new(
+            other.ident.span(),
+            format!(
+                "a statement holds only the values of what it runs; name this field in the attribute, as `#[statement({})]`",
+                other.ident
+            ),
+        ));
+    }
+    let ty: &Type = field.map_or(target, |(_, field)| &field.ty);
     let ident = &input.ident;
-    let dialect: Type = parse_quote!(<#target as #krate::Sql>::Dialect);
-    let mut items = Vec::new();
-    add_item(target, &input.generics, &[], &mut items);
-    let item = Item::new(
-        &input,
-        Role::Statement { target },
-        Vec::new(),
-        params::children(&items, &[], &[]),
-    );
-    let fields: Vec<Type> = items.iter().map(|(ty, _)| ty.clone()).collect();
+    let dialect: Type = parse_quote!(<#ty as #krate::Sql>::Dialect);
+    let embeds = match field {
+        Some(_) => embeds(&input, &[ty], &[], &dialect),
+        None => embeds(&input, &[], std::slice::from_ref(ty), &dialect),
+    };
     let node = node(
         &snake_case(&ident.to_string()),
         fingerprint(ident, &input),
         quote!(Scope),
         quote!(#krate::Inject::Subquery),
         Vec::new(),
-        &fields,
+        &[ty],
         [&[], &[]],
+        embeds.node,
     );
-    let params_ty = item.ty();
-    let params_struct = item.definition();
-    let derives = item.derives();
-    let bind_params = item.bind_impl();
-    let row = row(args.row.as_ref(), &input, true, None)?;
-    let (definitions, builder) = item.builder(&dialect, row.as_ref());
-    let embed_checks = embeds(&input, &fields, &dialect);
-    let hook_needs = hook_needs(&input, &[quote!(#target)], quote!(#krate::HookNeeds));
-    let fmt = fmt(args.display.as_ref(), args.debug.as_ref(), &input, true)?;
-    let rows = row.as_ref().map(|row| {
+    let checked = embeds.checked;
+    let hook_needs = hook_needs(
+        &input,
+        1,
+        |_, index| parse_quote!(#ty: #krate::HookNeeds<__V, #index>),
+    );
+    let values = values(&input, !fields.is_empty());
+    let bind = bind_impl(&input, &fields);
+    let row = args.row.as_ref();
+    let rows = row.map(|row| {
         quote! {
             impl #krate::Rows for #ident {
                 type Row = #row;
             }
         }
     });
-    let from_row = from_row(&input, &dialect);
-    let step = step_impl(&input, row.as_ref());
+    let methods = statement_methods(&input, &dialect, row);
+    let step = step_impl(&input, row);
+    let fmt = fmt(args.display.as_ref(), args.debug.as_ref(), &input, true)?;
     let parse_check = args.parse_check.as_ref().is_none_or(|check| check.value);
     let test = parse_check.then(|| parse_test(ident));
     let mut documented = input.clone();
-    documented.attrs.extend(item.item_docs());
-    documented.attrs.extend(row_docs(&input));
+    documented
+        .attrs
+        .extend(item_docs(&input, Role::Statement { target }));
     let impls = emit::scoped(quote! {
         impl #krate::Sql for #ident {
             type Dialect = #dialect;
-            type Params = #params_ty;
             const NODE: &'static #krate::Node = #node;
         }
 
-        #derives
-        #embed_checks
+        #values
+        #checked
         #hook_needs
-        #bind_params
-        #builder
+        #bind
 
         #krate::impl_statement!(#ident);
         #rows
-        #from_row
+        #methods
         #step
 
         impl #ident {
@@ -138,8 +149,6 @@ pub(crate) fn expand(args: StatementArgs, input: ItemStruct) -> syn::Result<Toke
     });
     Ok(quote! {
         #documented
-        #params_struct
-        #definitions
         #test
         #impls
     })

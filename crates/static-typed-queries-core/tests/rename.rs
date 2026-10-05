@@ -24,7 +24,6 @@ struct Users;
 
 impl Sql for Users {
     type Dialect = Postgres;
-    type Params = ();
     const NODE: &'static Node = node!("users", 1, Table, Inject::Ident, [Ident::part("users")]);
 }
 
@@ -32,7 +31,6 @@ struct Orders;
 
 impl Sql for Orders {
     type Dialect = Postgres;
-    type Params = ();
     const NODE: &'static Node = node!("orders", 2, Table, Inject::Ident, [Ident::part("orders")]);
 }
 
@@ -40,7 +38,6 @@ struct Recent<T>(PhantomData<T>);
 
 impl<T: Sql> Sql for Recent<T> {
     type Dialect = T::Dialect;
-    type Params = ();
     const NODE: &'static Node = &Node {
         name: Name::new("recent"),
         fingerprint: Fingerprint(3).combine(T::NODE.fingerprint),

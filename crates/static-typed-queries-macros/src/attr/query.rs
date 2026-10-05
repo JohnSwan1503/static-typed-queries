@@ -5,16 +5,16 @@ use syn::{
     GenericParam, Ident, ItemStruct, LitBool, LitStr, Path, Type, parenthesized, parse_quote,
 };
 
-use crate::args::{self, Keys, Placement, Sql};
-use crate::attr::wrapper::{self, separate};
-use crate::emit::checks::{embeds, hook_needs, parse_test, step_impl};
+use crate::args::{self, Keys, Sql};
+use crate::emit::bind::bind_impl;
+use crate::emit::checks::{embeds, hook_needs, parse_test, step_impl, values};
+use crate::emit::docs::item_docs;
 use crate::emit::fmt::fmt;
-use crate::emit::node::{fingerprint, node, parts, placement};
-use crate::emit::rows::{from_row, row, row_docs};
+use crate::emit::node::{fingerprint, node, parts};
+use crate::emit::run::statement_methods;
 use crate::emit::{self, krate};
-use crate::model::item::{Item, Role};
-use crate::model::items::items;
-use crate::model::params;
+use crate::model::fields;
+use crate::model::role::Role;
 use crate::naming::{snake_case, type_key};
 use crate::sql::analyze::{self, Engine, Kind};
 use crate::sql::template;
@@ -24,24 +24,20 @@ pub(crate) struct QueryArgs {
     pub(crate) sql: Option<Sql>,
     pub(crate) sql_file: Option<LitStr>,
     pub(crate) name: Option<LitStr>,
-    pub(crate) placement: Option<Placement>,
     pub(crate) display: Option<Ident>,
     pub(crate) debug: Option<Ident>,
     pub(crate) parse_check: Option<LitBool>,
-    pub(crate) separate: Option<Vec<Type>>,
     pub(crate) grammar: Option<Ident>,
     pub(crate) row: Option<Type>,
 }
 
 const KEYS: Keys = &[
-    &["cte", "subquery"],
     &["sql"],
     &["sql_file"],
     &["name"],
     &["display"],
     &["debug"],
     &["parse_check"],
-    &["separate"],
     &["grammar"],
     &["row"],
 ];
@@ -53,26 +49,28 @@ impl Parse for QueryArgs {
             sql: None,
             sql_file: None,
             name: None,
-            placement: None,
             display: None,
             debug: None,
             parse_check: None,
-            separate: None,
             grammar: None,
             row: None,
         };
         args::parse_keys(input, KEYS, |key, input| {
             match key.to_string().as_str() {
-                "cte" | "subquery" => args.placement = Some(Placement::parse_keyword(input)?),
                 "sql" => args.sql = Some(args::value(input)?),
                 "sql_file" => args.sql_file = Some(args::value(input)?),
                 "name" => args.name = Some(args::value(input)?),
                 "display" => args.display = Some(args::value(input)?),
                 "debug" => args.debug = Some(args::value(input)?),
                 "parse_check" => args.parse_check = Some(args::value(input)?),
-                "separate" => args.separate = Some(args::types(input)?),
                 "grammar" => args.grammar = Some(args::value(input)?),
                 "row" => args.row = Some(args::value(input)?),
+                "cte" | "subquery" => {
+                    return Err(syn::Error::new(
+                        key.span(),
+                        "a query is embedded the way each use asks: mark the field `#[cte]` or `#[subquery]`, or write `{Type as cte}`",
+                    ));
+                }
                 "before" | "after" => return Err(args::only_tables(key)),
                 "steps" => return Err(args::only_transactions(key)),
                 _ => return Ok(false),
@@ -102,7 +100,7 @@ impl Parse for NamedQuery {
     }
 }
 
-pub(crate) fn expand(args: QueryArgs, input: ItemStruct) -> syn::Result<TokenStream> {
+pub(crate) fn expand(args: QueryArgs, mut input: ItemStruct) -> syn::Result<TokenStream> {
     let krate = krate();
     if let Some(param) = input
         .generics
@@ -137,7 +135,8 @@ pub(crate) fn expand(args: QueryArgs, input: ItemStruct) -> syn::Result<TokenStr
         }
     };
     let track = file.as_ref().map(|(_, track)| track);
-    let template = template::parse(sql)?;
+    let fields = fields::marked(&mut input)?;
+    let template = template::parse(sql, &fields)?;
     let engine = Engine::of(&args.dialect, args.grammar.as_ref(), &input.generics)?;
     let analysis = analyze::analyze(&template, engine, sql)?;
     if let Some(row) = &args.row {
@@ -154,31 +153,21 @@ pub(crate) fn expand(args: QueryArgs, input: ItemStruct) -> syn::Result<TokenStr
             ));
         }
     }
-    let row = row(
-        args.row.as_ref(),
-        &input,
-        analysis.returns_rows,
-        Some(&analysis.columns),
-    )?;
+    let row = args.row.as_ref();
     let kind = match analysis.kind {
         Kind::Query => quote!(Query),
         Kind::Dml => quote!(Dml),
         Kind::Ddl => quote!(Ddl),
     };
 
-    let wrappers = separate(args.separate.as_deref(), &input, &template)?;
-    let separate: Vec<(Type, Type)> = wrappers
+    let items: Vec<&Type> = fields
         .iter()
-        .map(|(named, wrapper)| {
-            let wrapper = &wrapper.ident;
-            (named.clone(), parse_quote!(#wrapper))
-        })
+        .filter(|field| field.is_item())
+        .map(|field| &field.ty)
         .collect();
-    let items = items(&template, &input.generics, &separate);
-    let fields: Vec<Type> = items.iter().map(|(ty, _)| ty.clone()).collect();
-    let embed_checks = embeds(&input, &fields, &args.dialect);
+    let embeds = embeds(&input, &items, &template.types, &args.dialect);
     let mut referenced: Vec<&Type> = Vec::new();
-    for ty in &template.children {
+    for ty in items.iter().copied().chain(&template.types) {
         if !referenced
             .iter()
             .any(|other| type_key(other) == type_key(ty))
@@ -186,54 +175,46 @@ pub(crate) fn expand(args: QueryArgs, input: ItemStruct) -> syn::Result<TokenStr
             referenced.push(ty);
         }
     }
-    let needs: Vec<TokenStream> = referenced.iter().map(|ty| quote!(#ty)).collect();
-    let hook_needs = hook_needs(&input, &needs, quote!(#krate::HookNeeds));
+    let hook_needs = hook_needs(&input, referenced.len(), |i, index| {
+        let ty = referenced[i];
+        parse_quote!(#ty: #krate::HookNeeds<__V, #index>)
+    });
     let ident = &input.ident;
     let node_name = args
         .name
         .as_ref()
         .map_or_else(|| snake_case(&ident.to_string()), LitStr::value);
-    let inject = placement(args.placement.unwrap_or(Placement::Subquery));
-    let groups = params::groups(&template, &analysis, sql)?;
-    let aliases = params::aliases(&template, &analysis);
-    let children = params::children(&items, &aliases, &groups);
-    let item = Item::new(&input, Role::Query { sql }, groups, children);
     let node = node(
         &node_name,
         fingerprint(ident, &input),
         kind,
-        inject,
-        parts(&template, &analysis, &item, &items),
-        &fields,
+        quote!(#krate::Inject::Subquery),
+        parts(&template, &analysis, &fields),
+        &items,
         [&[], &[]],
+        embeds.node,
     );
-    let wrappers: Vec<TokenStream> = wrappers
-        .iter()
-        .map(|(named, wrapper)| wrapper::expand(named, wrapper, &args.dialect))
-        .collect();
+    let checked = embeds.checked;
 
     let dialect = &args.dialect;
     let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
-    let params_ty = item.ty();
-    let params_struct = item.definition();
-    let derives = item.derives();
-    let bind_params = item.bind_impl();
-    let (definitions, builder) = item.builder(dialect, row.as_ref());
+    let values = values(&input, !fields.is_empty());
+    let bind = bind_impl(&input, &fields);
     let parse_check = args.parse_check.as_ref().is_none_or(|check| check.value);
     let test = (input.generics.params.is_empty() && parse_check).then(|| parse_test(ident));
     let statement = input.generics.params.is_empty().then(|| {
-        let rows = row.as_ref().map(|row| {
+        let rows = row.map(|row| {
             quote! {
                 impl #krate::Rows for #ident {
                     type Row = #row;
                 }
             }
         });
-        let from_row = from_row(&input, dialect);
+        let methods = statement_methods(&input, dialect, row);
         quote! {
             #krate::impl_statement!(#ident);
             #rows
-            #from_row
+            #methods
 
             impl #ident {
                 /// The SQL, rendered at compile time.
@@ -242,23 +223,22 @@ pub(crate) fn expand(args: QueryArgs, input: ItemStruct) -> syn::Result<TokenStr
         }
     });
     let fmt = fmt(args.display.as_ref(), args.debug.as_ref(), &input, true)?;
-    let step = step_impl(&input, row.as_ref());
+    let step = step_impl(&input, row);
     let mut documented = input.clone();
-    documented.attrs.extend(item.item_docs());
-    documented.attrs.extend(row_docs(&input));
+    documented
+        .attrs
+        .extend(item_docs(&input, Role::Query { sql }));
 
     let impls = emit::scoped(quote! {
         impl #impl_generics #krate::Sql for #ident #ty_generics #where_clause {
             type Dialect = #dialect;
-            type Params = #params_ty;
             const NODE: &'static #krate::Node = #node;
         }
 
-        #derives
-        #embed_checks
+        #values
+        #checked
         #hook_needs
-        #bind_params
-        #builder
+        #bind
         #statement
         #step
         #fmt
@@ -266,11 +246,8 @@ pub(crate) fn expand(args: QueryArgs, input: ItemStruct) -> syn::Result<TokenStr
     });
     Ok(quote! {
         #documented
-        #params_struct
-        #definitions
         #test
         #impls
-        #(#wrappers)*
     })
 }
 

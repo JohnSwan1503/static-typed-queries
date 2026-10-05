@@ -31,31 +31,34 @@ order:
 A statement that uses a table with hooks, directly or through the items it
 embeds, renders them as statements of their own in its `BEFORE` and `AFTER`
 lists. Each hook runs once per statement, however many tables or paths
-reach it. The statement's builder has no `query()` or `query_as()`, since
-one query would skip the hooks. It has `run(conn)` instead, which takes
-anything that implements `sqlx::Acquire` and runs the hooks and the
-statement in one transaction, so a failing hook rolls back the statement
-too. `run` returns the statement's rows when it has `row = Type`, and
-otherwise the number of rows it affected. `run_as(conn)` reads the rows as
-any other `sqlx::FromRow` type, named by annotation or as `run_as::<T, _>`.
+reach it. The statement has no `query()` or `query_as()`, since one query
+would skip the hooks. It has `run(conn)` instead, which takes anything that
+implements `sqlx::Acquire` and runs the hooks and the statement in one
+transaction, so a failing hook rolls back the statement too. `run` returns
+the statement's rows when it has `row = Type`, and otherwise the number of
+rows it affected. `run_as(conn)` reads the rows as any other
+`sqlx::FromRow` type, named by annotation or as `run_as::<T, _, _>`.
 
-A hook with parameters takes its values from the run: pass its complete
-builder to `with`, in any order with the other setters. `run` doesn't
-compile until every hook the statement reaches has its values, and the
-error names the hook that's missing. Giving a hook's values twice doesn't
-compile either.
+A hook with values takes them from the run: pass a value of the hook to
+`with`, which returns a `With` that has the same `run` and `run_as`. `run` doesn't compile until every hook the statement
+reaches has its values, and the error names the hook that's missing.
+Giving a hook's values twice doesn't compile either.
 
 ```
 # use static_typed_queries::prelude::*;
 # use static_typed_queries::__private::__private::sqlx;
-#[query(Postgres, sql = "SELECT set_config('app.tenant', {tenant: String}, true)")]
-pub struct SetTenant;
+#[query(Postgres, sql = "SELECT set_config('app.tenant', {tenant}, true)")]
+pub struct SetTenant {
+    pub tenant: String,
+}
 
 #[table(Postgres, name = "orders", before(SetTenant))]
 pub struct Orders;
 
-#[query(Postgres, sql = "SELECT id FROM {Orders} WHERE status = {_: String}")]
-pub struct ByStatus;
+#[query(Postgres, sql = "SELECT id FROM {Orders} WHERE status = {status}")]
+pub struct ByStatus {
+    pub status: String,
+}
 
 assert_eq!(
     ByStatus::BEFORE[0].sql(),
@@ -63,11 +66,14 @@ assert_eq!(
 );
 
 async fn open_orders(conn: &mut sqlx::PgConnection) -> sqlx::Result<u64> {
-    ByStatus::builder()
-        .status("open".to_owned())
-        .with(SetTenant::builder().tenant("acme".to_owned()))
-        .run(conn)
-        .await
+    ByStatus {
+        status: "open".to_owned(),
+    }
+    .with(SetTenant {
+        tenant: "acme".to_owned(),
+    })
+    .run(conn)
+    .await
 }
 ```
 
@@ -76,9 +82,9 @@ can't be tables, and they can't use tables with hooks of their own.
 
 ## Generated items
 
-The struct implements `Sql` and `Build`. A table has no parameters, even
-with hooks, so queries that reference it never need a builder call for it.
+The struct implements `Sql`. A table holds no values, even with hooks, so
+queries reference it by type, as `{Table}`, and never hold it in a field.
 
 A table has no SQL of its own: it doesn't implement `Statement`, and it is
-always rendered as its name, so `{Table as cte}` and `{Table as subquery}`
-fail to compile. The struct can't be generic or have fields.
+always rendered as its name, whatever placement a reference or a generic
+field asks for. The struct can't be generic or have fields.

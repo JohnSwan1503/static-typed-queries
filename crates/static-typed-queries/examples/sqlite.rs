@@ -1,5 +1,3 @@
-use std::marker::PhantomData;
-
 use sqlx::{Connection, FromRow, SqliteConnection};
 use static_typed_queries::prelude::*;
 
@@ -11,25 +9,28 @@ pub struct Orders;
 
 #[query(
     Sqlite,
-    cte,
     sql = "
     SELECT id, email FROM {Users}
-    WHERE org_id = {_: i64} AND deleted_at IS NULL"
+    WHERE org_id = {org_id} AND deleted_at IS NULL"
 )]
-pub struct ActiveUsers;
+pub struct ActiveUsers {
+    pub org_id: i64,
+}
 
-#[query(T::Dialect, sql = "SELECT count(*) FROM {T}")]
-pub struct CountOf<T: Sql>(PhantomData<T>);
-
-#[query(Sqlite, display = sql, sql = "
+#[query(Sqlite, display = sql, debug = sql, sql = "
     SELECT u.email,
-           {CountOf<ActiveUsers>} AS org_size,
+           (SELECT count(*) FROM {active}) AS org_size,
            (SELECT count(*) FROM {Orders} o
-             WHERE o.user_id = u.id AND o.total >= {_: i64}) AS big_orders
-    FROM {ActiveUsers} u
-    WHERE u.email LIKE {_: String}
+             WHERE o.user_id = u.id AND o.total >= {big_total}) AS big_orders
+    FROM {active} u
+    WHERE u.email LIKE {pattern}
     ORDER BY u.email", row = ReportRow)]
-pub struct UserReport;
+pub struct UserReport {
+    pub big_total: i64,
+    pub pattern: String,
+    #[cte]
+    pub active: ActiveUsers,
+}
 
 #[derive(FromRow)]
 pub struct ReportRow {
@@ -52,25 +53,25 @@ const SCHEMA: &str = "
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), sqlx::Error> {
-    println!("-- UserReport::SQL, built at compile time:\n{UserReport}\n");
+    println!(
+        "-- UserReport::SQL, built at compile time:\n{}\n",
+        UserReport::SQL
+    );
     println!("-- binds:");
     for (i, bind) in UserReport::BINDS.iter().enumerate() {
         println!("   ${} {bind}", i + 1);
     }
-
     let mut conn = SqliteConnection::connect("sqlite::memory:").await?;
     sqlx::raw_sql(SCHEMA).execute(&mut conn).await?;
 
-    let rows = UserReport::builder()
-        .total(100)
-        .email("%@example.com".to_owned())
-        .active_users()
-        .org_id(1)
-        .query()?
-        .fetch_all(&mut conn)
-        .await?;
+    let report = UserReport {
+        big_total: 100,
+        pattern: "%@example.com".to_owned(),
+        active: ActiveUsers { org_id: 1 },
+    };
+    let rows = report.query()?.fetch_all(&mut conn).await?;
 
-    println!("\n-- results:");
+    println!("\n-- results of {report:?}:");
     for row in rows {
         println!(
             "   {:<20} org_size={} big_orders={}",

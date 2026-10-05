@@ -17,7 +17,7 @@ use crate::statement::bind::Bind;
 use crate::statement::bind::path::Path;
 use ctes::{Attached, Cte};
 use hooks::Hook;
-use paths::target;
+use paths::{resolve, target};
 use text::Numbered;
 
 pub(super) use hooks::{check_hooks, hooked};
@@ -27,7 +27,6 @@ const MAX_HOOKS: usize = 64;
 const MAX_NUMBERED: usize = 1024;
 
 pub(super) struct Renderer<'a, D> {
-    root: Option<&'static Node>,
     sql: &'a mut [u8],
     binds: &'a mut [Bind],
     offsets: &'a mut [Offsets],
@@ -52,7 +51,6 @@ impl<'a, D: Dialect> Renderer<'a, D> {
         offsets: &'a mut [Offsets],
     ) -> Self {
         Self {
-            root: None,
             sql,
             binds,
             offsets,
@@ -89,7 +87,7 @@ impl<'a, D: Dialect> Renderer<'a, D> {
         let (main, path) = target(root, Path::ROOT);
         self.find_hooks(main);
         self.render_hooks(false);
-        self.single(root, root, main, path);
+        self.single(root, main, path);
         self.size.steps = 1;
         self.render_hooks(true);
     }
@@ -100,13 +98,12 @@ impl<'a, D: Dialect> Renderer<'a, D> {
         let parts = root.parts.0;
         let mut i = 0;
         while i < parts.len() {
-            self.root = Some(root);
             match parts[i] {
                 Part::From(from) => self.attach(root, from.target()),
                 Part::Expr(step) => {
-                    let (step, path) = self.resolve(root, Path::ROOT, step.target());
+                    let (step, path) = resolve(root, Path::ROOT, step.target());
                     let (node, path) = target(step, path);
-                    self.single(root, step, node, path);
+                    self.single(step, node, path);
                     self.attached = [None; MAX_CTES];
                     self.attached_count = 0;
                     self.size.steps += 1;
@@ -121,14 +118,7 @@ impl<'a, D: Dialect> Renderer<'a, D> {
         self.render_hooks(true);
     }
 
-    const fn single(
-        &mut self,
-        root: &'static Node,
-        named: &'static Node,
-        node: &'static Node,
-        path: Path,
-    ) {
-        self.root = Some(root);
+    const fn single(&mut self, named: &'static Node, node: &'static Node, path: Path) {
         self.ctes = [None; MAX_CTES];
         self.cte_count = 0;
         self.recursive = false;

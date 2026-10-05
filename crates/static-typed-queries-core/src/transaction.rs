@@ -26,9 +26,9 @@ macro_rules! impl_transaction {
                     <$ty as $crate::render::Render>::SIZE.statements()] = RENDERED.statements();
                 $crate::render::Output::new(&STATEMENTS, RENDERED.before(), RENDERED.steps())
             };
-            type Hooks = <$crate::builder::HookFlag<
+            type Hooks = <$crate::hooks::HookFlag<
                 { $crate::render::hooked(<$ty as $crate::sql::Sql>::NODE) },
-            > as $crate::builder::HookState>::Out;
+            > as $crate::hooks::HookState>::Out;
         }
 
         impl $crate::transaction::Transaction for $ty {

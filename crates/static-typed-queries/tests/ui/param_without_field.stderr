@@ -1,5 +1,5 @@
-error: parameter `org_id` isn't declared; declare it once as `{org_id: Type}`
- --> tests/ui/undeclared_param.rs:6:25
+error: there is no field named `org_id`; parameters are the struct's fields
+ --> tests/ui/param_without_field.rs:6:25
   |
 6 | #[query(Postgres, sql = "SELECT id FROM {Users} WHERE org_id = {org_id}")]
   |                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

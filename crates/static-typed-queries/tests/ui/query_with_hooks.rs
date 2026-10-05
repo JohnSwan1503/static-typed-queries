@@ -10,7 +10,5 @@ pub struct Orders;
 pub struct OrderCount;
 
 fn main() {
-    let params = OrderCount::builder().build();
-    let _ = OrderCount::query(&params);
     let _ = sqlx::query(OrderCount);
 }

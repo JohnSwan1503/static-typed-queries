@@ -4,11 +4,10 @@ use static_typed_queries::__private::render::Render;
 use static_typed_queries::prelude::*;
 use static_typed_queries::state::{NoHooks, WithHooks};
 
-#[query(
-    Postgres,
-    sql = "SELECT set_config('app.tenant', {tenant: String}, true)"
-)]
-pub struct SetTenant;
+#[query(Postgres, sql = "SELECT set_config('app.tenant', {tenant}, true)")]
+pub struct SetTenant {
+    pub tenant: String,
+}
 
 #[query(Postgres, sql = "INSERT INTO audit (at) VALUES (now())")]
 pub struct Audit;
@@ -25,17 +24,27 @@ pub struct Refunds;
 #[table(Postgres, name = "users")]
 pub struct Users;
 
-#[query(Postgres, sql = "SELECT id FROM {Orders} WHERE status = {_: String}")]
-pub struct ByStatus;
+#[query(Postgres, sql = "SELECT id FROM {Orders} WHERE status = {status}")]
+pub struct ByStatus {
+    pub status: String,
+}
 
-#[query(Postgres, cte, sql = "SELECT id FROM {Orders} WHERE total > {_: i64}")]
-pub struct BigOrders;
+#[query(Postgres, sql = "SELECT id FROM {Orders} WHERE total > {total}")]
+pub struct BigOrders {
+    pub total: i64,
+}
 
-#[query(Postgres, sql = "SELECT count(*) FROM {BigOrders}")]
-pub struct BigOrderCount;
+#[query(Postgres, sql = "SELECT count(*) FROM {big}")]
+pub struct BigOrderCount {
+    #[cte]
+    pub big: BigOrders,
+}
 
-#[query(Postgres, sql = "SELECT * FROM {BigOrders} JOIN {Orders} o USING (id)")]
-pub struct BigOrderRows;
+#[query(Postgres, sql = "SELECT * FROM {big} JOIN {Orders} o USING (id)")]
+pub struct BigOrderRows {
+    #[cte]
+    pub big: BigOrders,
+}
 
 #[query(Postgres, sql = "SELECT id FROM {Orders} JOIN {Refunds} r USING (id)")]
 pub struct Refunded;
@@ -71,12 +80,6 @@ fn statements_that_use_a_hooked_table_run_its_hooks() {
 
 #[test]
 fn hooks_bind_their_own_parameters() {
-    let params = ByStatus::builder()
-        .status("open".to_owned())
-        .with(SetTenant::builder().tenant("acme".to_owned()))
-        .build();
-    assert_eq!(params.status, "open");
-    assert_eq!(params.orders, ());
     let bind = ByStatus::BEFORE[0].binds()[0];
     assert_eq!((bind.path().steps(), bind.field()), (&[][..], "tenant"));
     assert_eq!(
@@ -106,14 +109,15 @@ fn hooks_mark_every_statement_that_reaches_the_table() {
     unhooked::<UserCount>();
 }
 
-#[query(
-    Sqlite,
-    sql = "UPDATE counters SET n = n + 1 WHERE name = {name: String}"
-)]
-pub struct Bump;
+#[query(Sqlite, sql = "UPDATE counters SET n = n + 1 WHERE name = {name}")]
+pub struct Bump {
+    pub name: String,
+}
 
-#[query(Sqlite, sql = "INSERT INTO audit (note) VALUES ({note: String})")]
-pub struct Note;
+#[query(Sqlite, sql = "INSERT INTO audit (note) VALUES ({note})")]
+pub struct Note {
+    pub note: String,
+}
 
 #[table(Sqlite, name = "items", before(Bump), after(Note))]
 pub struct Items;
@@ -130,15 +134,19 @@ pub struct Item {
 #[query(
     Sqlite,
     row = Item,
-    sql = "SELECT id, price FROM {Items} WHERE price > {_: i64} ORDER BY id"
+    sql = "SELECT id, price FROM {Items} WHERE price > {price} ORDER BY id"
 )]
-pub struct Pricey;
+pub struct Pricey {
+    pub price: i64,
+}
 
 #[query(
     Sqlite,
-    sql = "UPDATE {Items} SET price = price * 2 WHERE price > {_: i64}"
+    sql = "UPDATE {Items} SET price = price * 2 WHERE price > {price}"
 )]
-pub struct Double;
+pub struct Double {
+    pub price: i64,
+}
 
 #[query(
     Sqlite,
@@ -176,27 +184,36 @@ async fn state(conn: &mut sqlx::SqliteConnection) -> sqlx::Result<(i64, Vec<Stri
 #[tokio::test]
 async fn run_wraps_the_statement_in_its_hooks() -> sqlx::Result<()> {
     let mut conn = connect().await?;
-    let rows = Pricey::builder()
-        .with(Bump::builder().name("reads".to_owned()))
-        .price(10)
-        .with(Note::builder().note("pricey".to_owned()))
+    let rows = Pricey { price: 10 }
+        .with(Bump {
+            name: "reads".to_owned(),
+        })
+        .with(Note {
+            note: "pricey".to_owned(),
+        })
         .run(&mut conn)
         .await?;
     assert_eq!(rows, [Item { id: 2, price: 20 }, Item { id: 3, price: 30 }]);
     assert_eq!(state(&mut conn).await?, (1, vec!["pricey".to_owned()]));
 
-    let doubled = Double::builder()
-        .price(25)
-        .with(Bump::builder().name("reads".to_owned()))
-        .with(Note::builder().note("double".to_owned()))
+    let doubled = Double { price: 25 }
+        .with(Bump {
+            name: "reads".to_owned(),
+        })
+        .with(Note {
+            note: "double".to_owned(),
+        })
         .run(&mut conn)
         .await?;
     assert_eq!(doubled, 1);
 
-    let ids: Vec<(i64,)> = Pricey::builder()
-        .price(40)
-        .with(Bump::builder().name("reads".to_owned()))
-        .with(Note::builder().note("ids".to_owned()))
+    let ids: Vec<(i64,)> = Pricey { price: 40 }
+        .with(Bump {
+            name: "reads".to_owned(),
+        })
+        .with(Note {
+            note: "ids".to_owned(),
+        })
         .run_as(&mut conn)
         .await?;
     assert_eq!(ids, [(3,)]);
@@ -206,9 +223,13 @@ async fn run_wraps_the_statement_in_its_hooks() -> sqlx::Result<()> {
 #[tokio::test]
 async fn hooks_shared_by_two_tables_run_once() -> sqlx::Result<()> {
     let mut conn = connect().await?;
-    let ids: Vec<(i64,)> = Tagged::builder()
-        .with(Bump::builder().name("reads".to_owned()))
-        .with(Note::builder().note("tagged".to_owned()))
+    let ids: Vec<(i64,)> = Tagged
+        .with(Bump {
+            name: "reads".to_owned(),
+        })
+        .with(Note {
+            note: "tagged".to_owned(),
+        })
         .run_as(&mut conn)
         .await?;
     assert_eq!(ids, [(2,)]);
@@ -220,10 +241,13 @@ async fn hooks_shared_by_two_tables_run_once() -> sqlx::Result<()> {
 async fn a_failing_hook_rolls_back_the_whole_run() -> sqlx::Result<()> {
     let mut conn = connect().await?;
     let run = |note: &str| {
-        Double::builder()
-            .price(0)
-            .with(Bump::builder().name("reads".to_owned()))
-            .with(Note::builder().note(note.to_owned()))
+        Double { price: 0 }
+            .with(Bump {
+                name: "reads".to_owned(),
+            })
+            .with(Note {
+                note: note.to_owned(),
+            })
     };
     run("once").run(&mut conn).await?;
     let error = run("once").run(&mut conn).await.unwrap_err();

@@ -8,53 +8,55 @@ pub struct Users;
     Postgres,
     sql = "
     SELECT id FROM {Users} -- line comments are dropped
-    WHERE org_id = {org_id: i64} OR parent_org_id = {org_id}
+    WHERE org_id = {org_id} OR parent_org_id = {org_id}
       AND note <> '{not a placeholder}'"
 )]
-pub struct Members;
+pub struct Members {
+    pub org_id: i64,
+}
 
 #[table(MySql, name = "users")]
 pub struct MyUsers;
 
 #[query(
     MySql,
-    sql = "SELECT id FROM {MyUsers} WHERE org_id = {org_id: i64} OR parent_org_id = {org_id}"
+    sql = "SELECT id FROM {MyUsers} WHERE org_id = {org_id} OR parent_org_id = {org_id}"
 )]
-pub struct MyMembers;
+pub struct MyMembers {
+    pub org_id: i64,
+}
 
-#[query(Postgres, cte, sql = "SELECT id FROM {Users} WHERE active")]
+#[query(Postgres, sql = "SELECT id FROM {Users} WHERE active")]
 pub struct ActiveIds;
 
 #[query(
     Postgres,
     sql = "
-    SELECT * FROM {ActiveIds as subquery} JOIN {ActiveIds as subquery} a USING (id)
+    SELECT * FROM {ActiveIds} JOIN {ActiveIds as cte} a USING (id)
     WHERE id IN {ActiveIds}"
 )]
 pub struct Placements;
 
-#[query(
-    Postgres,
-    sql = "UPDATE {Users} SET seen_at = now() WHERE id = {id: i64}"
-)]
-pub struct MarkSeen;
+#[query(Postgres, sql = "UPDATE {Users} SET seen_at = now() WHERE id = {id}")]
+pub struct MarkSeen {
+    pub id: i64,
+}
 
 #[query(
     Postgres,
-    sql = "INSERT INTO {Users} (email) VALUES ({email: String}) RETURNING id"
+    sql = "INSERT INTO {Users} (email) VALUES ({email}) RETURNING id"
 )]
-pub struct AddUser;
+pub struct AddUser {
+    pub email: String,
+}
 
 #[test]
-fn params_are_declared_once_and_reused_by_name() {
+fn fields_are_reused_by_name() {
     assert_eq!(
         Members::SQL,
         r#"SELECT id FROM "users" WHERE org_id = $1 OR parent_org_id = $1 AND note <> '{not a placeholder}'"#
     );
-    let _ = MembersParams {
-        org_id: 7,
-        users: (),
-    };
+    assert_eq!(Members::BINDS.len(), 1);
 }
 
 #[test]
@@ -70,7 +72,7 @@ fn positional_dialects_bind_every_use() {
 fn placement_follows_position_and_overrides() {
     assert_eq!(
         Placements::SQL,
-        r#"SELECT * FROM (SELECT id FROM "users" WHERE active) AS "active_ids" JOIN (SELECT id FROM "users" WHERE active) a USING (id) WHERE id IN (SELECT id FROM "users" WHERE active)"#
+        r#"WITH "active_ids" AS (SELECT id FROM "users" WHERE active) SELECT * FROM (SELECT id FROM "users" WHERE active) AS "active_ids" JOIN "active_ids" a USING (id) WHERE id IN (SELECT id FROM "users" WHERE active)"#
     );
 }
 
@@ -93,30 +95,13 @@ fn queries_inside_functions_can_skip_the_parse_check() {
     #[query(
         Postgres,
         parse_check = false,
-        sql = "SELECT id FROM {Users} WHERE id = {id: i64}"
+        sql = "SELECT id FROM {Users} WHERE id = {id}"
     )]
-    pub struct Local;
+    pub struct Local {
+        pub id: i64,
+    }
 
     assert_eq!(Local::SQL, r#"SELECT id FROM "users" WHERE id = $1"#);
-    assert_eq!(Local::builder().id(7).build().id, 7);
-}
-
-#[query(Postgres, sql = "SELECT id FROM {Users} WHERE score > {score: f64}")]
-pub struct AboveScore;
-
-#[test]
-fn params_derive_what_their_fields_allow() {
-    let built = Members::builder().org_id(7).build();
-    let copy = built.clone();
-    assert_eq!(built, copy);
-    assert_eq!(
-        format!("{copy:?}"),
-        "MembersParams { org_id: 7, users: () }"
-    );
-    assert_ne!(built, Members::builder().org_id(8).build());
-
-    let score = AboveScore::builder().score(0.5).build();
-    assert_eq!(score.clone(), score);
 }
 
 pub type Db = Postgres;
@@ -124,9 +109,11 @@ pub type Db = Postgres;
 #[query(
     Db,
     grammar = postgres,
-    sql = "SELECT id FROM {Users} WHERE id = ANY({ids: Vec<i64>})"
+    sql = "SELECT id FROM {Users} WHERE id = ANY({ids})"
 )]
-pub struct AnyOf;
+pub struct AnyOf {
+    pub ids: Vec<i64>,
+}
 
 #[test]
 fn dialect_aliases_name_their_grammar() {

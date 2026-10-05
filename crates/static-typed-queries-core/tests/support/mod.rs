@@ -25,16 +25,14 @@ macro_rules! node {
 
 macro_rules! root {
     ($ty:ident: $dialect:ty = $node:expr) => {
-        root!($ty: $dialect = $node, params = ());
-    };
-    ($ty:ident: $dialect:ty = $node:expr, params = $params:ty) => {
         pub struct $ty;
 
         impl static_typed_queries_core::sql::Sql for $ty {
             type Dialect = $dialect;
-            type Params = $params;
             const NODE: &'static static_typed_queries_core::node::Node = $node;
         }
+
+        impl static_typed_queries_core::values::Valueless for $ty {}
 
         static_typed_queries_core::impl_statement!($ty);
     };

@@ -24,7 +24,6 @@ struct Users;
 
 impl Sql for Users {
     type Dialect = Postgres;
-    type Params = ();
     const NODE: &'static Node = node!("users", 1, Table, Inject::Ident, [Ident::part("users")]);
 }
 
@@ -32,7 +31,6 @@ struct ActiveUsers;
 
 impl Sql for ActiveUsers {
     type Dialect = Postgres;
-    type Params = ();
     const NODE: &'static Node = node!(
         "active_users",
         2,
@@ -48,11 +46,11 @@ impl Sql for ActiveUsers {
     );
 }
 
+// A generic item lists its argument as an item of its own, so the argument's values nest under it.
 struct CountOf<T>(PhantomData<T>);
 
 impl<T: Sql> Sql for CountOf<T> {
     type Dialect = T::Dialect;
-    type Params = ();
     const NODE: &'static Node = node!(
         "count_of",
         3,
@@ -60,8 +58,9 @@ impl<T: Sql> Sql for CountOf<T> {
         Inject::Subquery,
         [
             Lit::part("SELECT count(*) FROM "),
-            From::part(Target::Node(T::NODE), AliasRule::NodeName, None),
-        ]
+            From::part(Target::Item(0), AliasRule::NodeName, None),
+        ],
+        items = [T::NODE]
     );
 }
 
@@ -69,7 +68,6 @@ struct UserReport;
 
 impl Sql for UserReport {
     type Dialect = Postgres;
-    type Params = ();
     const NODE: &'static Node = node!(
         "user_report",
         4,
@@ -93,22 +91,27 @@ root!(UserReportMySql: MySql = UserReport::NODE);
 root!(UserReportSqlite: Sqlite = UserReport::NODE);
 
 #[test]
-fn type_parameters_share_the_values_of_the_query_that_names_them() {
+fn each_item_is_its_own_instance() {
     assert_eq!(
         UserReport::SQL,
-        r#"WITH "active_users" AS (SELECT id, email FROM "users" WHERE deleted_at IS NULL AND org_id = $1) SELECT u.email, (SELECT count(*) FROM "active_users") AS total FROM "active_users" u WHERE u.id = $2"#
+        r#"WITH "active_users" AS (SELECT id, email FROM "users" WHERE deleted_at IS NULL AND org_id = $1), "active_users_2" AS (SELECT id, email FROM "users" WHERE deleted_at IS NULL AND org_id = $2) SELECT u.email, (SELECT count(*) FROM "active_users") AS total FROM "active_users_2" u WHERE u.id = $3"#
     );
+    let paths: Vec<Vec<u16>> = UserReport::BINDS
+        .iter()
+        .map(|bind| bind.path().steps().to_vec())
+        .collect();
+    assert_eq!(paths, [vec![0, 0], vec![1], vec![]]);
 }
 
 #[test]
 fn renders_in_the_root_dialect() {
     assert_eq!(
         UserReportMySql::SQL,
-        "WITH `active_users` AS (SELECT id, email FROM `users` WHERE deleted_at IS NULL AND org_id = ?) SELECT u.email, (SELECT count(*) FROM `active_users`) AS total FROM `active_users` u WHERE u.id = ?"
+        "WITH `active_users` AS (SELECT id, email FROM `users` WHERE deleted_at IS NULL AND org_id = ?), `active_users_2` AS (SELECT id, email FROM `users` WHERE deleted_at IS NULL AND org_id = ?) SELECT u.email, (SELECT count(*) FROM `active_users`) AS total FROM `active_users_2` u WHERE u.id = ?"
     );
     assert_eq!(
         UserReportSqlite::SQL,
-        r#"WITH "active_users" AS (SELECT id, email FROM "users" WHERE deleted_at IS NULL AND org_id = $1) SELECT u.email, (SELECT count(*) FROM "active_users") AS total FROM "active_users" u WHERE u.id = $2"#
+        r#"WITH "active_users" AS (SELECT id, email FROM "users" WHERE deleted_at IS NULL AND org_id = $1), "active_users_2" AS (SELECT id, email FROM "users" WHERE deleted_at IS NULL AND org_id = $2) SELECT u.email, (SELECT count(*) FROM "active_users") AS total FROM "active_users_2" u WHERE u.id = $3"#
     );
 }
 
@@ -284,6 +287,23 @@ fn data_modifying_ctes_where_the_dialect_allows_them() {
         ArchiveCount::SQL,
         r#"WITH "archived" AS (DELETE FROM "users" WHERE deleted_at < now() RETURNING id) SELECT count(*) FROM "archived""#
     );
+}
+
+root!(TableAsSubquery: Postgres = node!(
+    "table_as_subquery",
+    55,
+    Query,
+    Inject::Subquery,
+    [
+        Lit::part("SELECT * FROM "),
+        From::part(Target::Item(0), AliasRule::NodeName, Some(Inject::Subquery)),
+    ],
+    items = [Users::NODE]
+));
+
+#[test]
+fn tables_are_always_written_by_name() {
+    assert_eq!(TableAsSubquery::SQL, r#"SELECT * FROM "users""#);
 }
 
 root!(QuotedPostgres: Postgres = node!(

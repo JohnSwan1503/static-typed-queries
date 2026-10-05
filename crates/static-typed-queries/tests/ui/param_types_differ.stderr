@@ -1,5 +1,0 @@
-error: parameters named `total` have different types (`i64` and `i32`); name them with `{name: Type}`
- --> tests/ui/param_types_differ.rs:6:25
-  |
-6 | #[query(Postgres, sql = "SELECT id FROM {Orders} WHERE total > {_: i64} AND total < {_: i32}")]
-  |                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

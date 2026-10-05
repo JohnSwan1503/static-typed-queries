@@ -1,0 +1,17 @@
+error: `active` is a field, so it is embedded the way the field is marked; write `{active}`
+  --> tests/ui/item_field_marks.rs:11:25
+   |
+11 | #[query(Postgres, sql = "SELECT count(*) FROM {active as cte}")]
+   |                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: a field is embedded one way; give it one of `#[cte]`, `#[cte(recursive)]` or `#[subquery]`
+  --> tests/ui/item_field_marks.rs:20:5
+   |
+20 |     #[subquery]
+   |     ^^^^^^^^^^^
+
+error: expected `#[cte]` or `#[cte(recursive)]`
+  --> tests/ui/item_field_marks.rs:26:5
+   |
+26 |     #[cte(recursve)]
+   |     ^^^^^^^^^^^^^^^^

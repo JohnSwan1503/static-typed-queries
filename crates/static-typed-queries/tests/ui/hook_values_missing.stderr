@@ -1,182 +1,189 @@
 error[E0277]: no values for the hook `Note`
-  --> tests/ui/hook_values_missing.rs:27:10
+  --> tests/ui/hook_values_missing.rs:34:10
    |
-27 |         .run(conn)
-   |          ^^^ `Note` has parameters
+34 |         .run(conn)
+   |          ^^^ `Note` has values
    |
-   = help: the trait `static_typed_queries::__private::builder::Provides<Note, _>` is not implemented for `(HookValues<Bump>, ())`
-   = note: give them with `.with(Note::builder()…)`
-help: the trait `static_typed_queries::__private::builder::HookNeeds<__V, (__I0,)>` is conditionally implemented for `Pricey`
-  --> tests/ui/hook_values_missing.rs:14:1
+   = help: the trait `static_typed_queries::__private::hooks::Provides<Note, _>` is not implemented for `(HookValues<Bump>, ())`
+   = note: give them with `.with(Note { .. })`
+help: the trait `static_typed_queries::__private::hooks::HookNeeds<__V, (__I0,)>` is conditionally implemented for `Pricey`
+  --> tests/ui/hook_values_missing.rs:18:1
    |
-14 | #[query(Sqlite, sql = "SELECT id FROM {Items} WHERE price > {_: i64}")]
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unsatisfied requirement introduced here: `Items: static_typed_queries::__private::builder::HookNeeds<_, _>`
-   = note: required for `NoteParams` to implement `static_typed_queries::__private::builder::Demand<(HookValues<Bump>, ()), _>`
-note: required for `Items` to implement `static_typed_queries::__private::builder::HookNeeds<(HookValues<Bump>, ()), (static_typed_queries::__private::builder::Here, _)>`
-  --> tests/ui/hook_values_missing.rs:11:1
+18 | #[query(Sqlite, sql = "SELECT id FROM {Items} WHERE price > {price}")]
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unsatisfied requirement introduced here: `Items: static_typed_queries::__private::hooks::HookNeeds<_, _>`
+note: required for `Items` to implement `static_typed_queries::__private::hooks::HookNeeds<(HookValues<Bump>, ()), (static_typed_queries::__private::hooks::Here, _)>`
+  --> tests/ui/hook_values_missing.rs:15:1
    |
-11 | #[table(Sqlite, name = "items", before(Bump), after(Note))]
+15 | #[table(Sqlite, name = "items", before(Bump), after(Note))]
    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unsatisfied trait bound introduced here
-12 | pub struct Items;
+16 | pub struct Items;
    |            ^^^^^
    = note: 1 redundant requirement hidden
-   = note: required for `Pricey` to implement `static_typed_queries::__private::builder::HookNeeds<(HookValues<Bump>, ()), ((static_typed_queries::__private::builder::Here, _),)>`
-note: required by a bound in `_::<impl PriceyBuilder<Price<Filled>, Built<<Items as static_typed_queries::Sql>::Params>, WithHooks, __V>>::run`
-  --> tests/ui/hook_values_missing.rs:14:1
+   = note: required for `Pricey` to implement `static_typed_queries::__private::hooks::HookNeeds<(HookValues<Bump>, ()), ((static_typed_queries::__private::hooks::Here, _),)>`
+note: required by a bound in `With::<S, V>::run`
+  --> $WORKSPACE/crates/static-typed-queries-core/src/with.rs
    |
-14 | #[query(Sqlite, sql = "SELECT id FROM {Items} WHERE price > {_: i64}")]
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `_::<impl PriceyBuilder<Price<Filled>, Built<<Items as Sql>::Params>, WithHooks, __V>>::run`
-   = note: this error originates in the attribute macro `query` (in Nightly builds, run with -Z macro-backtrace for more info)
+   | impl<S, V> With<S, V> {
+...
+   |     pub async fn run<'c, I, A>(self, conn: A) -> Result<S::Output, sqlx::Error>
+   |     where
+   |         S: Run + HookNeeds<V, I>,
+   |                  ^^^^^^^^^^^^^^^ required by this bound in `With::<S, V>::run`
+   = note: this error originates in the attribute macro `query` which comes from the expansion of the attribute macro `table` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error[E0277]: no values for the hook `Note`
-  --> tests/ui/hook_values_missing.rs:24:5
+  --> tests/ui/hook_values_missing.rs:30:5
    |
-24 | /     Pricey::builder()
-25 | |         .price(10)
-26 | |         .with(Bump::builder().name("reads".to_owned()))
-27 | |         .run(conn)
-   | |__________________^ `Note` has parameters
+30 | /     Pricey { price: 10 }
+31 | |         .with(Bump {
+32 | |             name: "reads".to_owned(),
+33 | |         })
+34 | |         .run(conn)
+   | |__________________^ `Note` has values
    |
-   = help: the trait `static_typed_queries::__private::builder::Provides<Note, _>` is not implemented for `(HookValues<Bump>, ())`
-   = note: give them with `.with(Note::builder()…)`
-help: the trait `static_typed_queries::__private::builder::HookNeeds<__V, (__I0,)>` is conditionally implemented for `Pricey`
-  --> tests/ui/hook_values_missing.rs:14:1
+   = help: the trait `static_typed_queries::__private::hooks::Provides<Note, _>` is not implemented for `(HookValues<Bump>, ())`
+   = note: give them with `.with(Note { .. })`
+help: the trait `static_typed_queries::__private::hooks::HookNeeds<__V, (__I0,)>` is conditionally implemented for `Pricey`
+  --> tests/ui/hook_values_missing.rs:18:1
    |
-14 | #[query(Sqlite, sql = "SELECT id FROM {Items} WHERE price > {_: i64}")]
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unsatisfied requirement introduced here: `Items: static_typed_queries::__private::builder::HookNeeds<_, _>`
-   = note: required for `NoteParams` to implement `static_typed_queries::__private::builder::Demand<(HookValues<Bump>, ()), _>`
-note: required for `Items` to implement `static_typed_queries::__private::builder::HookNeeds<(HookValues<Bump>, ()), (static_typed_queries::__private::builder::Here, _)>`
-  --> tests/ui/hook_values_missing.rs:11:1
+18 | #[query(Sqlite, sql = "SELECT id FROM {Items} WHERE price > {price}")]
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unsatisfied requirement introduced here: `Items: static_typed_queries::__private::hooks::HookNeeds<_, _>`
+note: required for `Items` to implement `static_typed_queries::__private::hooks::HookNeeds<(HookValues<Bump>, ()), (static_typed_queries::__private::hooks::Here, _)>`
+  --> tests/ui/hook_values_missing.rs:15:1
    |
-11 | #[table(Sqlite, name = "items", before(Bump), after(Note))]
+15 | #[table(Sqlite, name = "items", before(Bump), after(Note))]
    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unsatisfied trait bound introduced here
-12 | pub struct Items;
+16 | pub struct Items;
    |            ^^^^^
    = note: 1 redundant requirement hidden
-   = note: required for `Pricey` to implement `static_typed_queries::__private::builder::HookNeeds<(HookValues<Bump>, ()), ((static_typed_queries::__private::builder::Here, _),)>`
-note: required by a bound in `_::<impl PriceyBuilder<Price<Filled>, Built<<Items as static_typed_queries::Sql>::Params>, WithHooks, __V>>::run`
-  --> tests/ui/hook_values_missing.rs:14:1
+   = note: required for `Pricey` to implement `static_typed_queries::__private::hooks::HookNeeds<(HookValues<Bump>, ()), ((static_typed_queries::__private::hooks::Here, _),)>`
+note: required by a bound in `With::<S, V>::run`
+  --> $WORKSPACE/crates/static-typed-queries-core/src/with.rs
    |
-14 | #[query(Sqlite, sql = "SELECT id FROM {Items} WHERE price > {_: i64}")]
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `_::<impl PriceyBuilder<Price<Filled>, Built<<Items as Sql>::Params>, WithHooks, __V>>::run`
-   = note: this error originates in the attribute macro `query` (in Nightly builds, run with -Z macro-backtrace for more info)
+   | impl<S, V> With<S, V> {
+...
+   |     pub async fn run<'c, I, A>(self, conn: A) -> Result<S::Output, sqlx::Error>
+   |     where
+   |         S: Run + HookNeeds<V, I>,
+   |                  ^^^^^^^^^^^^^^^ required by this bound in `With::<S, V>::run`
+   = note: this error originates in the attribute macro `query` which comes from the expansion of the attribute macro `table` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error[E0277]: no values for the hook `Note`
-  --> tests/ui/hook_values_missing.rs:28:10
+  --> tests/ui/hook_values_missing.rs:35:10
    |
-28 |         .await
-   |          ^^^^^ `Note` has parameters
+35 |         .await
+   |          ^^^^^ `Note` has values
    |
-   = help: the trait `static_typed_queries::__private::builder::Provides<Note, _>` is not implemented for `(HookValues<Bump>, ())`
-   = note: give them with `.with(Note::builder()…)`
-help: the trait `static_typed_queries::__private::builder::HookNeeds<__V, (__I0,)>` is conditionally implemented for `Pricey`
-  --> tests/ui/hook_values_missing.rs:14:1
+   = help: the trait `static_typed_queries::__private::hooks::Provides<Note, _>` is not implemented for `(HookValues<Bump>, ())`
+   = note: give them with `.with(Note { .. })`
+help: the trait `static_typed_queries::__private::hooks::HookNeeds<__V, (__I0,)>` is conditionally implemented for `Pricey`
+  --> tests/ui/hook_values_missing.rs:18:1
    |
-14 | #[query(Sqlite, sql = "SELECT id FROM {Items} WHERE price > {_: i64}")]
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unsatisfied requirement introduced here: `Items: static_typed_queries::__private::builder::HookNeeds<_, _>`
-   = note: required for `NoteParams` to implement `static_typed_queries::__private::builder::Demand<(HookValues<Bump>, ()), _>`
-note: required for `Items` to implement `static_typed_queries::__private::builder::HookNeeds<(HookValues<Bump>, ()), (static_typed_queries::__private::builder::Here, _)>`
-  --> tests/ui/hook_values_missing.rs:11:1
+18 | #[query(Sqlite, sql = "SELECT id FROM {Items} WHERE price > {price}")]
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unsatisfied requirement introduced here: `Items: static_typed_queries::__private::hooks::HookNeeds<_, _>`
+note: required for `Items` to implement `static_typed_queries::__private::hooks::HookNeeds<(HookValues<Bump>, ()), (static_typed_queries::__private::hooks::Here, _)>`
+  --> tests/ui/hook_values_missing.rs:15:1
    |
-11 | #[table(Sqlite, name = "items", before(Bump), after(Note))]
+15 | #[table(Sqlite, name = "items", before(Bump), after(Note))]
    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unsatisfied trait bound introduced here
-12 | pub struct Items;
+16 | pub struct Items;
    |            ^^^^^
    = note: 1 redundant requirement hidden
-   = note: required for `Pricey` to implement `static_typed_queries::__private::builder::HookNeeds<(HookValues<Bump>, ()), ((static_typed_queries::__private::builder::Here, _),)>`
-note: required by a bound in `_::<impl PriceyBuilder<Price<Filled>, Built<<Items as static_typed_queries::Sql>::Params>, WithHooks, __V>>::run`
-  --> tests/ui/hook_values_missing.rs:14:1
+   = note: required for `Pricey` to implement `static_typed_queries::__private::hooks::HookNeeds<(HookValues<Bump>, ()), ((static_typed_queries::__private::hooks::Here, _),)>`
+note: required by a bound in `With::<S, V>::run`
+  --> $WORKSPACE/crates/static-typed-queries-core/src/with.rs
    |
-14 | #[query(Sqlite, sql = "SELECT id FROM {Items} WHERE price > {_: i64}")]
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `_::<impl PriceyBuilder<Price<Filled>, Built<<Items as Sql>::Params>, WithHooks, __V>>::run`
-   = note: this error originates in the attribute macro `query` (in Nightly builds, run with -Z macro-backtrace for more info)
+   | impl<S, V> With<S, V> {
+...
+   |     pub async fn run<'c, I, A>(self, conn: A) -> Result<S::Output, sqlx::Error>
+   |     where
+   |         S: Run + HookNeeds<V, I>,
+   |                  ^^^^^^^^^^^^^^^ required by this bound in `With::<S, V>::run`
+   = note: this error originates in the attribute macro `query` which comes from the expansion of the attribute macro `table` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error[E0277]: no values for the hook `Bump`
-  --> tests/ui/hook_values_missing.rs:32:26
+  --> tests/ui/hook_values_missing.rs:39:15
    |
-32 |     ItemCount::builder().run_as(conn).await
-   |                          ^^^^^^ `Bump` has parameters
+39 |     ItemCount.run_as(conn).await
+   |               ^^^^^^ `Bump` has values
    |
-   = help: the trait `static_typed_queries::__private::builder::Provides<Bump, _>` is not implemented for `()`
-   = note: give them with `.with(Bump::builder()…)`
-help: the trait `static_typed_queries::__private::builder::HookNeeds<__V, (__I0,)>` is conditionally implemented for `ItemCount`
-  --> tests/ui/hook_values_missing.rs:20:1
+   = help: the trait `static_typed_queries::__private::hooks::Provides<Bump, _>` is not implemented for `()`
+   = note: give them with `.with(Bump { .. })`
+help: the trait `static_typed_queries::__private::hooks::HookNeeds<__V, (__I0,)>` is conditionally implemented for `ItemCount`
+  --> tests/ui/hook_values_missing.rs:26:1
    |
-20 | #[statement(CountOf<Items>)]
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unsatisfied requirement introduced here: `CountOf<Items>: static_typed_queries::__private::builder::HookNeeds<_, _>`
-   = note: required for `BumpParams` to implement `static_typed_queries::__private::builder::Demand<(), _>`
-note: required for `Items` to implement `static_typed_queries::__private::builder::HookNeeds<(), (_, _)>`
-  --> tests/ui/hook_values_missing.rs:11:1
+26 | #[statement(CountOf<Items>)]
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unsatisfied requirement introduced here: `CountOf<Items>: static_typed_queries::__private::hooks::HookNeeds<_, _>`
+note: required for `Items` to implement `static_typed_queries::__private::hooks::HookNeeds<(), (_, _)>`
+  --> tests/ui/hook_values_missing.rs:15:1
    |
-11 | #[table(Sqlite, name = "items", before(Bump), after(Note))]
+15 | #[table(Sqlite, name = "items", before(Bump), after(Note))]
    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unsatisfied trait bound introduced here
-12 | pub struct Items;
+16 | pub struct Items;
    |            ^^^^^
    = note: 2 redundant requirements hidden
-   = note: required for `ItemCount` to implement `static_typed_queries::__private::builder::HookNeeds<(), (((_, _),),)>`
-note: required by a bound in `_::<impl ItemCountBuilder<Built<<CountOf<Items> as static_typed_queries::Sql>::Params>, Built<<Items as static_typed_queries::Sql>::Params>, WithHooks, __V>>::run_as`
-  --> tests/ui/hook_values_missing.rs:20:1
+   = note: required for `ItemCount` to implement `static_typed_queries::__private::hooks::HookNeeds<(), (((_, _),),)>`
+note: required by a bound in `_::<impl ItemCount>::run_as`
+  --> tests/ui/hook_values_missing.rs:26:1
    |
-20 | #[statement(CountOf<Items>)]
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `_::<impl ItemCountBuilder<Built<<CountOf<Items> as Sql>::Params>, Built<<Items as Sql>::Params>, WithHooks, __V>>::run_as`
+26 | #[statement(CountOf<Items>)]
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `_::<impl ItemCount>::run_as`
    = note: this error originates in the attribute macro `statement` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error[E0277]: no values for the hook `Bump`
-  --> tests/ui/hook_values_missing.rs:32:5
+  --> tests/ui/hook_values_missing.rs:39:5
    |
-32 |     ItemCount::builder().run_as(conn).await
-   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `Bump` has parameters
+39 |     ItemCount.run_as(conn).await
+   |     ^^^^^^^^^^^^^^^^^^^^^^ `Bump` has values
    |
-   = help: the trait `static_typed_queries::__private::builder::Provides<Bump, _>` is not implemented for `()`
-   = note: give them with `.with(Bump::builder()…)`
-help: the trait `static_typed_queries::__private::builder::HookNeeds<__V, (__I0,)>` is conditionally implemented for `ItemCount`
-  --> tests/ui/hook_values_missing.rs:20:1
+   = help: the trait `static_typed_queries::__private::hooks::Provides<Bump, _>` is not implemented for `()`
+   = note: give them with `.with(Bump { .. })`
+help: the trait `static_typed_queries::__private::hooks::HookNeeds<__V, (__I0,)>` is conditionally implemented for `ItemCount`
+  --> tests/ui/hook_values_missing.rs:26:1
    |
-20 | #[statement(CountOf<Items>)]
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unsatisfied requirement introduced here: `CountOf<Items>: static_typed_queries::__private::builder::HookNeeds<_, _>`
-   = note: required for `BumpParams` to implement `static_typed_queries::__private::builder::Demand<(), _>`
-note: required for `Items` to implement `static_typed_queries::__private::builder::HookNeeds<(), (_, _)>`
-  --> tests/ui/hook_values_missing.rs:11:1
+26 | #[statement(CountOf<Items>)]
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unsatisfied requirement introduced here: `CountOf<Items>: static_typed_queries::__private::hooks::HookNeeds<_, _>`
+note: required for `Items` to implement `static_typed_queries::__private::hooks::HookNeeds<(), (_, _)>`
+  --> tests/ui/hook_values_missing.rs:15:1
    |
-11 | #[table(Sqlite, name = "items", before(Bump), after(Note))]
+15 | #[table(Sqlite, name = "items", before(Bump), after(Note))]
    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unsatisfied trait bound introduced here
-12 | pub struct Items;
+16 | pub struct Items;
    |            ^^^^^
    = note: 2 redundant requirements hidden
-   = note: required for `ItemCount` to implement `static_typed_queries::__private::builder::HookNeeds<(), (((_, _),),)>`
-note: required by a bound in `_::<impl ItemCountBuilder<Built<<CountOf<Items> as static_typed_queries::Sql>::Params>, Built<<Items as static_typed_queries::Sql>::Params>, WithHooks, __V>>::run_as`
-  --> tests/ui/hook_values_missing.rs:20:1
+   = note: required for `ItemCount` to implement `static_typed_queries::__private::hooks::HookNeeds<(), (((_, _),),)>`
+note: required by a bound in `_::<impl ItemCount>::run_as`
+  --> tests/ui/hook_values_missing.rs:26:1
    |
-20 | #[statement(CountOf<Items>)]
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `_::<impl ItemCountBuilder<Built<<CountOf<Items> as Sql>::Params>, Built<<Items as Sql>::Params>, WithHooks, __V>>::run_as`
+26 | #[statement(CountOf<Items>)]
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `_::<impl ItemCount>::run_as`
    = note: this error originates in the attribute macro `statement` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error[E0277]: no values for the hook `Bump`
-  --> tests/ui/hook_values_missing.rs:32:39
+  --> tests/ui/hook_values_missing.rs:39:28
    |
-32 |     ItemCount::builder().run_as(conn).await
-   |                                       ^^^^^ `Bump` has parameters
+39 |     ItemCount.run_as(conn).await
+   |                            ^^^^^ `Bump` has values
    |
-   = help: the trait `static_typed_queries::__private::builder::Provides<Bump, _>` is not implemented for `()`
-   = note: give them with `.with(Bump::builder()…)`
-help: the trait `static_typed_queries::__private::builder::HookNeeds<__V, (__I0,)>` is conditionally implemented for `ItemCount`
-  --> tests/ui/hook_values_missing.rs:20:1
+   = help: the trait `static_typed_queries::__private::hooks::Provides<Bump, _>` is not implemented for `()`
+   = note: give them with `.with(Bump { .. })`
+help: the trait `static_typed_queries::__private::hooks::HookNeeds<__V, (__I0,)>` is conditionally implemented for `ItemCount`
+  --> tests/ui/hook_values_missing.rs:26:1
    |
-20 | #[statement(CountOf<Items>)]
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unsatisfied requirement introduced here: `CountOf<Items>: static_typed_queries::__private::builder::HookNeeds<_, _>`
-   = note: required for `BumpParams` to implement `static_typed_queries::__private::builder::Demand<(), _>`
-note: required for `Items` to implement `static_typed_queries::__private::builder::HookNeeds<(), (_, _)>`
-  --> tests/ui/hook_values_missing.rs:11:1
+26 | #[statement(CountOf<Items>)]
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unsatisfied requirement introduced here: `CountOf<Items>: static_typed_queries::__private::hooks::HookNeeds<_, _>`
+note: required for `Items` to implement `static_typed_queries::__private::hooks::HookNeeds<(), (_, _)>`
+  --> tests/ui/hook_values_missing.rs:15:1
    |
-11 | #[table(Sqlite, name = "items", before(Bump), after(Note))]
+15 | #[table(Sqlite, name = "items", before(Bump), after(Note))]
    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unsatisfied trait bound introduced here
-12 | pub struct Items;
+16 | pub struct Items;
    |            ^^^^^
    = note: 2 redundant requirements hidden
-   = note: required for `ItemCount` to implement `static_typed_queries::__private::builder::HookNeeds<(), (((_, _),),)>`
-note: required by a bound in `_::<impl ItemCountBuilder<Built<<CountOf<Items> as static_typed_queries::Sql>::Params>, Built<<Items as static_typed_queries::Sql>::Params>, WithHooks, __V>>::run_as`
-  --> tests/ui/hook_values_missing.rs:20:1
+   = note: required for `ItemCount` to implement `static_typed_queries::__private::hooks::HookNeeds<(), (((_, _),),)>`
+note: required by a bound in `_::<impl ItemCount>::run_as`
+  --> tests/ui/hook_values_missing.rs:26:1
    |
-20 | #[statement(CountOf<Items>)]
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `_::<impl ItemCountBuilder<Built<<CountOf<Items> as Sql>::Params>, Built<<Items as Sql>::Params>, WithHooks, __V>>::run_as`
+26 | #[statement(CountOf<Items>)]
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `_::<impl ItemCount>::run_as`
    = note: this error originates in the attribute macro `statement` (in Nightly builds, run with -Z macro-backtrace for more info)

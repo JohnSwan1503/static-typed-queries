@@ -1,21 +1,23 @@
 error[E0283]: type annotations needed
-  --> tests/ui/hook_values_twice.rs:16:10
+  --> tests/ui/hook_values_twice.rs:21:10
    |
-16 |         .with(SetTenant::builder().tenant("other".to_owned()));
-   |          ^^^^ cannot infer type of the type parameter `__Once` declared on the method `with`
+21 |         .with(SetTenant {
+   |          ^^^^ cannot infer type of the type parameter `I` declared on the method `with`
    |
-   = note: multiple `impl`s satisfying `(HookValues<SetTenant>, (HookValues<SetTenant>, ())): static_typed_queries::__private::builder::Provides<SetTenant, _>` found in the `static_typed_queries_core` crate:
-           - impl<H, Rest> static_typed_queries::__private::builder::Provides<H, static_typed_queries::__private::builder::Here> for (HookValues<H>, Rest)
+   = note: multiple `impl`s satisfying `(HookValues<SetTenant>, (HookValues<SetTenant>, ())): static_typed_queries::__private::hooks::Provides<SetTenant, _>` found in the `static_typed_queries_core` crate:
+           - impl<H, Rest> static_typed_queries::__private::hooks::Provides<H, static_typed_queries::__private::hooks::Here> for (HookValues<H>, Rest)
              where H: Sql;
-           - impl<H, X, Rest, I> static_typed_queries::__private::builder::Provides<H, static_typed_queries::__private::builder::There<I>> for (X, Rest)
-             where Rest: static_typed_queries::__private::builder::Provides<H, I>;
-note: required by a bound in `_::<impl OrderByIdBuilder<ParamId, ItemOrders, WithHooks, __V>>::with`
-  --> tests/ui/hook_values_twice.rs:9:1
+           - impl<H, X, Rest, I> static_typed_queries::__private::hooks::Provides<H, static_typed_queries::__private::hooks::There<I>> for (X, Rest)
+             where Rest: static_typed_queries::__private::hooks::Provides<H, I>;
+note: required by a bound in `With::<S, V>::with`
+  --> $WORKSPACE/crates/static-typed-queries-core/src/with.rs
    |
- 9 | #[query(Postgres, sql = "SELECT id FROM {Orders} WHERE id = {_: i64}")]
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `_::<impl OrderByIdBuilder<ParamId, ItemOrders, WithHooks, __V>>::with`
-   = note: this error originates in the attribute macro `query` (in Nightly builds, run with -Z macro-backtrace for more info)
+   | impl<S, V> With<S, V> {
+   |     pub fn with<H, I>(self, values: H) -> With<S, (HookValues<H>, V)>
+...
+   |         (HookValues<H>, V): Provides<H, I>,
+   |                             ^^^^^^^^^^^^^^ required by this bound in `With::<S, V>::with`
 help: consider specifying the generic arguments
    |
-16 |         .with::<SetTenantBuilder<Tenant<Filled>>, SetTenant, __Once>(SetTenant::builder().tenant("other".to_owned()));
-   |              +++++++++++++++++++++++++++++++++++++++++++++++++++++++
+21 |         .with::<SetTenant, I>(SetTenant {
+   |              ++++++++++++++++

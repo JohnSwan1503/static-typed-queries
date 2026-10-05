@@ -1,10 +1,8 @@
 use quote::ToTokens;
-use syn::{Attribute, Ident, Type, parse_quote};
+use syn::{Attribute, Ident, ItemStruct, Type, parse_quote};
 
 use crate::args::{Fetch, Step};
-use crate::model::item::{Item, Role};
-use crate::naming::type_key;
-use crate::sql::analyze::Origin;
+use crate::model::role::Role;
 
 pub(crate) fn attrs(lines: &[String]) -> Vec<Attribute> {
     lines
@@ -50,44 +48,21 @@ pub(crate) fn template(sql: &str) -> Vec<String> {
         .collect()
 }
 
-pub(crate) fn origin(origin: Origin, name: &str) -> String {
-    match origin {
-        Origin::Compared => format!("compared with `{name}`"),
-        Origin::Inserted => format!("inserted into `{name}`"),
-        Origin::Assigned => format!("assigned to `{name}`"),
-        Origin::Selected => format!("selected as `{name}`"),
-        Origin::Limit => "used as the `LIMIT`".to_owned(),
-        Origin::Offset => "used as the `OFFSET`".to_owned(),
-    }
-}
-
-pub(crate) fn origins(origins: &[String]) -> String {
-    match origins {
-        [one] => one.clone(),
-        [first, rest @ ..] if rest.iter().all(|other| other == first) => format!("each {first}"),
-        _ => origins.join(", then "),
-    }
-}
-
-pub(crate) fn capitalize(text: &str) -> String {
-    let mut chars = text.chars();
-    chars
-        .next()
-        .map(|first| first.to_uppercase().chain(chars).collect())
-        .unwrap_or_default()
-}
-
+// A doc link to a type, unless it's a type parameter or a field named in place of a type.
 pub(crate) fn link(ty: &Type, generics: &[&Ident]) -> String {
     let text = type_string(ty);
     let Type::Path(path) = ty else {
         return format!("`{text}`");
     };
-    let generic = path
-        .path
-        .segments
-        .first()
-        .is_some_and(|segment| generics.contains(&&segment.ident));
-    if path.qself.is_some() || generic {
+    let first = path.path.segments.first();
+    let generic = first.is_some_and(|segment| generics.contains(&&segment.ident));
+    let field = path.path.get_ident().is_some_and(|ident| {
+        ident
+            .to_string()
+            .trim_start_matches("r#")
+            .starts_with(|c: char| c.is_lowercase())
+    });
+    if path.qself.is_some() || generic || field {
         return format!("`{text}`");
     }
     let mut target = String::new();
@@ -127,106 +102,63 @@ pub(crate) fn type_string(ty: &Type) -> String {
     out
 }
 
-impl<'a> Item<'a> {
-    pub(crate) fn item_docs(&self) -> Vec<syn::Attribute> {
-        let mut lines = Vec::new();
-        if self
-            .input
-            .attrs
-            .iter()
-            .any(|attr| attr.path().is_ident("doc"))
-        {
+pub(crate) fn item_docs(input: &ItemStruct, role: Role) -> Vec<Attribute> {
+    let generics: Vec<&Ident> = input
+        .generics
+        .type_params()
+        .map(|param| &param.ident)
+        .collect();
+    let link = |ty: &Type| link(ty, &generics);
+    let mut lines = Vec::new();
+    if input.attrs.iter().any(|attr| attr.path().is_ident("doc")) {
+        lines.push(String::new());
+    }
+    match role {
+        Role::Query { sql } => {
+            lines.push("# Template".to_owned());
             lines.push(String::new());
+            lines.push("```sql".to_owned());
+            lines.extend(template(&sql.value()));
+            lines.push("```".to_owned());
         }
-        match self.role {
-            Role::Query { sql } => {
-                lines.push("# Template".to_owned());
-                lines.push(String::new());
-                lines.push("```sql".to_owned());
-                lines.extend(template(&sql.value()));
-                lines.push("```".to_owned());
-            }
-            Role::Statement { target } => {
-                lines.push(format!("Runs {} as a statement.", self.link(target)))
-            }
-            Role::Transaction { steps } => lines.push(format!(
-                "Runs {} in one transaction, in this order.",
-                self.describe_steps(steps)
-            )),
-            Role::Table { before, after } => {
-                let list = |hooks: &[Type]| {
-                    let links: Vec<String> = hooks.iter().map(|ty| self.link(ty)).collect();
-                    links.join(", ")
-                };
-                let runs = match (before.is_empty(), after.is_empty()) {
-                    (true, true) => return Vec::new(),
-                    (false, true) => format!("{} before it", list(before)),
-                    (true, false) => format!("{} after it", list(after)),
-                    (false, false) => {
-                        format!("{} before it and {} after it", list(before), list(after))
-                    }
-                };
-                lines.push("# Hooks".to_owned());
-                lines.push(String::new());
-                lines.push(format!(
-                    "Every statement that uses this table runs {runs}, each hook once. A hook with parameters takes its values from the statement builder's `with`."
-                ));
-            }
-            Role::Wrapper => {}
-        }
-        if !self.is_empty() {
-            lines.push(String::new());
-            lines.push("# Parameters".to_owned());
+        Role::Statement { target } => lines.push(format!("Runs {} as a statement.", link(target))),
+        Role::Transaction { steps } => lines.push(format!(
+            "Runs {} in one transaction, in this order.",
+            describe_steps(steps, &link)
+        )),
+        Role::Table { before, after } => {
+            let list = |hooks: &[Type]| {
+                let links: Vec<String> = hooks.iter().map(&link).collect();
+                links.join(", ")
+            };
+            let runs = match (before.is_empty(), after.is_empty()) {
+                (true, true) => return Vec::new(),
+                (false, true) => format!("{} before it", list(before)),
+                (true, false) => format!("{} after it", list(after)),
+                (false, false) => {
+                    format!("{} before it and {} after it", list(before), list(after))
+                }
+            };
+            lines.push("# Hooks".to_owned());
             lines.push(String::new());
             lines.push(format!(
-                "Set them through [`{}`], from `{}`:",
-                self.builder,
-                self.constructor()
+                "Every statement that uses this table runs {runs}, each hook once. A hook with values takes them from the statement's `with`."
             ));
-            lines.push(String::new());
-            for group in &self.groups {
-                let times = match group.slots.len() {
-                    1 => String::new(),
-                    len => format!(" ×{len}"),
-                };
-                lines.push(format!(
-                    "- `.{}({})`{times}: {}",
-                    group.name,
-                    type_string(&group.ty),
-                    origins(&group.origins)
-                ));
-            }
-            for child in &self.children {
-                let separate = if type_key(&child.ty) == type_key(&child.named) {
-                    ""
-                } else {
-                    ", with its own values for its type arguments"
-                };
-                lines.push(format!(
-                    "- `.{}()`, then a setter: the parameters of {}{separate}",
-                    child.name,
-                    self.link(&child.named)
-                ));
-            }
-            if !self.children.is_empty() {
-                lines.push(String::new());
-                lines.push("Items without parameters, such as tables, need no call.".to_owned());
-            }
         }
-        attrs(&lines)
     }
+    attrs(&lines)
+}
 
-    pub(crate) fn describe_steps(&self, steps: &[Step]) -> String {
-        let steps: Vec<String> = steps
-            .iter()
-            .map(|step| match step {
-                Step::Run(ty, Fetch::Default) => self.link(ty),
-                Step::Run(ty, Fetch::One) => format!("{} as one", self.link(ty)),
-                Step::Run(ty, Fetch::Optional) => format!("{} as optional", self.link(ty)),
-                Step::Run(ty, Fetch::Cte) => format!("{} as cte", self.link(ty)),
-                Step::Savepoint(steps) => format!("savepoint({})", self.describe_steps(steps)),
-            })
-            .collect();
-        steps.join(", ")
-    }
+fn describe_steps(steps: &[Step], link: &dyn Fn(&Type) -> String) -> String {
+    let steps: Vec<String> = steps
+        .iter()
+        .map(|step| match step {
+            Step::Run(ty, Fetch::Default) => link(ty),
+            Step::Run(ty, Fetch::One) => format!("{} as one", link(ty)),
+            Step::Run(ty, Fetch::Optional) => format!("{} as optional", link(ty)),
+            Step::Run(ty, Fetch::Cte) => format!("{} as cte", link(ty)),
+            Step::Savepoint(steps) => format!("savepoint({})", describe_steps(steps, link)),
+        })
+        .collect();
+    steps.join(", ")
 }

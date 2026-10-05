@@ -5,10 +5,9 @@ pub mod params;
 #[cfg(feature = "sqlx")]
 pub mod run;
 
-use crate::builder::NoHooks;
 #[cfg(feature = "sqlx")]
 use crate::dialect::driver::{Arguments, Database, Driver, Query, QueryAs, Row};
-use crate::render::Render;
+use crate::hooks::Single;
 use crate::sql::Sql;
 use bind::Bind;
 use hook::Hook;
@@ -20,52 +19,7 @@ pub trait Statement: Sql {
     const BINDS: &'static [Bind];
     const BEFORE: &'static [Hook];
     const AFTER: &'static [Hook];
-
-    #[cfg(feature = "sqlx")]
-    fn arguments(params: &Self::Params) -> Result<Arguments<Self::Dialect>, sqlx::Error>
-    where
-        Self::Dialect: Driver,
-        Self::Params: BindParams<Database<Self::Dialect>>,
-    {
-        params::arguments::<Self::Dialect, _>(params, Self::BINDS)
-    }
-
-    #[cfg(feature = "sqlx")]
-    fn query<'q>(params: &Self::Params) -> Result<Query<'q, Self::Dialect>, sqlx::Error>
-    where
-        Self: Single,
-        Self::Dialect: Driver,
-        Self::Params: BindParams<Database<Self::Dialect>>,
-        Arguments<Self::Dialect>: sqlx::IntoArguments<Database<Self::Dialect>>,
-    {
-        query::<Self>(params)
-    }
-
-    #[cfg(feature = "sqlx")]
-    fn query_as<'q, O>(params: &Self::Params) -> Result<QueryAs<'q, Self::Dialect, O>, sqlx::Error>
-    where
-        Self: Single,
-        Self::Dialect: Driver,
-        Self::Params: BindParams<Database<Self::Dialect>>,
-        Arguments<Self::Dialect>: sqlx::IntoArguments<Database<Self::Dialect>>,
-        O: for<'r> sqlx::FromRow<'r, Row<Self::Dialect>>,
-    {
-        query_as::<Self, O>(params)
-    }
 }
-
-#[diagnostic::on_unimplemented(
-    message = "this statement runs `before` or `after` hooks, so it can't run as a single query",
-    label = "has hooks",
-    note = "run it through its builder's `run`, which wraps the hooks and the statement in a transaction"
-)]
-pub trait Unhooked {}
-
-impl Unhooked for NoHooks {}
-
-pub trait Single: Statement {}
-
-impl<S: Statement + Render> Single for S where S::Hooks: Unhooked {}
 
 #[doc(hidden)]
 pub trait SingleRef {}
@@ -74,28 +28,26 @@ impl<S: Single> SingleRef for &S {}
 
 #[cfg(feature = "sqlx")]
 #[doc(hidden)]
-pub fn query<'q, S>(params: &S::Params) -> Result<Query<'q, S::Dialect>, sqlx::Error>
+pub fn query<'q, S, I>(statement: &S) -> Result<Query<'q, S::Dialect>, sqlx::Error>
 where
-    S: Statement + ?Sized,
+    S: Statement + Single<I> + BindParams<Database<S::Dialect>>,
     S::Dialect: Driver,
-    S::Params: BindParams<Database<S::Dialect>>,
     Arguments<S::Dialect>: sqlx::IntoArguments<Database<S::Dialect>>,
 {
-    let args = S::arguments(params)?;
+    let args = params::arguments::<S::Dialect, S>(statement, S::BINDS)?;
     Ok(sqlx::query_with(sqlx::SqlStr::from_static(S::SQL), args))
 }
 
 #[cfg(feature = "sqlx")]
 #[doc(hidden)]
-pub fn query_as<'q, S, O>(params: &S::Params) -> Result<QueryAs<'q, S::Dialect, O>, sqlx::Error>
+pub fn query_as<'q, S, O, I>(statement: &S) -> Result<QueryAs<'q, S::Dialect, O>, sqlx::Error>
 where
-    S: Statement + ?Sized,
+    S: Statement + Single<I> + BindParams<Database<S::Dialect>>,
     S::Dialect: Driver,
-    S::Params: BindParams<Database<S::Dialect>>,
     Arguments<S::Dialect>: sqlx::IntoArguments<Database<S::Dialect>>,
     O: for<'r> sqlx::FromRow<'r, Row<S::Dialect>>,
 {
-    let args = S::arguments(params)?;
+    let args = params::arguments::<S::Dialect, S>(statement, S::BINDS)?;
     Ok(sqlx::query_as_with(sqlx::SqlStr::from_static(S::SQL), args))
 }
 
@@ -126,9 +78,9 @@ macro_rules! impl_statement {
                     <$ty as $crate::render::Render>::SIZE.statements()] = RENDERED.statements();
                 $crate::render::Output::new(&STATEMENTS, RENDERED.before(), RENDERED.steps())
             };
-            type Hooks = <$crate::builder::HookFlag<
+            type Hooks = <$crate::hooks::HookFlag<
                 { $crate::render::hooked(<$ty as $crate::sql::Sql>::NODE) },
-            > as $crate::builder::HookState>::Out;
+            > as $crate::hooks::HookState>::Out;
         }
 
         impl $crate::statement::Statement for $ty {

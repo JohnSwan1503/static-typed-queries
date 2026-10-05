@@ -18,7 +18,6 @@ pub struct ActiveUsers;
 
 impl Sql for ActiveUsers {
     type Dialect = Postgres;
-    type Params = ();
     const NODE: &'static Node = node!(
         "active_users",
         1,
@@ -32,7 +31,6 @@ pub struct CountOf<T>(PhantomData<T>);
 
 impl<T: Sql> Sql for CountOf<T> {
     type Dialect = T::Dialect;
-    type Params = ();
     const NODE: &'static Node = node!(
         "count_of",
         2,
