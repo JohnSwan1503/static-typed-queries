@@ -1,6 +1,6 @@
 use std::marker::PhantomData;
 
-use sqlx::{Connection, Row, SqliteConnection};
+use sqlx::{Connection, FromRow, SqliteConnection};
 use static_typed_queries::prelude::*;
 
 #[table(Sqlite, name = "users")]
@@ -28,8 +28,15 @@ pub struct CountOf<T: Sql>(PhantomData<T>);
              WHERE o.user_id = u.id AND o.total >= {_: i64}) AS big_orders
     FROM {ActiveUsers} u
     WHERE u.email LIKE {_: String}
-    ORDER BY u.email")]
+    ORDER BY u.email", row = ReportRow)]
 pub struct UserReport;
+
+#[derive(FromRow)]
+pub struct ReportRow {
+    pub email: String,
+    pub org_size: i64,
+    pub big_orders: i64,
+}
 
 const SCHEMA: &str = "
     CREATE TABLE users (id INTEGER PRIMARY KEY, org_id INTEGER, email TEXT, deleted_at TEXT);
@@ -67,9 +74,7 @@ async fn main() -> Result<(), sqlx::Error> {
     for row in rows {
         println!(
             "   {:<20} org_size={} big_orders={}",
-            row.get::<String, _>("email"),
-            row.get::<i64, _>("org_size"),
-            row.get::<i64, _>("big_orders"),
+            row.email, row.org_size, row.big_orders
         );
     }
     Ok(())

@@ -7,3 +7,5 @@ pub trait Driver: Dialect {
 pub type Database<D> = <D as Driver>::Database;
 pub type Arguments<D> = <<D as Driver>::Database as sqlx::Database>::Arguments;
 pub type Query<'q, D> = sqlx::query::Query<'q, Database<D>, Arguments<D>>;
+pub type QueryAs<'q, D, O> = sqlx::query::QueryAs<'q, Database<D>, O, Arguments<D>>;
+pub type Row<D> = <<D as Driver>::Database as sqlx::Database>::Row;

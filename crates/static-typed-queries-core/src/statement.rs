@@ -3,7 +3,7 @@ pub mod bind;
 pub mod params;
 
 #[cfg(feature = "sqlx")]
-use crate::dialect::driver::{Arguments, Database, Driver};
+use crate::dialect::driver::{Arguments, Database, Driver, Query, QueryAs, Row};
 use crate::sql::Sql;
 use bind::Bind;
 #[cfg(feature = "sqlx")]
@@ -14,16 +14,10 @@ pub trait Statement: Sql {
     const BINDS: &'static [Bind];
 
     #[cfg(feature = "sqlx")]
-    fn query<'q>(
-        params: &Self::Params,
-    ) -> Result<
-        sqlx::query::Query<'q, Database<Self::Dialect>, Arguments<Self::Dialect>>,
-        sqlx::Error,
-    >
+    fn arguments(params: &Self::Params) -> Result<Arguments<Self::Dialect>, sqlx::Error>
     where
         Self::Dialect: Driver,
         Self::Params: BindParams<Database<Self::Dialect>>,
-        Arguments<Self::Dialect>: sqlx::IntoArguments<Database<Self::Dialect>>,
     {
         let mut args = Arguments::<Self::Dialect>::default();
         for bind in Self::BINDS {
@@ -31,8 +25,38 @@ pub trait Statement: Sql {
                 .bind(bind.path().steps(), bind.slot().inner(), &mut args)
                 .map_err(sqlx::Error::Encode)?;
         }
+        Ok(args)
+    }
+
+    #[cfg(feature = "sqlx")]
+    fn query<'q>(params: &Self::Params) -> Result<Query<'q, Self::Dialect>, sqlx::Error>
+    where
+        Self::Dialect: Driver,
+        Self::Params: BindParams<Database<Self::Dialect>>,
+        Arguments<Self::Dialect>: sqlx::IntoArguments<Database<Self::Dialect>>,
+    {
+        let args = Self::arguments(params)?;
         Ok(sqlx::query_with(sqlx::SqlStr::from_static(Self::SQL), args))
     }
+
+    #[cfg(feature = "sqlx")]
+    fn query_as<'q, O>(params: &Self::Params) -> Result<QueryAs<'q, Self::Dialect, O>, sqlx::Error>
+    where
+        Self::Dialect: Driver,
+        Self::Params: BindParams<Database<Self::Dialect>>,
+        Arguments<Self::Dialect>: sqlx::IntoArguments<Database<Self::Dialect>>,
+        O: for<'r> sqlx::FromRow<'r, Row<Self::Dialect>>,
+    {
+        let args = Self::arguments(params)?;
+        Ok(sqlx::query_as_with(
+            sqlx::SqlStr::from_static(Self::SQL),
+            args,
+        ))
+    }
+}
+
+pub trait Rows: Statement {
+    type Row;
 }
 
 #[macro_export]

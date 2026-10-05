@@ -308,3 +308,74 @@ fn generic_items_with_fixed_children_hold_their_own_values() {
         r#"WITH "active_users" AS (SELECT id, email FROM "users" WHERE org_id = $1) SELECT (SELECT count(*) FROM "active_users" JOIN "orders" o USING (id) WHERE o.total > $2) AS n"#
     );
 }
+
+#[derive(sqlx::FromRow, Debug, PartialEq)]
+pub struct EventRow {
+    pub kind: String,
+    pub at: i64,
+}
+
+#[query(
+    Sqlite,
+    row = EventRow,
+    sql = "SELECT kind, at FROM {Events} WHERE at >= {_: i64} ORDER BY at"
+)]
+pub struct EventsSince;
+
+#[query(
+    Sqlite,
+    row = EventRow,
+    sql = "INSERT INTO {Events} (kind, at) VALUES ({_: String}, {_: i64}) RETURNING kind, at"
+)]
+pub struct AddEvent;
+
+#[tokio::test]
+async fn rows_are_typed_by_row_or_query_as() -> sqlx::Result<()> {
+    let mut conn = SqliteConnection::connect("sqlite::memory:").await?;
+    sqlx::raw_sql("CREATE TABLE events (kind TEXT, at INTEGER); INSERT INTO events VALUES ('a', 1), ('b', 5);")
+        .execute(&mut conn)
+        .await?;
+
+    let added = AddEvent::builder()
+        .kind("c".to_owned())
+        .at(9)
+        .query()?
+        .fetch_one(&mut conn)
+        .await?;
+    assert_eq!(
+        added,
+        EventRow {
+            kind: "c".to_owned(),
+            at: 9
+        }
+    );
+
+    let rows = EventsSince::builder()
+        .at(5)
+        .query()?
+        .fetch_all(&mut conn)
+        .await?;
+    assert_eq!(
+        rows,
+        [
+            EventRow {
+                kind: "b".to_owned(),
+                at: 5
+            },
+            EventRow {
+                kind: "c".to_owned(),
+                at: 9
+            },
+        ]
+    );
+
+    let (n,): (i64,) = CountEvents::builder()
+        .kind("a".to_owned())
+        .at(0)
+        .at(10)
+        .query_as()?
+        .fetch_one(&mut conn)
+        .await?;
+    assert_eq!(n, 1);
+    Ok(())
+}

@@ -1,0 +1,5 @@
+error: this statement returns no rows; only queries and statements with `RETURNING` take `row`
+ --> tests/ui/row_without_rows.rs:8:25
+  |
+8 | #[query(Postgres, row = UserRow, sql = "UPDATE {Users} SET seen_at = now() WHERE id = {id: i64}")]
+  |                         ^^^^^^^

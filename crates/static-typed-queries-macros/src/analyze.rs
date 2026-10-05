@@ -39,6 +39,7 @@ pub(crate) enum Origin {
 
 pub(crate) struct Analysis {
     pub kind: Kind,
+    pub returns_rows: bool,
     pub refs: Vec<Position>,
     pub names: Vec<Option<(String, Origin)>>,
 }
@@ -171,6 +172,13 @@ pub(crate) fn analyze(template: &Template, engine: Engine, sql: &LitStr) -> syn:
         | Statement::Merge(_) => Kind::Dml,
         _ => Kind::Ddl,
     };
+    let returns_rows = match statement {
+        Statement::Query(_) => true,
+        Statement::Insert(insert) => insert.returning.is_some(),
+        Statement::Update(update) => update.returning.is_some(),
+        Statement::Delete(delete) => delete.returning.is_some(),
+        _ => false,
+    };
 
     let mut analyzer = Analyzer {
         refs,
@@ -179,6 +187,7 @@ pub(crate) fn analyze(template: &Template, engine: Engine, sql: &LitStr) -> syn:
     let _ = statement.visit(&mut analyzer);
     Ok(Analysis {
         kind,
+        returns_rows,
         refs: analyzer.refs,
         names: analyzer.names,
     })

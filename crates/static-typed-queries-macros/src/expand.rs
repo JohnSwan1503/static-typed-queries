@@ -11,7 +11,7 @@ use crate::docs;
 use crate::naming::{camel, field_name, short_name, snake_case, to_ident, unique};
 use crate::template::{self, Segment, Template};
 
-const RESERVED: &[&str] = &["build", "builder", "finish", "query"];
+const RESERVED: &[&str] = &["build", "builder", "finish", "query", "query_as"];
 
 fn krate() -> TokenStream {
     quote!(::static_typed_queries::__private)
@@ -38,6 +38,12 @@ pub(crate) fn table(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
         return Err(syn::Error::new(
             grammar.span(),
             "tables have no SQL to check",
+        ));
+    }
+    if let Some(row) = &args.row {
+        return Err(syn::Error::new_spanned(
+            row,
+            "tables aren't statements; give `row` to a query that selects from it",
         ));
     }
     if !item.generics.params.is_empty() {
@@ -114,6 +120,20 @@ pub(crate) fn query(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
     let template = template::parse(sql)?;
     let engine = Engine::of(&args.dialect, args.grammar.as_ref(), &item.generics)?;
     let analysis = analyze::analyze(&template, engine, sql)?;
+    if let Some(row) = &args.row {
+        if !item.generics.params.is_empty() {
+            return Err(syn::Error::new_spanned(
+                row,
+                "generic queries can't take `row`; they aren't statements on their own",
+            ));
+        }
+        if !analysis.returns_rows {
+            return Err(syn::Error::new_spanned(
+                row,
+                "this statement returns no rows; only queries and statements with `RETURNING` take `row`",
+            ));
+        }
+    }
     let kind = match analysis.kind {
         Kind::Query => quote!(Query),
         Kind::Dml => quote!(Dml),
@@ -157,7 +177,7 @@ pub(crate) fn query(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
     let params_struct = params.definition();
     let derives = params.derives();
     let bind_params = params.bind_impl();
-    let builder = params.builder(dialect);
+    let builder = params.builder(dialect, args.row.as_ref());
     let parse_check = args.parse_check.as_ref().is_none_or(|check| check.value);
     let statement = item.generics.params.is_empty().then(|| {
         let test = format_ident!("{}_sql_parses", snake_case(&ident.to_string()));
@@ -172,8 +192,16 @@ pub(crate) fn query(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
                 }
             }
         });
+        let rows = args.row.as_ref().map(|row| {
+            quote! {
+                impl #krate::statement::Rows for #ident {
+                    type Row = #row;
+                }
+            }
+        });
         quote! {
             #krate::impl_statement!(#ident);
+            #rows
 
             impl #ident {
                 /// The SQL, rendered at compile time.
@@ -331,6 +359,7 @@ fn wrapper(
     };
     let analysis = Analysis {
         kind: Kind::Query,
+        returns_rows: false,
         refs: Vec::new(),
         names: Vec::new(),
     };
@@ -350,7 +379,7 @@ fn wrapper(
     let params_struct = params.definition();
     let derives = params.derives();
     let bind_params = params.bind_impl();
-    let builder = params.builder(dialect);
+    let builder = params.builder(dialect, None);
     let embed_checks = embeds(item, &fields, dialect);
     Ok(quote! {
         #item
@@ -1015,7 +1044,7 @@ impl<'a> Params<'a> {
             .collect()
     }
 
-    fn builder(&self, dialect: &Type) -> TokenStream {
+    fn builder(&self, dialect: &Type, row: Option<&Type>) -> TokenStream {
         let krate = krate();
         let ident = &self.item.ident;
         let (impl_generics, ty_generics, where_clause) = self.item.generics.split_for_impl();
@@ -1307,19 +1336,46 @@ impl<'a> Params<'a> {
             }
         });
         if self.item.generics.params.is_empty() && !self.synthetic {
+            let driver = quote!(#krate::dialect::driver);
+            let error = quote!(#krate::__private::sqlx::Error);
+            let statement = quote!(#krate::statement::Statement);
+            let query = match row {
+                Some(row) => {
+                    let doc = doc(&format!(
+                        "Binds the parameters to the SQL as a `sqlx` query that reads each row as {}.",
+                        docs::link(row, &[])
+                    ));
+                    quote! {
+                        #doc
+                        pub fn query<'q>(
+                            self,
+                        ) -> ::core::result::Result<#driver::QueryAs<'q, #dialect, #row>, #error> {
+                            <#ident as #statement>::query_as::<#row>(&#b::Finish::finish(self))
+                        }
+                    }
+                }
+                None => quote! {
+                    /// Binds the parameters to the SQL as a `sqlx` query.
+                    pub fn query<'q>(
+                        self,
+                    ) -> ::core::result::Result<#driver::Query<'q, #dialect>, #error> {
+                        <#ident as #statement>::query(&#b::Finish::finish(self))
+                    }
+                },
+            };
             out.extend(quote! {
                 #krate::__if_sqlx! {
                     impl #complete {
-                        /// Binds the parameters to the SQL as a `sqlx` query.
-                        pub fn query<'q>(
+                        #query
+
+                        /// Binds the parameters to the SQL as a `sqlx` query that reads each row as `O`.
+                        pub fn query_as<'q, O>(
                             self,
-                        ) -> ::core::result::Result<
-                            #krate::dialect::driver::Query<'q, #dialect>,
-                            #krate::__private::sqlx::Error,
-                        > {
-                            <#ident as #krate::statement::Statement>::query(
-                                &#b::Finish::finish(self),
-                            )
+                        ) -> ::core::result::Result<#driver::QueryAs<'q, #dialect, O>, #error>
+                        where
+                            O: for<'r> #krate::__private::sqlx::FromRow<'r, #driver::Row<#dialect>>,
+                        {
+                            <#ident as #statement>::query_as::<O>(&#b::Finish::finish(self))
                         }
                     }
                 }

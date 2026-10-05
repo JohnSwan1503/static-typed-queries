@@ -103,6 +103,11 @@ pub fn table(args: TokenStream, item: TokenStream) -> TokenStream {
 ///   template is checked against. It's needed when the dialect isn't written
 ///   as `Postgres`, `MySql`, `Sqlite` or `T::Dialect`, such as through a type
 ///   alias, since the macro only sees the name.
+/// - `row = Type`: the type each returned row is read as, through
+///   `sqlx::FromRow`. The complete builder's `query()` then returns a
+///   `sqlx` `QueryAs` for it. Only queries and statements with `RETURNING`
+///   take it. Every complete builder also has `query_as::<T>()` for reading
+///   rows as some other type.
 /// - `separate(Type, ...)`: gives each listed generic item its own values for
 ///   the items in its type arguments, instead of sharing the query's. With
 ///   `separate(CountOf<ActiveUsers>)`, `.active_users()` and
