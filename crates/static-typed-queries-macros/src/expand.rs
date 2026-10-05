@@ -82,6 +82,8 @@ pub(crate) fn table(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
             }
         }
 
+        impl #krate::embed::Checked for #ident {}
+
         #fmt
     })
 }
@@ -111,12 +113,6 @@ pub(crate) fn query(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
         Kind::Ddl => quote!(Ddl),
     };
 
-    let ident = &item.ident;
-    let node_name = args
-        .name
-        .as_ref()
-        .map_or_else(|| snake_case(&ident.to_string()), LitStr::value);
-    let inject = placement(args.placement.unwrap_or(Placement::Subquery));
     let wrappers = separate(&args, &item, &template)?;
     let separate: Vec<(Type, Type)> = wrappers
         .iter()
@@ -126,8 +122,15 @@ pub(crate) fn query(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
         })
         .collect();
     let items = items(&template, &item.generics, &separate);
-    let params = Params::new(&template, &analysis, &items, &item, sql)?;
     let fields: Vec<Type> = items.iter().map(|(ty, _)| ty.clone()).collect();
+    let embed_checks = embeds(&item, &fields, &args.dialect);
+    let ident = &item.ident;
+    let node_name = args
+        .name
+        .as_ref()
+        .map_or_else(|| snake_case(&ident.to_string()), LitStr::value);
+    let inject = placement(args.placement.unwrap_or(Placement::Subquery));
+    let params = Params::new(&template, &analysis, &items, &item, sql)?;
     let node = node(
         &node_name,
         fingerprint(ident, &item),
@@ -189,6 +192,7 @@ pub(crate) fn query(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
             const NODE: &'static #krate::node::Node = #node;
         }
 
+        #embed_checks
         #bind_params
         #builder
         #statement
@@ -340,6 +344,7 @@ fn wrapper(
     let derives = params.derives();
     let bind_params = params.bind_impl();
     let builder = params.builder(dialect);
+    let embed_checks = embeds(item, &fields, dialect);
     Ok(quote! {
         #item
 
@@ -352,9 +357,45 @@ fn wrapper(
             const NODE: &'static #krate::node::Node = #node;
         }
 
+        #embed_checks
+
         #bind_params
         #builder
     })
+}
+
+fn embeds(item: &ItemStruct, items: &[Type], dialect: &Type) -> TokenStream {
+    let krate = krate();
+    let ident = &item.ident;
+    if item.generics.params.is_empty() {
+        let checks = items.iter().map(|ty| {
+            quote! {
+                const _: () = {
+                    #krate::embed::embeds::<#dialect, <#ty as #krate::sql::Sql>::Dialect>();
+                    #krate::embed::checked::<#ty>();
+                };
+            }
+        });
+        return quote! {
+            impl #krate::embed::Checked for #ident {}
+
+            #(#checks)*
+        };
+    }
+    let mut generics = item.generics.clone();
+    let clause = generics.make_where_clause();
+    for ty in items {
+        clause.predicates.push(parse_quote!(
+            <#ty as #krate::sql::Sql>::Dialect: #krate::embed::EmbedsIn<#dialect>
+        ));
+        clause
+            .predicates
+            .push(parse_quote!(#ty: #krate::embed::Checked));
+    }
+    let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
+    quote! {
+        impl #impl_generics #krate::embed::Checked for #ident #ty_generics #where_clause {}
+    }
 }
 
 fn node(

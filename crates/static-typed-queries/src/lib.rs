@@ -25,6 +25,7 @@ pub mod dialect {
     pub use static_typed_queries_core::dialect::postgres::Postgres;
     #[cfg(feature = "sqlite")]
     pub use static_typed_queries_core::dialect::sqlite::Sqlite;
+    pub use static_typed_queries_core::embed::EmbedsIn;
 }
 
 pub mod prelude {

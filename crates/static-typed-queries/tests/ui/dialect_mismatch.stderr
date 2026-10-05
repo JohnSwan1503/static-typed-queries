@@ -1,0 +1,13 @@
+error[E0277]: static_typed_queries::dialect::Postgres SQL can't be embedded in a static_typed_queries::dialect::Sqlite statement
+ --> tests/ui/dialect_mismatch.rs:9:1
+  |
+9 | #[query(Sqlite, sql = "SELECT count(*) FROM {Tagged}")]
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this item is written for static_typed_queries::dialect::Postgres
+  |
+  = help: the trait `EmbedsIn<static_typed_queries::dialect::Sqlite>` is not implemented for `static_typed_queries::dialect::Postgres`
+note: required by a bound in `static_typed_queries::__private::embed::embeds`
+ --> $WORKSPACE/crates/static-typed-queries-core/src/embed.rs
+  |
+  | pub const fn embeds<D: Dialect, E: EmbedsIn<D>>() {}
+  |                                    ^^^^^^^^^^^ required by this bound in `embeds`
+  = note: this error originates in the attribute macro `query` (in Nightly builds, run with -Z macro-backtrace for more info)

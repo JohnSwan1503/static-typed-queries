@@ -1,0 +1,25 @@
+error[E0277]: static_typed_queries::dialect::Postgres SQL can't be embedded in a static_typed_queries::dialect::Sqlite statement
+  --> tests/ui/dialect_mismatch_inside_generic.rs:14:1
+   |
+14 | #[query(Sqlite, sql = "SELECT * FROM {JoinUsers<Events>}")]
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this item is written for static_typed_queries::dialect::Postgres
+   |
+   = help: the trait `EmbedsIn<static_typed_queries::dialect::Sqlite>` is not implemented for `static_typed_queries::dialect::Postgres`
+help: the trait `static_typed_queries::__private::embed::Checked` is conditionally implemented for `JoinUsers<T>`
+  --> tests/ui/dialect_mismatch_inside_generic.rs:11:1
+   |
+11 | #[query(T::Dialect, sql = "SELECT count(*) FROM {T} JOIN {Users} USING (id)")]
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unsatisfied requirement introduced here: `<Users as static_typed_queries::Sql>::Dialect: EmbedsIn<<_ as static_typed_queries::Sql>::Dialect>`
+note: required for `JoinUsers<Events>` to implement `static_typed_queries::__private::embed::Checked`
+  --> tests/ui/dialect_mismatch_inside_generic.rs:11:1
+   |
+11 | #[query(T::Dialect, sql = "SELECT count(*) FROM {T} JOIN {Users} USING (id)")]
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unsatisfied trait bound introduced here
+12 | pub struct JoinUsers<T: Sql>(PhantomData<T>);
+   |            ^^^^^^^^^^^^^^^^^
+note: required by a bound in `static_typed_queries::__private::embed::checked`
+  --> $WORKSPACE/crates/static-typed-queries-core/src/embed.rs
+   |
+   | pub const fn checked<T: Checked>() {}
+   |                         ^^^^^^^ required by this bound in `checked`
+   = note: this error originates in the attribute macro `query` (in Nightly builds, run with -Z macro-backtrace for more info)
