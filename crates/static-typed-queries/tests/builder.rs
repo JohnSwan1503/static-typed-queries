@@ -283,3 +283,28 @@ async fn builder_queries_run_against_sqlite() -> sqlx::Result<()> {
     assert_eq!(row.get::<i64, _>("n"), 2);
     Ok(())
 }
+
+#[query(
+    T::Dialect,
+    sql = "SELECT count(*) FROM {T} JOIN {Orders} o USING (id) WHERE o.total > {_: i64}"
+)]
+pub struct WithOrders<T: Sql>(PhantomData<T>);
+
+#[query(Postgres, sql = "SELECT {WithOrders<ActiveUsers>} AS n")]
+pub struct BigSpenders;
+
+#[test]
+fn generic_items_with_fixed_children_hold_their_own_values() {
+    let params = BigSpenders::builder()
+        .with_orders()
+        .total(100)
+        .active_users()
+        .org_id(3)
+        .build();
+    assert_eq!(params.with_orders.total, 100);
+    assert_eq!(params.active_users.org_id, 3);
+    assert_eq!(
+        BigSpenders::SQL,
+        r#"WITH "active_users" AS (SELECT id, email FROM "users" WHERE org_id = $1) SELECT (SELECT count(*) FROM "active_users" JOIN "orders" o USING (id) WHERE o.total > $2) AS n"#
+    );
+}

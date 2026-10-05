@@ -611,6 +611,16 @@ impl<'a> Params<'a> {
             .expect("every slot belongs to a group")
     }
 
+    fn marker(&self) -> Option<TokenStream> {
+        let args = self.item_args();
+        (!args.is_empty()).then(|| quote!(::core::marker::PhantomData<fn() -> (#(#args,)*)>))
+    }
+
+    fn marker_value(&self) -> Option<TokenStream> {
+        self.marker()
+            .map(|_| quote!(__marker: ::core::marker::PhantomData,))
+    }
+
     fn is_empty(&self) -> bool {
         self.groups.is_empty() && self.children.is_empty()
     }
@@ -745,12 +755,19 @@ impl<'a> Params<'a> {
             self.item.ident, self.builder
         ));
         let hidden = self.synthetic.then(|| quote!(#[doc(hidden)]));
+        let marker = self.marker().map(|marker| {
+            quote! {
+                #[doc(hidden)]
+                pub __marker: #marker,
+            }
+        });
         Some(quote! {
             #doc
             #hidden
             #vis struct #ident #generics #where_clause {
                 #(#groups,)*
                 #(#children,)*
+                #marker
             }
         })
     }
@@ -782,6 +799,7 @@ impl<'a> Params<'a> {
             }))
             .collect();
         let names: Vec<&Ident> = fields.iter().map(|(name, _)| *name).collect();
+        let marker_value = self.marker_value();
         let labels: Vec<String> = names
             .iter()
             .map(|name| name.to_string().trim_start_matches("r#").to_owned())
@@ -804,6 +822,7 @@ impl<'a> Params<'a> {
                 fn clone(&self) -> Self {
                     Self {
                         #(#names: ::core::clone::Clone::clone(&self.#names),)*
+                        #marker_value
                     }
                 }
             }
@@ -1218,6 +1237,7 @@ impl<'a> Params<'a> {
             let (name, field) = (&child.name, &child.field);
             quote!(#name: self.#field.0)
         });
+        let marker_value = self.marker_value();
         out.extend(quote! {
             impl #impl_generics #b::Finish for #complete #where_clause {
                 type Params = #params_ty;
@@ -1226,6 +1246,7 @@ impl<'a> Params<'a> {
                     #params_ident {
                         #(#extract_groups,)*
                         #(#extract_children,)*
+                        #marker_value
                     }
                 }
             }
