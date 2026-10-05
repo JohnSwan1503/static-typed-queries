@@ -1,3 +1,5 @@
+#![doc = include_str!("../docs/crate.md")]
+
 pub use static_typed_queries_core::builder::{Build, Finish};
 pub use static_typed_queries_core::hooks::HookValues;
 pub use static_typed_queries_core::sql::Sql;
