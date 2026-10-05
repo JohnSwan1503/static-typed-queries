@@ -84,7 +84,7 @@ use syn::{ItemStruct, parse_macro_input};
 ///
 /// A table has no SQL of its own: it doesn't implement `Statement`, and it is
 /// always rendered as its name, so `{Table as cte}` and `{Table as subquery}`
-/// fail to compile. The struct can't be generic.
+/// fail to compile. The struct can't be generic or have fields.
 #[proc_macro_attribute]
 pub fn table(args: TokenStream, item: TokenStream) -> TokenStream {
     let args = parse_macro_input!(args as args::Args);
@@ -150,7 +150,8 @@ pub fn table(args: TokenStream, item: TokenStream) -> TokenStream {
 ///   `sqlx` `QueryAs` for it, and `run()` a `Vec` of it. Only queries and
 ///   statements with `RETURNING` take it. Every complete builder also has
 ///   `query_as::<T>()`, or `run_as::<T>()`, for reading rows as some other
-///   type.
+///   type. A struct with named fields is its own row type instead; see
+///   [Rows](#rows).
 /// - `separate(Type, ...)`: gives each listed generic item its own values for
 ///   the items in its type arguments, instead of sharing the query's. With
 ///   `separate(CountOf<ActiveUsers>)`, `.active_users()` and
@@ -215,6 +216,32 @@ pub fn table(args: TokenStream, item: TokenStream) -> TokenStream {
 /// Some combinations are only rejected once the whole statement is rendered,
 /// such as a data-modifying CTE on a dialect that doesn't support one. Those
 /// show up as compile errors on the outermost query.
+///
+/// # Rows
+///
+/// A struct with named fields is the statement's row type. It gets a
+/// `sqlx::FromRow` impl that reads each field from the column of the same
+/// name, and `query()` returns a `sqlx` `QueryAs` for it. The macro checks the
+/// field names against the columns the statement returns, unless those
+/// include `*` or an expression without an alias. Unquoted names are
+/// lowercased for PostgreSQL, as the database does.
+///
+/// ```
+/// # use static_typed_queries::prelude::*;
+/// # #[table(Postgres, name = "users")]
+/// # pub struct Users;
+/// #[query(Postgres, sql = "SELECT id, email FROM {Users} WHERE org_id = {_: i64}")]
+/// pub struct Member {
+///     pub id: i64,
+///     pub email: String,
+/// }
+///
+/// let params = Member::builder().org_id(7).build();
+/// assert_eq!(params.org_id, 7);
+/// ```
+///
+/// Only non-generic queries and statements with `RETURNING` can have fields,
+/// and a struct with fields doesn't take `row`, `display` or `debug`.
 ///
 /// # Generated items
 ///
@@ -326,7 +353,8 @@ pub fn query(args: TokenStream, item: TokenStream) -> TokenStream {
 /// assert_eq!(params.org_users.org_id, 7);
 /// ```
 ///
-/// It takes `display`, `debug`, `row` and `parse_check` like [`query`].
+/// It takes `display`, `debug`, `row` and `parse_check` like [`query`], and
+/// a struct with named fields is its row type, as for [`query`].
 #[proc_macro_attribute]
 pub fn statement(args: TokenStream, item: TokenStream) -> TokenStream {
     let args = parse_macro_input!(args as args::Args);

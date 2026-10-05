@@ -1,0 +1,45 @@
+error: tables can't have fields; give them to a query that selects from the table to read its rows
+ --> tests/ui/row_fields.rs:4:21
+  |
+4 |   pub struct Accounts {
+  |  _____________________^
+5 | |     pub id: i64,
+6 | | }
+  | |_^
+
+error: the statement returns no column named `name`; its columns are `id`, `email`, `one`
+  --> tests/ui/row_fields.rs:14:9
+   |
+14 |     pub name: String,
+   |         ^^^^
+
+error: this struct's fields are its row type, so it doesn't take `row`
+  --> tests/ui/row_fields.rs:17:25
+   |
+17 | #[query(Postgres, row = (i64,), sql = "SELECT id FROM {Users}")]
+   |                         ^^^^^^
+
+error: this statement returns no rows, so its struct can't have fields; only queries and statements with `RETURNING` have a row type
+  --> tests/ui/row_fields.rs:23:19
+   |
+23 |   pub struct NoRows {
+   |  ___________________^
+24 | |     pub id: i64,
+25 | | }
+   | |_^
+
+error: generic queries aren't statements, so their fields can't be a row type; declare them as `struct Name<T>(PhantomData<T>)`
+  --> tests/ui/row_fields.rs:28:28
+   |
+28 |   pub struct Generic<T: Sql> {
+   |  ____________________________^
+29 | |     pub id: i64,
+30 | |     marker: std::marker::PhantomData<T>,
+31 | | }
+   | |_^
+
+error: a struct with fields is its own row type, so `display`/`debug` would describe each row; implement them yourself
+  --> tests/ui/row_fields.rs:33:27
+   |
+33 | #[query(Postgres, debug = sql, sql = "SELECT id FROM {Users}")]
+   |                           ^^^

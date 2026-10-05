@@ -1,11 +1,12 @@
 use proc_macro2::{Literal, Span, TokenStream};
-use quote::{ToTokens, format_ident, quote};
+use quote::{ToTokens, format_ident, quote, quote_spanned};
+use syn::spanned::Spanned;
 use syn::{
-    GenericArgument, GenericParam, Generics, Ident, ItemStruct, LitStr, PathArguments, Type,
-    parse_quote,
+    Field, Fields, GenericArgument, GenericParam, Generics, Ident, ItemStruct, LitStr,
+    PathArguments, Type, parse_quote,
 };
 
-use crate::analyze::{self, Analysis, Engine, Kind};
+use crate::analyze::{self, Analysis, Columns, Engine, Kind};
 use crate::args::{Args, Placement};
 use crate::docs;
 use crate::naming::{camel, field_name, short_name, snake_case, to_ident, unique};
@@ -54,6 +55,12 @@ pub(crate) fn table(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
             "tables can't be generic",
         ));
     }
+    if !named_fields(&item).is_empty() {
+        return Err(syn::Error::new_spanned(
+            &item.fields,
+            "tables can't have fields; give them to a query that selects from the table to read its rows",
+        ));
+    }
     let name = args
         .name
         .as_ref()
@@ -80,6 +87,7 @@ pub(crate) fn table(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
     let analysis = Analysis {
         kind: Kind::Query,
         returns_rows: false,
+        columns: Columns::default(),
         refs: Vec::new(),
         names: Vec::new(),
     };
@@ -194,6 +202,7 @@ pub(crate) fn query(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
             ));
         }
     }
+    let row = row(&args, &item, analysis.returns_rows, Some(&analysis.columns))?;
     let kind = match analysis.kind {
         Kind::Query => quote!(Query),
         Kind::Dml => quote!(Dml),
@@ -238,7 +247,7 @@ pub(crate) fn query(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
     let params_struct = params.definition();
     let derives = params.derives();
     let bind_params = params.bind_impl();
-    let builder = params.builder(dialect, args.row.as_ref());
+    let builder = params.builder(dialect, row.as_ref());
     let parse_check = args.parse_check.as_ref().is_none_or(|check| check.value);
     let statement = item.generics.params.is_empty().then(|| {
         let test = format_ident!("{}_sql_parses", snake_case(&ident.to_string()));
@@ -253,16 +262,18 @@ pub(crate) fn query(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
                 }
             }
         });
-        let rows = args.row.as_ref().map(|row| {
+        let rows = row.as_ref().map(|row| {
             quote! {
                 impl #krate::statement::Rows for #ident {
                     type Row = #row;
                 }
             }
         });
+        let from_row = from_row(&item, dialect);
         quote! {
             #krate::impl_statement!(#ident);
             #rows
+            #from_row
 
             impl #ident {
                 /// The SQL, rendered at compile time.
@@ -277,6 +288,7 @@ pub(crate) fn query(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
     documented
         .attrs
         .extend(params.item_docs(Source::Template(sql)));
+    documented.attrs.extend(row_docs(&item));
 
     Ok(quote! {
         #documented
@@ -423,6 +435,7 @@ fn wrapper(
     let analysis = Analysis {
         kind: Kind::Query,
         returns_rows: false,
+        columns: Columns::default(),
         refs: Vec::new(),
         names: Vec::new(),
     };
@@ -505,6 +518,7 @@ pub(crate) fn statement(args: Args, item: ItemStruct) -> syn::Result<TokenStream
     let analysis = Analysis {
         kind: Kind::Query,
         returns_rows: true,
+        columns: Columns::default(),
         refs: Vec::new(),
         names: Vec::new(),
     };
@@ -523,16 +537,18 @@ pub(crate) fn statement(args: Args, item: ItemStruct) -> syn::Result<TokenStream
     let params_struct = params.definition();
     let derives = params.derives();
     let bind_params = params.bind_impl();
-    let builder = params.builder(&dialect, args.row.as_ref());
+    let row = row(&args, &item, true, None)?;
+    let builder = params.builder(&dialect, row.as_ref());
     let embed_checks = embeds(&item, &fields, &dialect);
     let fmt = fmt(&args, &item, true)?;
-    let rows = args.row.as_ref().map(|row| {
+    let rows = row.as_ref().map(|row| {
         quote! {
             impl #krate::statement::Rows for #ident {
                 type Row = #row;
             }
         }
     });
+    let from_row = from_row(&item, &dialect);
     let parse_check = args.parse_check.as_ref().is_none_or(|check| check.value);
     let test = parse_check.then(|| {
         let test = format_ident!("{}_sql_parses", snake_case(&ident.to_string()));
@@ -550,6 +566,7 @@ pub(crate) fn statement(args: Args, item: ItemStruct) -> syn::Result<TokenStream
     documented
         .attrs
         .extend(params.item_docs(Source::Statement(target)));
+    documented.attrs.extend(row_docs(&item));
     Ok(quote! {
         #documented
 
@@ -568,6 +585,7 @@ pub(crate) fn statement(args: Args, item: ItemStruct) -> syn::Result<TokenStream
 
         #krate::impl_statement!(#ident);
         #rows
+        #from_row
 
         impl #ident {
             /// The SQL, rendered at compile time.
@@ -577,6 +595,111 @@ pub(crate) fn statement(args: Args, item: ItemStruct) -> syn::Result<TokenStream
         #test
         #fmt
     })
+}
+
+fn named_fields(item: &ItemStruct) -> Vec<&Field> {
+    match &item.fields {
+        Fields::Named(fields) => fields.named.iter().collect(),
+        Fields::Unnamed(_) | Fields::Unit => Vec::new(),
+    }
+}
+
+fn column_name(field: &Field) -> String {
+    let name = field.ident.as_ref().expect("a named field");
+    name.to_string().trim_start_matches("r#").to_owned()
+}
+
+fn row(
+    args: &Args,
+    item: &ItemStruct,
+    returns_rows: bool,
+    columns: Option<&Columns>,
+) -> syn::Result<Option<Type>> {
+    let fields = named_fields(item);
+    if fields.is_empty() {
+        return Ok(args.row.clone());
+    }
+    if !item.generics.params.is_empty() {
+        return Err(syn::Error::new_spanned(
+            &item.fields,
+            "generic queries aren't statements, so their fields can't be a row type; declare them as `struct Name<T>(PhantomData<T>)`",
+        ));
+    }
+    if let Some(row) = &args.row {
+        return Err(syn::Error::new_spanned(
+            row,
+            "this struct's fields are its row type, so it doesn't take `row`",
+        ));
+    }
+    if !returns_rows {
+        return Err(syn::Error::new_spanned(
+            &item.fields,
+            "this statement returns no rows, so its struct can't have fields; only queries and statements with `RETURNING` have a row type",
+        ));
+    }
+    if let Some(columns) = columns.filter(|columns| columns.complete) {
+        for field in &fields {
+            let name = column_name(field);
+            if !columns.names.contains(&name) {
+                let names: Vec<String> = columns
+                    .names
+                    .iter()
+                    .map(|name| format!("`{name}`"))
+                    .collect();
+                return Err(syn::Error::new_spanned(
+                    &field.ident,
+                    format!(
+                        "the statement returns no column named `{name}`; its columns are {}",
+                        names.join(", ")
+                    ),
+                ));
+            }
+        }
+    }
+    let ident = &item.ident;
+    Ok(Some(parse_quote!(#ident)))
+}
+
+fn from_row(item: &ItemStruct, dialect: &Type) -> Option<TokenStream> {
+    let fields = named_fields(item);
+    if fields.is_empty() {
+        return None;
+    }
+    let krate = krate();
+    let sqlx = quote!(#krate::__private::sqlx);
+    let driver = quote!(#krate::dialect::driver);
+    let ident = &item.ident;
+    let reads = fields.iter().map(|field| {
+        let (name, ty) = (&field.ident, &field.ty);
+        let column = column_name(field);
+        quote_spanned!(ty.span()=> #name: #sqlx::Row::try_get::<#ty, _>(row, #column)?)
+    });
+    Some(quote! {
+        #krate::__if_sqlx! {
+            impl<'__r> #sqlx::FromRow<'__r, #driver::Row<#dialect>> for #ident {
+                fn from_row(
+                    row: &'__r #driver::Row<#dialect>,
+                ) -> ::core::result::Result<Self, #sqlx::Error> {
+                    ::core::result::Result::Ok(Self {
+                        #(#reads,)*
+                    })
+                }
+            }
+        }
+    })
+}
+
+fn row_docs(item: &ItemStruct) -> Vec<syn::Attribute> {
+    if named_fields(item).is_empty() {
+        return Vec::new();
+    }
+    docs::attrs(&[
+        String::new(),
+        "# Row".to_owned(),
+        String::new(),
+        "Each row the statement returns is read into this struct, matching fields to columns by name."
+            .to_owned(),
+    ])
 }
 
 fn embeds(item: &ItemStruct, items: &[Type], dialect: &Type) -> TokenStream {
@@ -1749,6 +1872,12 @@ fn fmt(args: &Args, item: &ItemStruct, statement: bool) -> syn::Result<TokenStre
             return Err(syn::Error::new(
                 value.span(),
                 "generic items can't take `display`/`debug`; give them to a `#[statement]` for an instantiation",
+            ));
+        }
+        if !named_fields(item).is_empty() {
+            return Err(syn::Error::new(
+                value.span(),
+                "a struct with fields is its own row type, so `display`/`debug` would describe each row; implement them yourself",
             ));
         }
         if value == "sql" && !statement {

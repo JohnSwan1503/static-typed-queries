@@ -3,8 +3,8 @@ use std::ops::ControlFlow;
 
 use sqlparser::ast::{
     AssignmentTarget, BinaryOperator, Expr, Function, FunctionArg, FunctionArgExpr,
-    FunctionArguments, LimitClause, ObjectName, ObjectNamePart, Query, SelectItem, SetExpr,
-    Statement, TableAlias, TableFactor, Visit, Visitor,
+    FunctionArguments, Ident as SqlIdent, LimitClause, ObjectName, ObjectNamePart, Query,
+    SelectItem, SetExpr, Statement, TableAlias, TableFactor, Visit, Visitor,
 };
 use sqlparser::dialect::{Dialect, GenericDialect, MySqlDialect, PostgreSqlDialect, SQLiteDialect};
 use sqlparser::parser::Parser;
@@ -40,8 +40,15 @@ pub(crate) enum Origin {
 pub(crate) struct Analysis {
     pub kind: Kind,
     pub returns_rows: bool,
+    pub columns: Columns,
     pub refs: Vec<Position>,
     pub names: Vec<Option<(String, Origin)>>,
+}
+
+#[derive(Default)]
+pub(crate) struct Columns {
+    pub names: Vec<String>,
+    pub complete: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -108,6 +115,13 @@ impl Engine {
             Engine::MySql => "MySQL",
             Engine::Sqlite => "SQLite",
             Engine::Generic => "generic SQL",
+        }
+    }
+
+    fn column(self, ident: &SqlIdent) -> String {
+        match (self, ident.quote_style) {
+            (Engine::Postgres, None) => ident.value.to_lowercase(),
+            _ => ident.value.clone(),
         }
     }
 
@@ -188,9 +202,50 @@ pub(crate) fn analyze(template: &Template, engine: Engine, sql: &LitStr) -> syn:
     Ok(Analysis {
         kind,
         returns_rows,
+        columns: columns(statement, engine),
         refs: analyzer.refs,
         names: analyzer.names,
     })
+}
+
+fn columns(statement: &Statement, engine: Engine) -> Columns {
+    let items = match statement {
+        Statement::Query(query) => projection(&query.body),
+        Statement::Insert(insert) => insert.returning.as_deref(),
+        Statement::Update(update) => update.returning.as_deref(),
+        Statement::Delete(delete) => delete.returning.as_deref(),
+        _ => None,
+    };
+    let mut columns = Columns {
+        names: Vec::new(),
+        complete: items.is_some(),
+    };
+    for item in items.unwrap_or_default() {
+        let ident = match item {
+            SelectItem::UnnamedExpr(Expr::Identifier(ident))
+                if !ident.value.starts_with("__stq_") =>
+            {
+                Some(ident)
+            }
+            SelectItem::UnnamedExpr(Expr::CompoundIdentifier(parts)) => parts.last(),
+            SelectItem::ExprWithAlias { alias, .. } => Some(alias),
+            _ => None,
+        };
+        match ident {
+            Some(ident) => columns.names.push(engine.column(ident)),
+            None => columns.complete = false,
+        }
+    }
+    columns
+}
+
+fn projection(body: &SetExpr) -> Option<&[SelectItem]> {
+    match body {
+        SetExpr::Select(select) => Some(&select.projection),
+        SetExpr::Query(query) => projection(&query.body),
+        SetExpr::SetOperation { left, .. } => projection(left),
+        _ => None,
+    }
 }
 
 struct Analyzer {
