@@ -18,7 +18,7 @@ pub(super) const fn resolve(
             None => fail(&["items can't be nested more than 16 deep"]),
         },
         Target::Node(child) => {
-            if has_params(child) {
+            if has(child, Probe::Params) {
                 fail(&[
                     "`",
                     child.name.as_str(),
@@ -49,7 +49,11 @@ pub(super) const fn resolve_node(node: &'static Node, target: Target) -> &'stati
 }
 
 pub(super) const fn instance_path(node: &'static Node, path: Path) -> Path {
-    if has_params(node) { path } else { Path::ROOT }
+    if has(node, Probe::Params) {
+        path
+    } else {
+        Path::ROOT
+    }
 }
 
 const fn unwrap(node: &'static Node, path: Path) -> (&'static Node, Path) {
@@ -81,15 +85,29 @@ pub(super) const fn unwrap_scope(node: &'static Node) -> &'static Node {
     }
 }
 
-const fn has_params(node: &'static Node) -> bool {
+#[derive(Clone, Copy)]
+pub(super) enum Probe {
+    Hooks,
+    Params,
+}
+
+// Whether `node`, or an item it embeds at any depth, has hooks or binds a value.
+pub(super) const fn has(node: &'static Node, probe: Probe) -> bool {
+    let node = unwrap_scope(node);
+    if let Probe::Hooks = probe
+        && !(node.before.0.is_empty() && node.after.0.is_empty())
+    {
+        return true;
+    }
     let parts = node.parts.0;
     let mut i = 0;
     while i < parts.len() {
-        let found = match parts[i] {
-            Part::Param(_) => true,
-            Part::Expr(expr) => has_params(resolve_node(node, expr.target())),
-            Part::From(from) => has_params(resolve_node(node, from.target())),
-            Part::Lit(_) | Part::Ident(_) => false,
+        let found = match (parts[i], probe) {
+            (Part::Param(_), Probe::Params) => true,
+            (part, _) => match part.target() {
+                Some(target) => has(resolve_node(node, target), probe),
+                None => false,
+            },
         };
         if found {
             return true;

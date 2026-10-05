@@ -1,12 +1,11 @@
 use crate::dialect::Dialect;
 use crate::node::Node;
 use crate::node::kind::Kind;
-use crate::part::Part;
 use crate::render::error::fail;
 use crate::statement::bind::path::Path;
 
 use super::names::same_node;
-use super::paths::{resolve_node, target, unwrap_scope};
+use super::paths::{Probe, has, resolve_node, target, unwrap_scope};
 use super::{MAX_HOOKS, Renderer};
 
 #[derive(Clone, Copy)]
@@ -25,10 +24,8 @@ impl<'a, D: Dialect> Renderer<'a, D> {
         let parts = node.parts.0;
         let mut i = 0;
         while i < parts.len() {
-            match parts[i] {
-                Part::Expr(expr) => self.find_hooks(resolve_node(node, expr.target())),
-                Part::From(from) => self.find_hooks(resolve_node(node, from.target())),
-                Part::Lit(_) | Part::Ident(_) | Part::Param(_) => {}
+            if let Some(target) = parts[i].target() {
+                self.find_hooks(resolve_node(node, target));
             }
             i += 1;
         }
@@ -113,7 +110,7 @@ const fn hook(owner: &'static Node, hook: &'static Node, path: Path) -> (&'stati
         ]);
     }
     let (node, path) = target(hook, path);
-    if has_hooks(node) {
+    if has(node, Probe::Hooks) {
         fail(&[
             "`",
             hook.name.as_str(),
@@ -126,26 +123,5 @@ const fn hook(owner: &'static Node, hook: &'static Node, path: Path) -> (&'stati
 }
 
 pub(crate) const fn hooked(root: &'static Node) -> bool {
-    has_hooks(root)
-}
-
-const fn has_hooks(node: &'static Node) -> bool {
-    let node = unwrap_scope(node);
-    if !node.before.0.is_empty() || !node.after.0.is_empty() {
-        return true;
-    }
-    let parts = node.parts.0;
-    let mut i = 0;
-    while i < parts.len() {
-        let nested = match parts[i] {
-            Part::Expr(expr) => has_hooks(resolve_node(node, expr.target())),
-            Part::From(from) => has_hooks(resolve_node(node, from.target())),
-            Part::Lit(_) | Part::Ident(_) | Part::Param(_) => false,
-        };
-        if nested {
-            return true;
-        }
-        i += 1;
-    }
-    false
+    has(root, Probe::Hooks)
 }

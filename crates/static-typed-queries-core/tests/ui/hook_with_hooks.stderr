@@ -28,8 +28,8 @@ note: inside `render::renderer::Renderer::<'_, Postgres>::statement`
 note: inside `render::renderer::hooks::<impl render::renderer::Renderer<'_, Postgres>>::find_hooks`
   --> src/render/renderer/hooks.rs
    |
-   |                 Part::From(from) => self.find_hooks(resolve_node(node, from.target())),
-   |                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |                 self.find_hooks(resolve_node(node, target));
+   |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 note: inside `render::renderer::hooks::<impl render::renderer::Renderer<'_, Postgres>>::find_hooks`
   --> src/render/renderer/hooks.rs
    |

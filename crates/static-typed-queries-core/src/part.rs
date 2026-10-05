@@ -14,6 +14,16 @@ pub enum Part {
     Param(param::Param),
 }
 
+impl Part {
+    pub const fn target(&self) -> Option<target::Target> {
+        match self {
+            Part::Expr(expr) => Some(expr.target()),
+            Part::From(from) => Some(from.target()),
+            Part::Ident(_) | Part::Lit(_) | Part::Param(_) => None,
+        }
+    }
+}
+
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Parts(pub &'static [Part]);
