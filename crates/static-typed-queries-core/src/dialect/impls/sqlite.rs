@@ -21,4 +21,8 @@ impl Dialect for Sqlite {
 #[cfg(feature = "sqlite")]
 impl crate::dialect::driver::Driver for Sqlite {
     type Database = sqlx::Sqlite;
+
+    fn rows_affected(result: &<sqlx::Sqlite as sqlx::Database>::QueryResult) -> u64 {
+        result.rows_affected()
+    }
 }

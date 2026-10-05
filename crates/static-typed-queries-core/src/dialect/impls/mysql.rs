@@ -21,4 +21,8 @@ impl Dialect for MySql {
 #[cfg(feature = "mysql")]
 impl crate::dialect::driver::Driver for MySql {
     type Database = sqlx::MySql;
+
+    fn rows_affected(result: &<sqlx::MySql as sqlx::Database>::QueryResult) -> u64 {
+        result.rows_affected()
+    }
 }

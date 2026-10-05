@@ -41,7 +41,12 @@ use syn::{ItemStruct, parse_macro_input};
 /// A statement that uses a table with hooks, directly or through the items it
 /// embeds, renders them as statements of their own in its `BEFORE` and `AFTER`
 /// lists, each hook once per set of values. Its builder has no `query()` or
-/// `query_as()`, since one query would skip the hooks.
+/// `query_as()`, since one query would skip the hooks. It has `run(conn)`
+/// instead, which takes anything that implements `sqlx::Acquire` and runs the
+/// hooks and the statement in one transaction, so a failing hook rolls back
+/// the statement too. `run` returns the statement's rows when it has
+/// `row = Type`, and otherwise the number of rows it affected.
+/// `run_as::<T>(conn)` reads the rows as `T`.
 ///
 /// ```
 /// # use static_typed_queries::prelude::*;
@@ -142,9 +147,10 @@ pub fn table(args: TokenStream, item: TokenStream) -> TokenStream {
 ///   alias, since the macro only sees the name.
 /// - `row = Type`: the type each returned row is read as, through
 ///   `sqlx::FromRow`. The complete builder's `query()` then returns a
-///   `sqlx` `QueryAs` for it. Only queries and statements with `RETURNING`
-///   take it. Every complete builder also has `query_as::<T>()` for reading
-///   rows as some other type.
+///   `sqlx` `QueryAs` for it, and `run()` a `Vec` of it. Only queries and
+///   statements with `RETURNING` take it. Every complete builder also has
+///   `query_as::<T>()`, or `run_as::<T>()`, for reading rows as some other
+///   type.
 /// - `separate(Type, ...)`: gives each listed generic item its own values for
 ///   the items in its type arguments, instead of sharing the query's. With
 ///   `separate(CountOf<ActiveUsers>)`, `.active_users()` and
@@ -232,7 +238,7 @@ pub fn table(args: TokenStream, item: TokenStream) -> TokenStream {
 ///   such as tables, have no method. Once everything is set, the builder has
 ///   only `build()`, which returns `NameParams`, and, with a database feature
 ///   enabled, `query()`, which returns a `sqlx` query with everything bound.
-///   A query that uses a table with hooks has no `query()`; see [`table`].
+///   A query that uses a table with hooks has `run()` instead; see [`table`].
 /// - A `Statement` impl and an inherent `Name::SQL` constant holding the
 ///   rendered SQL.
 /// - With the `parse-check` feature, a `#[cfg(test)]` test named
@@ -242,8 +248,8 @@ pub fn table(args: TokenStream, item: TokenStream) -> TokenStream {
 /// When several `{_: Type}` parameters end up with the same name, they share
 /// one field of type `[Type; N]` and the setter is called `N` times, in the
 /// order they appear in the template. Their types must match. A parameter
-/// whose name would clash with a builder method (`build`, `builder`, `finish`
-/// or `query`) gets a trailing underscore.
+/// whose name would clash with a builder method (`build`, `builder`, `finish`,
+/// `query`, `query_as`, `run` or `run_as`) gets a trailing underscore.
 ///
 /// A query with neither parameters nor references uses `()` as its params
 /// and gets no params or builder struct.

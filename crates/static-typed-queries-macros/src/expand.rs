@@ -11,7 +11,9 @@ use crate::docs;
 use crate::naming::{camel, field_name, short_name, snake_case, to_ident, unique};
 use crate::template::{self, Segment, Template};
 
-const RESERVED: &[&str] = &["build", "builder", "finish", "query", "query_as"];
+const RESERVED: &[&str] = &[
+    "build", "builder", "finish", "query", "query_as", "run", "run_as",
+];
 
 fn krate() -> TokenStream {
     quote!(::static_typed_queries::__private)
@@ -1554,6 +1556,7 @@ impl<'a> Params<'a> {
             }))
             .collect();
         let unhooked = self.builder_in(&complete, &quote!(#b::NoHooks), &root);
+        let with_hooks = self.builder_in(&complete, &quote!(#b::WithHooks), &root);
         let complete = self.builder_in(&complete, &hooked, &root);
         let generics = self.generics(&[hooked.clone()]);
         let (impl_generics, _, where_clause) = generics.split_for_impl();
@@ -1633,6 +1636,58 @@ impl<'a> Params<'a> {
                             O: for<'r> #krate::__private::sqlx::FromRow<'r, #driver::Row<#dialect>>,
                         {
                             <#ident as #statement>::query_as::<O>(&#b::Finish::finish(self))
+                        }
+                    }
+                }
+            });
+            let sqlx = quote!(#krate::__private::sqlx);
+            let run = quote!(#krate::statement::run);
+            let acquire = quote!(#sqlx::Acquire<'c, Database = #driver::Database<#dialect>>);
+            let run_main = match row {
+                Some(row) => {
+                    let doc = doc(&format!(
+                        "Runs the statement and its hooks in one transaction, and reads each row of the statement as {}.",
+                        docs::link(row, &[])
+                    ));
+                    quote! {
+                        #doc
+                        pub async fn run<'c, A: #acquire>(
+                            self,
+                            conn: A,
+                        ) -> ::core::result::Result<::std::vec::Vec<#row>, #error> {
+                            let params = #b::Finish::finish(self);
+                            #run::fetch_all::<#ident, #row, A>(&params, conn).await
+                        }
+                    }
+                }
+                None => quote! {
+                    /// Runs the statement and its hooks in one transaction, and returns the number of rows the statement affected.
+                    pub async fn run<'c, A: #acquire>(
+                        self,
+                        conn: A,
+                    ) -> ::core::result::Result<u64, #error> {
+                        let params = #b::Finish::finish(self);
+                        #run::execute::<#ident, A>(&params, conn).await
+                    }
+                },
+            };
+            out.extend(quote! {
+                #krate::__if_sqlx! {
+                    impl #with_hooks {
+                        #run_main
+
+                        /// Runs the statement and its hooks in one transaction, and reads each row of the statement as `O`.
+                        pub async fn run_as<'c, O, A: #acquire>(
+                            self,
+                            conn: A,
+                        ) -> ::core::result::Result<::std::vec::Vec<O>, #error>
+                        where
+                            O: for<'r> #sqlx::FromRow<'r, #driver::Row<#dialect>>
+                                + ::core::marker::Send
+                                + ::core::marker::Unpin,
+                        {
+                            let params = #b::Finish::finish(self);
+                            #run::fetch_all::<#ident, O, A>(&params, conn).await
                         }
                     }
                 }

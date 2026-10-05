@@ -88,3 +88,125 @@ fn hooks_mark_every_statement_that_reaches_the_table() {
     unhooked::<CountOf<Orders>>();
     unhooked::<UserCount>();
 }
+
+#[query(
+    Sqlite,
+    sql = "UPDATE counters SET n = n + 1 WHERE name = {name: String}"
+)]
+pub struct Bump;
+
+#[query(Sqlite, sql = "INSERT INTO audit (note) VALUES ({note: String})")]
+pub struct Note;
+
+#[table(Sqlite, name = "items", before(Bump), after(Note))]
+pub struct Items;
+
+#[derive(sqlx::FromRow, Debug, PartialEq)]
+pub struct Item {
+    pub id: i64,
+    pub price: i64,
+}
+
+#[query(
+    Sqlite,
+    row = Item,
+    sql = "SELECT id, price FROM {Items} WHERE price > {_: i64} ORDER BY id"
+)]
+pub struct Pricey;
+
+#[query(
+    Sqlite,
+    sql = "UPDATE {Items} SET price = price * 2 WHERE price > {_: i64}"
+)]
+pub struct Double;
+
+async fn connect() -> sqlx::Result<sqlx::SqliteConnection> {
+    use sqlx::Connection;
+    let mut conn = sqlx::SqliteConnection::connect("sqlite::memory:").await?;
+    sqlx::raw_sql(
+        "CREATE TABLE items (id INTEGER PRIMARY KEY, price INTEGER);
+         CREATE TABLE counters (name TEXT PRIMARY KEY, n INTEGER);
+         CREATE TABLE audit (note TEXT UNIQUE);
+         INSERT INTO items VALUES (1, 5), (2, 20), (3, 30);
+         INSERT INTO counters VALUES ('reads', 0);",
+    )
+    .execute(&mut conn)
+    .await?;
+    Ok(conn)
+}
+
+async fn state(conn: &mut sqlx::SqliteConnection) -> sqlx::Result<(i64, Vec<String>)> {
+    let (n,): (i64,) = sqlx::query_as("SELECT n FROM counters")
+        .fetch_one(&mut *conn)
+        .await?;
+    let notes: Vec<(String,)> = sqlx::query_as("SELECT note FROM audit ORDER BY note")
+        .fetch_all(&mut *conn)
+        .await?;
+    Ok((n, notes.into_iter().map(|(note,)| note).collect()))
+}
+
+#[tokio::test]
+async fn run_wraps_the_statement_in_its_hooks() -> sqlx::Result<()> {
+    let mut conn = connect().await?;
+    let rows = Pricey::builder()
+        .price(10)
+        .items()
+        .bump()
+        .name("reads".to_owned())
+        .items()
+        .note()
+        .note("pricey".to_owned())
+        .run(&mut conn)
+        .await?;
+    assert_eq!(rows, [Item { id: 2, price: 20 }, Item { id: 3, price: 30 }]);
+    assert_eq!(state(&mut conn).await?, (1, vec!["pricey".to_owned()]));
+
+    let doubled = Double::builder()
+        .price(25)
+        .items()
+        .bump()
+        .name("reads".to_owned())
+        .items()
+        .note()
+        .note("double".to_owned())
+        .run(&mut conn)
+        .await?;
+    assert_eq!(doubled, 1);
+
+    let ids: Vec<(i64,)> = Pricey::builder()
+        .price(40)
+        .items()
+        .bump()
+        .name("reads".to_owned())
+        .items()
+        .note()
+        .note("ids".to_owned())
+        .run_as(&mut conn)
+        .await?;
+    assert_eq!(ids, [(3,)]);
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_failing_hook_rolls_back_the_whole_run() -> sqlx::Result<()> {
+    let mut conn = connect().await?;
+    let run = |note: &str| {
+        Double::builder()
+            .price(0)
+            .items()
+            .bump()
+            .name("reads".to_owned())
+            .items()
+            .note()
+            .note(note.to_owned())
+    };
+    run("once").run(&mut conn).await?;
+    let error = run("once").run(&mut conn).await.unwrap_err();
+    assert!(error.to_string().contains("UNIQUE"), "{error}");
+    assert_eq!(state(&mut conn).await?, (1, vec!["once".to_owned()]));
+    let (price,): (i64,) = sqlx::query_as("SELECT price FROM items WHERE id = 1")
+        .fetch_one(&mut conn)
+        .await?;
+    assert_eq!(price, 10);
+    Ok(())
+}

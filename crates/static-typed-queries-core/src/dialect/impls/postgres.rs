@@ -21,4 +21,8 @@ impl Dialect for Postgres {
 #[cfg(feature = "postgres")]
 impl crate::dialect::driver::Driver for Postgres {
     type Database = sqlx::Postgres;
+
+    fn rows_affected(result: &<sqlx::Postgres as sqlx::Database>::QueryResult) -> u64 {
+        result.rows_affected()
+    }
 }

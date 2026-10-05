@@ -2,6 +2,8 @@ pub mod bind;
 pub mod hook;
 #[cfg(feature = "sqlx")]
 pub mod params;
+#[cfg(feature = "sqlx")]
+pub mod run;
 
 #[cfg(feature = "sqlx")]
 use crate::dialect::driver::{Arguments, Database, Driver, Query, QueryAs, Row};
@@ -23,13 +25,7 @@ pub trait Statement: Sql {
         Self::Dialect: Driver,
         Self::Params: BindParams<Database<Self::Dialect>>,
     {
-        let mut args = Arguments::<Self::Dialect>::default();
-        for bind in Self::BINDS {
-            params
-                .bind(bind.path().steps(), bind.slot().inner(), &mut args)
-                .map_err(sqlx::Error::Encode)?;
-        }
-        Ok(args)
+        params::arguments::<Self::Dialect, _>(params, Self::BINDS)
     }
 
     #[cfg(feature = "sqlx")]
