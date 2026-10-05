@@ -1,3 +1,4 @@
+pub mod builder;
 #[cfg(feature = "parse-check")]
 pub mod check;
 #[doc(hidden)]
