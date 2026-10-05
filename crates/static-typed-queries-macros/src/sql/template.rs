@@ -3,7 +3,7 @@ use syn::parse::{Parse, ParseStream};
 use syn::{Ident, LitStr, Token, Type};
 
 use crate::args::Placement;
-use crate::model::fields::{Field, Kind};
+use crate::model::fields::{self, Field, Kind};
 use crate::naming::type_key;
 
 pub(crate) enum Segment {
@@ -101,22 +101,15 @@ pub(crate) fn parse(sql: &LitStr, fields: &[Field]) -> syn::Result<Template> {
                     "parameters are the struct's fields; add `pub {name}: {ty}` and write `{{{name}}}`"
                 )));
             }
-            Raw::Name(name)
-                if let Some(index) = fields
-                    .iter()
-                    .position(|field| field.ident.unraw() == name.unraw()) =>
-            {
+            Raw::Name(name) if let Some(index) = fields::find(fields, name) => {
                 used[index] = true;
                 let field = &fields[index];
+                let slot = fields::slot(fields, index);
                 segments.push(match field.kind {
-                    Kind::Value => Segment::Param(slot(fields, index)),
-                    Kind::Item(placement) => reference(
-                        &raw,
-                        i,
-                        field.ty.clone(),
-                        Some(slot(fields, index)),
-                        placement,
-                    ),
+                    Kind::Value => Segment::Param(slot),
+                    Kind::Item(placement) => {
+                        reference(&raw, i, field.ty.clone(), Some(slot), placement)
+                    }
                 });
             }
             Raw::Name(name) if name.to_string().starts_with(|c: char| c.is_lowercase()) => {
@@ -132,9 +125,7 @@ pub(crate) fn parse(sql: &LitStr, fields: &[Field]) -> syn::Result<Template> {
             Raw::Ref(syntax) => {
                 if let Type::Path(path) = &syntax.ty
                     && let Some(name) = path.path.get_ident()
-                    && fields
-                        .iter()
-                        .any(|field| field.ident.unraw() == name.unraw())
+                    && fields::find(fields, name).is_some()
                 {
                     return Err(error(format!(
                         "`{name}` is a field, so it is embedded the way the field is marked; write `{{{name}}}`"
@@ -161,14 +152,6 @@ pub(crate) fn parse(sql: &LitStr, fields: &[Field]) -> syn::Result<Template> {
         ));
     }
     Ok(Template { segments, types })
-}
-
-// Values and items are numbered separately, each in field order.
-fn slot(fields: &[Field], index: usize) -> u16 {
-    fields[..index]
-        .iter()
-        .filter(|field| field.is_item() == fields[index].is_item())
-        .count() as u16
 }
 
 fn add_type(types: &mut Vec<Type>, ty: &Type) {

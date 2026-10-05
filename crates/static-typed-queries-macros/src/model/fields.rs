@@ -17,6 +17,16 @@ pub(crate) struct Field {
 }
 
 impl Field {
+    fn new(field: &syn::Field, kind: Kind) -> Field {
+        Field {
+            ident: field.ident.clone().expect("a named field"),
+            ty: field.ty.clone(),
+            vis: field.vis.clone(),
+            docs: docs(&field.attrs),
+            kind,
+        }
+    }
+
     pub(crate) fn is_item(&self) -> bool {
         matches!(self.kind, Kind::Item(_))
     }
@@ -42,16 +52,8 @@ pub(crate) fn marked(input: &mut ItemStruct) -> syn::Result<Vec<Field>> {
             }
         }
         field.attrs = attrs;
-        fields.push(Field {
-            ident: field.ident.clone().expect("a named field"),
-            ty: field.ty.clone(),
-            vis: field.vis.clone(),
-            docs: docs(&field.attrs),
-            kind: match placement {
-                Some(placement) => Kind::Item(Some(placement)),
-                None => Kind::Value,
-            },
-        });
+        let kind = placement.map_or(Kind::Value, |placement| Kind::Item(Some(placement)));
+        fields.push(Field::new(field, kind));
     }
     Ok(fields)
 }
@@ -68,13 +70,7 @@ pub(crate) fn items(input: &mut ItemStruct) -> syn::Result<Vec<Field>> {
                 ));
             }
         }
-        fields.push(Field {
-            ident: field.ident.clone().expect("a named field"),
-            ty: field.ty.clone(),
-            vis: field.vis.clone(),
-            docs: docs(&field.attrs),
-            kind: Kind::Item(None),
-        });
+        fields.push(Field::new(field, Kind::Item(None)));
     }
     Ok(fields)
 }
@@ -148,15 +144,34 @@ fn is_phantom(ty: &Type) -> bool {
     )
 }
 
+// A raw identifier matches its plain spelling, so `{type}` names the field `r#type`.
+pub(crate) fn find(fields: &[Field], name: &Ident) -> Option<usize> {
+    fields
+        .iter()
+        .position(|field| field.ident.unraw() == name.unraw())
+}
+
 // A statement's target or a transaction's step names a field, or a type that holds no values.
 pub(crate) fn resolve<'a>(named: &Type, fields: &'a [Field]) -> Option<(u16, &'a Field)> {
     let Type::Path(path) = named else {
         return None;
     };
-    let name = path.path.get_ident()?;
+    let index = find(fields, path.path.get_ident()?)?;
+    Some((index as u16, &fields[index]))
+}
+
+// Values and items are numbered separately, each in field order.
+pub(crate) fn slot(fields: &[Field], index: usize) -> u16 {
+    fields[..index]
+        .iter()
+        .filter(|field| field.is_item() == fields[index].is_item())
+        .count() as u16
+}
+
+pub(crate) fn value(fields: &[Field], slot: u16) -> &Field {
     fields
         .iter()
-        .enumerate()
-        .find(|(_, field)| field.ident.unraw() == name.unraw())
-        .map(|(index, field)| (index as u16, field))
+        .filter(|field| !field.is_item())
+        .nth(slot as usize)
+        .expect("a value field at every slot")
 }

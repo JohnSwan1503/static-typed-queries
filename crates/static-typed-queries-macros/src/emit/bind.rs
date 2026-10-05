@@ -3,7 +3,7 @@ use quote::quote;
 use syn::{GenericParam, ItemStruct, parse_quote};
 
 use crate::emit::krate;
-use crate::model::fields::Field;
+use crate::model::fields::{self, Field};
 
 // Binds a value field by its slot, and hands the rest of a path to the item field it starts with.
 pub(crate) fn bind_impl(input: &ItemStruct, fields: &[Field]) -> Option<TokenStream> {
@@ -31,20 +31,20 @@ pub(crate) fn bind_impl(input: &ItemStruct, fields: &[Field]) -> Option<TokenStr
 
     let values = fields
         .iter()
-        .filter(|field| !field.is_item())
         .enumerate()
-        .map(|(slot, field)| {
+        .filter(|(_, field)| !field.is_item())
+        .map(|(index, field)| {
             let name = &field.ident;
-            let slot = Literal::u16_unsuffixed(slot as u16);
+            let slot = Literal::u16_unsuffixed(fields::slot(fields, index));
             quote!(([], #slot) => args.add(&self.#name),)
         });
     let items = fields
         .iter()
-        .filter(|field| field.is_item())
         .enumerate()
-        .map(|(step, field)| {
+        .filter(|(_, field)| field.is_item())
+        .map(|(index, field)| {
             let name = &field.ident;
-            let step = Literal::u16_unsuffixed(step as u16);
+            let step = Literal::u16_unsuffixed(fields::slot(fields, index));
             quote!(([#step, rest @ ..], _) => #bind::<__DB>::bind(&self.#name, rest, slot, args),)
         });
     let ident = &input.ident;

@@ -5,7 +5,7 @@ use syn::{Ident, ItemStruct, Type};
 use crate::args::Placement;
 use crate::emit::docs::type_string;
 use crate::emit::krate;
-use crate::model::fields::Field;
+use crate::model::fields::{self, Field};
 use crate::sql::analyze::Analysis;
 use crate::sql::template::{Segment, Template};
 
@@ -79,7 +79,6 @@ pub(crate) fn parts(
     fields: &[Field],
 ) -> Vec<TokenStream> {
     let krate = krate();
-    let values: Vec<&Field> = fields.iter().filter(|field| !field.is_item()).collect();
     let mut positions = analysis.refs.iter();
     template
         .segments
@@ -87,7 +86,7 @@ pub(crate) fn parts(
         .map(|segment| match segment {
             Segment::Lit(text) => quote!(#krate::Lit::part(#text)),
             Segment::Param(slot) => {
-                let field = values[*slot as usize];
+                let field = fields::value(fields, *slot);
                 let (name, ty) = (
                     field.ident.to_string().trim_start_matches("r#").to_owned(),
                     type_string(&field.ty),
