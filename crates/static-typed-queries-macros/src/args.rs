@@ -1,9 +1,6 @@
-use std::fmt::Display;
-
-use proc_macro2::Span;
 use syn::parse::{Parse, ParseStream};
 use syn::spanned::Spanned;
-use syn::{Ident, ItemStruct, LitBool, LitStr, Path, Token, Type, parenthesized};
+use syn::{Ident, LitStr, Path, Token, Type, parenthesized};
 
 #[derive(Clone, Copy)]
 pub(crate) enum Placement {
@@ -41,15 +38,6 @@ pub(crate) enum Sql {
     Named(Path),
 }
 
-impl Sql {
-    pub(crate) fn span(&self) -> Span {
-        match self {
-            Sql::Inline(sql) => sql.span(),
-            Sql::Named(path) => path.span(),
-        }
-    }
-}
-
 impl Parse for Sql {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         if input.peek(LitStr) {
@@ -70,22 +58,15 @@ pub(crate) enum Fetch {
 
 pub(crate) enum Step {
     Run(Type, Fetch),
-    Savepoint(Ident, Vec<Step>),
+    Savepoint(Vec<Step>),
 }
 
 impl Step {
-    pub(crate) fn span(&self) -> Span {
-        match self {
-            Step::Run(ty, _) => ty.span(),
-            Step::Savepoint(keyword, _) => keyword.span(),
-        }
-    }
-
     pub(crate) fn flatten<'a>(steps: &'a [Step], out: &mut Vec<(&'a Type, Fetch)>) {
         for step in steps {
             match step {
                 Step::Run(ty, fetch) => out.push((ty, *fetch)),
-                Step::Savepoint(_, steps) => Step::flatten(steps, out),
+                Step::Savepoint(steps) => Step::flatten(steps, out),
             }
         }
     }
@@ -99,13 +80,13 @@ impl Step {
                         "`as cte` attaches this step to the next one, so another step must follow it",
                     ));
                 }
-                (Step::Run(ty, Fetch::Cte), Some(Step::Savepoint(..))) => {
+                (Step::Run(ty, Fetch::Cte), Some(Step::Savepoint(_))) => {
                     return Err(syn::Error::new(
                         ty.span(),
                         "`as cte` attaches this step to the next one, which can't be a savepoint",
                     ));
                 }
-                (Step::Savepoint(_, steps), _) => Step::check_ctes(steps)?,
+                (Step::Savepoint(steps), _) => Step::check_ctes(steps)?,
                 _ => {}
             }
         }
@@ -131,7 +112,7 @@ impl Parse for Step {
                         "a savepoint needs at least one step",
                     ));
                 }
-                return Ok(Step::Savepoint(keyword, steps));
+                return Ok(Step::Savepoint(steps));
             }
         }
         let ty = input.parse()?;
@@ -154,249 +135,66 @@ impl Parse for Step {
     }
 }
 
-pub(crate) struct Args {
-    pub dialect: Type,
-    pub sql: Option<Sql>,
-    pub sql_file: Option<LitStr>,
-    pub name: Option<LitStr>,
-    pub placement: Option<Placement>,
-    pub display: Option<Ident>,
-    pub debug: Option<Ident>,
-    pub parse_check: Option<LitBool>,
-    pub separate: Option<Vec<Type>>,
-    pub grammar: Option<Ident>,
-    pub row: Option<Type>,
-    pub before: Option<Vec<Type>>,
-    pub after: Option<Vec<Type>>,
-    pub steps: Option<Vec<Step>>,
-    to_add: ToAdd,
-}
+pub(crate) type Keys = &'static [&'static [&'static str]];
 
-struct ToAdd(Vec<Option<&'static str>>, usize);
-
-impl ToAdd {
-    fn record_set(&mut self, key: &str) {
-        let slots: &[usize] = match key {
-            "cte" | "subquery" => &[0, 1],
-            "sql" | "sql_file" => &[2, 3],
-            "name" => &[4],
-            "display" => &[5],
-            "debug" => &[6],
-            "parse_check" => &[7],
-            "separate" => &[8],
-            "grammar" => &[9],
-            "row" => &[10],
-            "before" => &[11],
-            "after" => &[12],
-            "steps" => &[13],
-            _ => return,
-        };
-        for &idx in slots {
-            if self.0[idx].take().is_some() {
-                self.1 -= 1;
-            }
+// `take` parses one `key = value` and returns false for keys the attribute doesn't know.
+pub(crate) fn parse_keys(
+    input: ParseStream,
+    keys: Keys,
+    mut take: impl FnMut(&Ident, ParseStream) -> syn::Result<bool>,
+) -> syn::Result<()> {
+    let mut given = vec![false; keys.len()];
+    while !input.is_empty() {
+        input.parse::<Token![,]>()?;
+        if input.is_empty() {
+            break;
+        }
+        let key: Ident = input.fork().parse()?;
+        let group = keys
+            .iter()
+            .position(|group| group.iter().any(|name| key == name));
+        if let Some(group) = group
+            && given[group]
+        {
+            return Err(syn::Error::new(
+                key.span(),
+                format!("`{key}` is given more than once"),
+            ));
+        }
+        if !take(&key, input)? {
+            return Err(syn::Error::new(key.span(), expected(keys, &given)));
+        }
+        if let Some(group) = group {
+            given[group] = true;
         }
     }
+    Ok(())
 }
 
-impl Default for ToAdd {
-    fn default() -> Self {
-        ToAdd(
-            vec![
-                Some("cte"),
-                Some("subquery"),
-                Some("sql"),
-                Some("sql_file"),
-                Some("name"),
-                Some("display"),
-                Some("debug"),
-                Some("parse_check"),
-                Some("separate"),
-                Some("grammar"),
-                Some("row"),
-                Some("before"),
-                Some("after"),
-                Some("steps"),
-            ],
-            14,
-        )
+fn expected(keys: Keys, given: &[bool]) -> String {
+    let left: Vec<String> = keys
+        .iter()
+        .zip(given)
+        .filter(|(_, given)| !**given)
+        .flat_map(|(group, _)| group.iter().map(|key| format!("`{key}`")))
+        .collect();
+    match left.as_slice() {
+        [] => "expected no more arguments".to_owned(),
+        [key] => format!("expected {key}"),
+        [first, second] => format!("expected either {first} or {second}"),
+        [rest @ .., last] => format!("expected one of {} or {last}", rest.join(", ")),
     }
 }
 
-impl Display for ToAdd {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        fn sep(remain: usize) -> &'static str {
-            match remain {
-                0 => "",
-                1 => " or ",
-                _ => ", ",
-            }
-        }
-        f.write_str("expected ")?;
-        if self.1 == 2 {
-            f.write_str("either ")?;
-        } else if self.1 > 2 {
-            f.write_str("one of ")?;
-        }
-        let mut remain = self.1;
-        self.0.iter().try_for_each(|name| {
-            if let Some(name) = name {
-                remain -= 1;
-                write!(f, "`{}`{}", name, sep(remain))?;
-            }
-            Ok::<(), std::fmt::Error>(())
-        })?;
-
-        Ok(())
-    }
+pub(crate) fn only_tables(key: &Ident) -> syn::Error {
+    syn::Error::new(key.span(), "only tables take `before` and `after`")
 }
 
-impl Parse for Args {
-    fn parse(input: ParseStream) -> syn::Result<Self> {
-        let mut args = Args {
-            dialect: input.parse()?,
-            sql: None,
-            sql_file: None,
-            name: None,
-            placement: None,
-            display: None,
-            debug: None,
-            parse_check: None,
-            separate: None,
-            grammar: None,
-            row: None,
-            before: None,
-            after: None,
-            steps: None,
-            to_add: ToAdd::default(),
-        };
-        while !input.is_empty() {
-            input.parse::<Token![,]>()?;
-            if input.is_empty() {
-                break;
-            }
-            let key: Ident = input.fork().parse()?;
-            match key.to_string().as_str() {
-                key_str @ "cte" | key_str @ "subquery" => set(
-                    &mut args.placement,
-                    Placement::parse_keyword(input)?,
-                    &key,
-                    &mut args.to_add,
-                    key_str,
-                )?,
-                key_str @ "sql" => set(
-                    &mut args.sql,
-                    value(input)?,
-                    &key,
-                    &mut args.to_add,
-                    key_str,
-                )?,
-                key_str @ "sql_file" => set(
-                    &mut args.sql_file,
-                    value(input)?,
-                    &key,
-                    &mut args.to_add,
-                    key_str,
-                )?,
-                key_str @ "name" => set(
-                    &mut args.name,
-                    value(input)?,
-                    &key,
-                    &mut args.to_add,
-                    key_str,
-                )?,
-                key_str @ "display" => set(
-                    &mut args.display,
-                    value(input)?,
-                    &key,
-                    &mut args.to_add,
-                    key_str,
-                )?,
-                key_str @ "debug" => set(
-                    &mut args.debug,
-                    value(input)?,
-                    &key,
-                    &mut args.to_add,
-                    key_str,
-                )?,
-                key_str @ "parse_check" => set(
-                    &mut args.parse_check,
-                    value(input)?,
-                    &key,
-                    &mut args.to_add,
-                    key_str,
-                )?,
-                key_str @ "separate" => set(
-                    &mut args.separate,
-                    types(input)?,
-                    &key,
-                    &mut args.to_add,
-                    key_str,
-                )?,
-                key_str @ "grammar" => set(
-                    &mut args.grammar,
-                    value(input)?,
-                    &key,
-                    &mut args.to_add,
-                    key_str,
-                )?,
-                key_str @ "row" => set(
-                    &mut args.row,
-                    value(input)?,
-                    &key,
-                    &mut args.to_add,
-                    key_str,
-                )?,
-                key_str @ "before" => set(
-                    &mut args.before,
-                    types(input)?,
-                    &key,
-                    &mut args.to_add,
-                    key_str,
-                )?,
-                key_str @ "after" => set(
-                    &mut args.after,
-                    types(input)?,
-                    &key,
-                    &mut args.to_add,
-                    key_str,
-                )?,
-                key_str @ "steps" => set(
-                    &mut args.steps,
-                    steps(input)?,
-                    &key,
-                    &mut args.to_add,
-                    key_str,
-                )?,
-                _ => {
-                    return Err(syn::Error::new(key.span(), args.to_add));
-                }
-            }
-        }
-        Ok(args)
-    }
+pub(crate) fn only_transactions(key: &Ident) -> syn::Error {
+    syn::Error::new(key.span(), "only transactions take `steps`")
 }
 
-pub(crate) struct NamedQuery {
-    pub sql: LitStr,
-    pub args: Args,
-    pub item: ItemStruct,
-}
-
-impl Parse for NamedQuery {
-    fn parse(input: ParseStream) -> syn::Result<Self> {
-        let sql = input.parse()?;
-        let content;
-        parenthesized!(content in input);
-        Ok(NamedQuery {
-            sql,
-            args: content.parse()?,
-            item: input.parse()?,
-        })
-    }
-}
-
-fn steps(input: ParseStream) -> syn::Result<Vec<Step>> {
+pub(crate) fn steps(input: ParseStream) -> syn::Result<Vec<Step>> {
     input.parse::<Ident>()?;
     let content;
     parenthesized!(content in input);
@@ -406,7 +204,7 @@ fn steps(input: ParseStream) -> syn::Result<Vec<Step>> {
         .collect())
 }
 
-fn types(input: ParseStream) -> syn::Result<Vec<Type>> {
+pub(crate) fn types(input: ParseStream) -> syn::Result<Vec<Type>> {
     input.parse::<Ident>()?;
     let content;
     parenthesized!(content in input);
@@ -416,26 +214,8 @@ fn types(input: ParseStream) -> syn::Result<Vec<Type>> {
         .collect())
 }
 
-fn value<T: Parse>(input: ParseStream) -> syn::Result<T> {
+pub(crate) fn value<T: Parse>(input: ParseStream) -> syn::Result<T> {
     input.parse::<Ident>()?;
     input.parse::<Token![=]>()?;
     input.parse()
-}
-
-fn set<T>(
-    slot: &mut Option<T>,
-    value: T,
-    key: &Ident,
-    to_add: &mut ToAdd,
-    key_str: &str,
-) -> syn::Result<()> {
-    if slot.is_some() {
-        return Err(syn::Error::new(
-            key.span(),
-            format!("`{key}` is given more than once"),
-        ));
-    }
-    to_add.record_set(key_str);
-    *slot = Some(value);
-    Ok(())
 }

@@ -230,7 +230,7 @@ impl<'a> Params<'a> {
                 Step::Run(ty, Fetch::One) => format!("{} as one", self.link(ty)),
                 Step::Run(ty, Fetch::Optional) => format!("{} as optional", self.link(ty)),
                 Step::Run(ty, Fetch::Cte) => format!("{} as cte", self.link(ty)),
-                Step::Savepoint(_, steps) => format!("savepoint({})", self.describe_steps(steps)),
+                Step::Savepoint(steps) => format!("savepoint({})", self.describe_steps(steps)),
             })
             .collect();
         steps.join(", ")

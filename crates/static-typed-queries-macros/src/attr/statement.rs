@@ -1,9 +1,9 @@
 use proc_macro2::{Span, TokenStream};
 use quote::{format_ident, quote};
-use syn::{ItemStruct, LitStr, Type, parse_quote};
+use syn::parse::{Parse, ParseStream};
+use syn::{Ident, ItemStruct, LitBool, LitStr, Type, parse_quote};
 
-use crate::args::Args;
-use crate::attr::{no_hooks, no_steps};
+use crate::args::{self, Keys};
 use crate::emit::checks::{embeds, hook_needs, step_impl};
 use crate::emit::docs::{self, Source};
 use crate::emit::fmt::fmt;
@@ -16,29 +16,53 @@ use crate::naming::snake_case;
 use crate::sql::analyze::{Analysis, Columns, Kind};
 use crate::sql::template::Template;
 
-pub(crate) fn statement(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
-    let krate = krate();
-    let target = &args.dialect;
-    for (present, name) in [
-        (args.sql.is_some(), "sql"),
-        (args.sql_file.is_some(), "sql_file"),
-        (args.name.is_some(), "name"),
-        (args.placement.is_some(), "cte` or `subquery"),
-        (args.separate.is_some(), "separate"),
-        (args.grammar.is_some(), "grammar"),
-    ] {
-        if present {
-            return Err(syn::Error::new(
-                Span::call_site(),
-                format!(
-                    "statements take their SQL from `{}`, so they don't take `{name}`",
-                    docs::type_string(target)
-                ),
-            ));
-        }
+pub(crate) struct StatementArgs {
+    target: Type,
+    display: Option<Ident>,
+    debug: Option<Ident>,
+    row: Option<Type>,
+    parse_check: Option<LitBool>,
+}
+
+const KEYS: Keys = &[&["display"], &["debug"], &["row"], &["parse_check"]];
+
+impl Parse for StatementArgs {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let mut args = StatementArgs {
+            target: input.parse()?,
+            display: None,
+            debug: None,
+            row: None,
+            parse_check: None,
+        };
+        let target = docs::type_string(&args.target);
+        args::parse_keys(input, KEYS, |key, input| {
+            match key.to_string().as_str() {
+                "display" => args.display = Some(args::value(input)?),
+                "debug" => args.debug = Some(args::value(input)?),
+                "row" => args.row = Some(args::value(input)?),
+                "parse_check" => args.parse_check = Some(args::value(input)?),
+                "sql" | "sql_file" | "name" | "cte" | "subquery" | "separate" | "grammar" => {
+                    return Err(syn::Error::new(
+                        key.span(),
+                        format!(
+                            "statements take their SQL from `{target}`, so they don't take `{key}`"
+                        ),
+                    ));
+                }
+                "before" | "after" => return Err(args::only_tables(key)),
+                "steps" => return Err(args::only_transactions(key)),
+                _ => return Ok(false),
+            }
+            Ok(true)
+        })?;
+        Ok(args)
     }
-    no_hooks(&args)?;
-    no_steps(&args)?;
+}
+
+pub(crate) fn expand(args: StatementArgs, item: ItemStruct) -> syn::Result<TokenStream> {
+    let krate = krate();
+    let target = &args.target;
     if !item.generics.params.is_empty() {
         return Err(syn::Error::new_spanned(
             &item.generics,
@@ -77,7 +101,7 @@ pub(crate) fn statement(args: Args, item: ItemStruct) -> syn::Result<TokenStream
     let params_struct = params.definition();
     let derives = params.derives();
     let bind_params = params.bind_impl();
-    let row = row(&args, &item, true, None)?;
+    let row = row(args.row.as_ref(), &item, true, None)?;
     let builder = params.builder(&dialect, row.as_ref());
     let embed_checks = embeds(&item, &fields, &dialect);
     let hook_needs = hook_needs(
@@ -85,7 +109,7 @@ pub(crate) fn statement(args: Args, item: ItemStruct) -> syn::Result<TokenStream
         &[quote!(#target)],
         quote!(#krate::builder::HookNeeds),
     );
-    let fmt = fmt(&args, &item, true)?;
+    let fmt = fmt(args.display.as_ref(), args.debug.as_ref(), &item, true)?;
     let rows = row.as_ref().map(|row| {
         quote! {
             impl #krate::statement::Rows for #ident {

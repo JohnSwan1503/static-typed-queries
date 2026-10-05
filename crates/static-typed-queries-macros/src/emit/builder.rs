@@ -79,7 +79,7 @@ impl<'a> Params<'a> {
                     outputs.push(output);
                     names.push(name);
                 }
-                Step::Savepoint(_, steps) => {
+                Step::Savepoint(steps) => {
                     let name = format_ident!("__group{}", counts.1);
                     let savepoint = format_ident!("__savepoint{}", counts.1);
                     counts.1 += 1;

@@ -1,18 +1,22 @@
 use proc_macro2::TokenStream;
 use quote::quote;
-use syn::ItemStruct;
+use syn::{Ident, ItemStruct};
 
-use crate::args::Args;
 use crate::emit::krate;
 use crate::emit::rows::named_fields;
 
-pub(crate) fn fmt(args: &Args, item: &ItemStruct, statement: bool) -> syn::Result<TokenStream> {
+pub(crate) fn fmt(
+    display: Option<&Ident>,
+    debug: Option<&Ident>,
+    item: &ItemStruct,
+    statement: bool,
+) -> syn::Result<TokenStream> {
     let krate = krate();
     let ident = &item.ident;
     let mut out = TokenStream::new();
     for (option, allowed, macro_name) in [
-        (&args.display, ["sql", "name"], quote!(impl_display)),
-        (&args.debug, ["sql", "tree"], quote!(impl_debug)),
+        (display, ["sql", "name"], quote!(impl_display)),
+        (debug, ["sql", "tree"], quote!(impl_debug)),
     ] {
         let Some(value) = option else { continue };
         if !allowed.iter().any(|allowed| value == allowed) {

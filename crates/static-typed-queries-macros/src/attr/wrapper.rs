@@ -2,7 +2,6 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use syn::{ItemStruct, LitStr, Type, parse_quote};
 
-use crate::args::Args;
 use crate::emit::checks::embeds;
 use crate::emit::docs;
 use crate::emit::krate;
@@ -14,11 +13,11 @@ use crate::sql::analyze::{Analysis, Columns, Kind};
 use crate::sql::template::Template;
 
 pub(crate) fn separate(
-    args: &Args,
+    types: Option<&[Type]>,
     item: &ItemStruct,
     template: &Template,
 ) -> syn::Result<Vec<(Type, ItemStruct)>> {
-    let Some(types) = &args.separate else {
+    let Some(types) = types else {
         return Ok(Vec::new());
     };
     if !item.generics.params.is_empty() {

@@ -1,9 +1,9 @@
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
+use syn::parse::{Parse, ParseStream};
 use syn::{Fields, ItemStruct, LitStr, Type};
 
-use crate::args::{Args, Fetch, Step};
-use crate::attr::no_hooks;
+use crate::args::{self, Fetch, Keys, Step};
 use crate::emit::checks::{embeds, hook_needs};
 use crate::emit::docs::Source;
 use crate::emit::krate;
@@ -14,28 +14,44 @@ use crate::naming::{snake_case, type_key};
 use crate::sql::analyze::{Analysis, Columns, Kind};
 use crate::sql::template::Template;
 
-pub(crate) fn transaction(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
-    let krate = krate();
-    for (present, name) in [
-        (args.sql.is_some(), "sql"),
-        (args.sql_file.is_some(), "sql_file"),
-        (args.name.is_some(), "name"),
-        (args.placement.is_some(), "cte` or `subquery"),
-        (args.display.is_some(), "display"),
-        (args.debug.is_some(), "debug"),
-        (args.parse_check.is_some(), "parse_check"),
-        (args.separate.is_some(), "separate"),
-        (args.grammar.is_some(), "grammar"),
-        (args.row.is_some(), "row"),
-    ] {
-        if present {
+pub(crate) struct TransactionArgs {
+    dialect: Type,
+    steps: Vec<Step>,
+}
+
+const KEYS: Keys = &[&["steps"]];
+
+impl Parse for TransactionArgs {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let dialect = input.parse()?;
+        let mut steps = Vec::new();
+        args::parse_keys(input, KEYS, |key, input| {
+            match key.to_string().as_str() {
+                "steps" => steps = args::steps(input)?,
+                "before" | "after" => return Err(args::only_tables(key)),
+                "sql" | "sql_file" | "name" | "cte" | "subquery" | "display" | "debug"
+                | "parse_check" | "separate" | "grammar" | "row" => {
+                    return Err(syn::Error::new(
+                        key.span(),
+                        format!("transactions take only `steps(...)`, not `{key}`"),
+                    ));
+                }
+                _ => return Ok(false),
+            }
+            Ok(true)
+        })?;
+        if steps.is_empty() {
             return Err(syn::Error::new(
                 Span::call_site(),
-                format!("transactions take only `steps(...)`, not `{name}`"),
+                "transactions need `steps(Type, ...)`",
             ));
         }
+        Ok(TransactionArgs { dialect, steps })
     }
-    no_hooks(&args)?;
+}
+
+pub(crate) fn expand(args: TransactionArgs, item: ItemStruct) -> syn::Result<TokenStream> {
+    let krate = krate();
     if !item.generics.params.is_empty() {
         return Err(syn::Error::new_spanned(
             &item.generics,
@@ -48,15 +64,7 @@ pub(crate) fn transaction(args: Args, item: ItemStruct) -> syn::Result<TokenStre
             "transactions can't have fields; each step returns its own rows",
         ));
     }
-    let steps = match &args.steps {
-        Some(steps) if !steps.is_empty() => steps,
-        _ => {
-            return Err(syn::Error::new(
-                Span::call_site(),
-                "transactions need `steps(Type, ...)`",
-            ));
-        }
-    };
+    let steps = &args.steps;
     let ident = &item.ident;
     let dialect = &args.dialect;
     Step::check_ctes(steps)?;

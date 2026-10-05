@@ -1,9 +1,9 @@
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
-use syn::{ItemStruct, Type};
+use syn::parse::{Parse, ParseStream};
+use syn::{Ident, ItemStruct, LitStr, Type};
 
-use crate::args::Args;
-use crate::attr::no_steps;
+use crate::args::{self, Keys};
 use crate::emit::checks::{embeds, hook_needs, step_impl};
 use crate::emit::docs::{self, Source};
 use crate::emit::fmt::fmt;
@@ -15,41 +15,60 @@ use crate::naming::type_key;
 use crate::sql::analyze::{Analysis, Columns, Kind};
 use crate::sql::template::Template;
 
-pub(crate) fn table(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
+pub(crate) struct TableArgs {
+    dialect: Type,
+    name: LitStr,
+    before: Vec<Type>,
+    after: Vec<Type>,
+    display: Option<Ident>,
+    debug: Option<Ident>,
+}
+
+const KEYS: Keys = &[&["name"], &["before"], &["after"], &["display"], &["debug"]];
+
+impl Parse for TableArgs {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let dialect = input.parse()?;
+        let (mut name, mut display, mut debug) = (None, None, None);
+        let (mut before, mut after) = (Vec::new(), Vec::new());
+        args::parse_keys(input, KEYS, |key, input| {
+            let error = |message: &str| syn::Error::new(key.span(), message);
+            match key.to_string().as_str() {
+                "name" => name = Some(args::value(input)?),
+                "before" => before = args::types(input)?,
+                "after" => after = args::types(input)?,
+                "display" => display = Some(args::value(input)?),
+                "debug" => debug = Some(args::value(input)?),
+                "sql" | "sql_file" => {
+                    return Err(error(&format!("tables take `name`, not `{key}`")));
+                }
+                "cte" | "subquery" => return Err(error("tables are always referenced by name")),
+                "parse_check" | "grammar" => return Err(error("tables have no SQL to check")),
+                "row" => {
+                    return Err(error(
+                        "tables aren't statements; give `row` to a query that selects from it",
+                    ));
+                }
+                "steps" => return Err(args::only_transactions(key)),
+                _ => return Ok(false),
+            }
+            Ok(true)
+        })?;
+        let name =
+            name.ok_or_else(|| syn::Error::new(Span::call_site(), "tables need `name = \"...\"`"))?;
+        Ok(TableArgs {
+            dialect,
+            name,
+            before,
+            after,
+            display,
+            debug,
+        })
+    }
+}
+
+pub(crate) fn expand(args: TableArgs, item: ItemStruct) -> syn::Result<TokenStream> {
     let krate = krate();
-    if let Some(sql) = &args.sql {
-        return Err(syn::Error::new(sql.span(), "tables take `name`, not `sql`"));
-    }
-    if let Some(file) = &args.sql_file {
-        return Err(syn::Error::new(
-            file.span(),
-            "tables take `name`, not `sql_file`",
-        ));
-    }
-    if args.placement.is_some() {
-        return Err(syn::Error::new(
-            Span::call_site(),
-            "tables are always referenced by name",
-        ));
-    }
-    if let Some(parse_check) = &args.parse_check {
-        return Err(syn::Error::new(
-            parse_check.span(),
-            "tables have no SQL to check",
-        ));
-    }
-    if let Some(grammar) = &args.grammar {
-        return Err(syn::Error::new(
-            grammar.span(),
-            "tables have no SQL to check",
-        ));
-    }
-    if let Some(row) = &args.row {
-        return Err(syn::Error::new_spanned(
-            row,
-            "tables aren't statements; give `row` to a query that selects from it",
-        ));
-    }
     if !item.generics.params.is_empty() {
         return Err(syn::Error::new_spanned(
             &item.generics,
@@ -62,10 +81,7 @@ pub(crate) fn table(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
             "tables can't have fields; give them to a query that selects from the table to read its rows",
         ));
     }
-    let name = args
-        .name
-        .as_ref()
-        .ok_or_else(|| syn::Error::new(Span::call_site(), "tables need `name = \"...\"`"))?;
+    let name = &args.name;
     let table = name.value();
     let mut parts = Vec::new();
     for (i, segment) in table.split('.').enumerate() {
@@ -74,9 +90,8 @@ pub(crate) fn table(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
         }
         parts.push(quote!(#krate::part::ident::Ident::part(#segment)));
     }
-    no_steps(&args)?;
-    let before = hooks(args.before.as_deref())?;
-    let after = hooks(args.after.as_deref())?;
+    let before = hooks(&args.before)?;
+    let after = hooks(&args.after)?;
     let template = Template {
         segments: Vec::new(),
         params: Vec::new(),
@@ -116,7 +131,7 @@ pub(crate) fn table(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
         .collect();
     let hook_needs = hook_needs(&item, &needs, quote!(#krate::builder::Demand));
     let step = step_impl(&item, None);
-    let fmt = fmt(&args, &item, false)?;
+    let fmt = fmt(args.display.as_ref(), args.debug.as_ref(), &item, false)?;
     let mut documented = item.clone();
     documented
         .attrs
@@ -140,9 +155,9 @@ pub(crate) fn table(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
     })
 }
 
-pub(crate) fn hooks(types: Option<&[Type]>) -> syn::Result<Vec<Type>> {
+fn hooks(types: &[Type]) -> syn::Result<Vec<Type>> {
     let mut hooks: Vec<Type> = Vec::new();
-    for ty in types.unwrap_or_default() {
+    for ty in types {
         if hooks.iter().any(|other| type_key(other) == type_key(ty)) {
             return Err(syn::Error::new_spanned(
                 ty,

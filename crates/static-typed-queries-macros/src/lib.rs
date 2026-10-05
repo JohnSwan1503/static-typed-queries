@@ -11,9 +11,9 @@ use syn::{ItemConst, ItemStruct, parse_macro_input};
 #[doc = include_str!("../docs/table.md")]
 #[proc_macro_attribute]
 pub fn table(args: TokenStream, item: TokenStream) -> TokenStream {
-    let args = parse_macro_input!(args as args::Args);
+    let args = parse_macro_input!(args as attr::table::TableArgs);
     let item = parse_macro_input!(item as ItemStruct);
-    attr::table::table(args, item)
+    attr::table::expand(args, item)
         .unwrap_or_else(|error| error.to_compile_error())
         .into()
 }
@@ -22,12 +22,12 @@ pub fn table(args: TokenStream, item: TokenStream) -> TokenStream {
 #[proc_macro_attribute]
 pub fn query(args: TokenStream, item: TokenStream) -> TokenStream {
     let tokens = proc_macro2::TokenStream::from(args.clone());
-    let args = parse_macro_input!(args as args::Args);
+    let args = parse_macro_input!(args as attr::query::QueryArgs);
     let item = parse_macro_input!(item as ItemStruct);
     if let Some(args::Sql::Named(name)) = &args.sql {
         return attr::query::named(name, tokens, &item).into();
     }
-    attr::query::query(args, item)
+    attr::query::expand(args, item)
         .unwrap_or_else(|error| error.to_compile_error())
         .into()
 }
@@ -35,7 +35,7 @@ pub fn query(args: TokenStream, item: TokenStream) -> TokenStream {
 #[doc(hidden)]
 #[proc_macro]
 pub fn __query_sql(input: TokenStream) -> TokenStream {
-    let named = parse_macro_input!(input as args::NamedQuery);
+    let named = parse_macro_input!(input as attr::query::NamedQuery);
     attr::query::named_query(named)
         .unwrap_or_else(|error| error.to_compile_error())
         .into()
@@ -44,9 +44,9 @@ pub fn __query_sql(input: TokenStream) -> TokenStream {
 #[doc = include_str!("../docs/statement.md")]
 #[proc_macro_attribute]
 pub fn statement(args: TokenStream, item: TokenStream) -> TokenStream {
-    let args = parse_macro_input!(args as args::Args);
+    let args = parse_macro_input!(args as attr::statement::StatementArgs);
     let item = parse_macro_input!(item as ItemStruct);
-    attr::statement::statement(args, item)
+    attr::statement::expand(args, item)
         .unwrap_or_else(|error| error.to_compile_error())
         .into()
 }
@@ -55,7 +55,7 @@ pub fn statement(args: TokenStream, item: TokenStream) -> TokenStream {
 #[proc_macro_attribute]
 pub fn sql(args: TokenStream, item: TokenStream) -> TokenStream {
     let item = parse_macro_input!(item as ItemConst);
-    attr::sql::sql(args.into(), item)
+    attr::sql::expand(args.into(), item)
         .unwrap_or_else(|error| error.to_compile_error())
         .into()
 }
@@ -63,9 +63,9 @@ pub fn sql(args: TokenStream, item: TokenStream) -> TokenStream {
 #[doc = include_str!("../docs/transaction.md")]
 #[proc_macro_attribute]
 pub fn transaction(args: TokenStream, item: TokenStream) -> TokenStream {
-    let args = parse_macro_input!(args as args::Args);
+    let args = parse_macro_input!(args as attr::transaction::TransactionArgs);
     let item = parse_macro_input!(item as ItemStruct);
-    attr::transaction::transaction(args, item)
+    attr::transaction::expand(args, item)
         .unwrap_or_else(|error| error.to_compile_error())
         .into()
 }

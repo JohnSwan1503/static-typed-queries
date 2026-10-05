@@ -3,7 +3,7 @@ use quote::{format_ident, quote};
 use syn::ext::IdentExt;
 use syn::{Expr, ExprLit, ItemConst, Lit, Type, Visibility};
 
-pub(crate) fn sql(args: TokenStream, item: ItemConst) -> syn::Result<TokenStream> {
+pub(crate) fn expand(args: TokenStream, item: ItemConst) -> syn::Result<TokenStream> {
     if !args.is_empty() {
         return Err(syn::Error::new_spanned(args, "`#[sql]` takes no arguments"));
     }

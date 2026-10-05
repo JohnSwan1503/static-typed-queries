@@ -1,10 +1,12 @@
 use proc_macro2::{Span, TokenStream};
 use quote::{format_ident, quote};
-use syn::{GenericParam, ItemStruct, LitStr, Path, Type, parse_quote};
+use syn::parse::{Parse, ParseStream};
+use syn::{
+    GenericParam, Ident, ItemStruct, LitBool, LitStr, Path, Type, parenthesized, parse_quote,
+};
 
-use crate::args::{Args, NamedQuery, Placement, Sql};
+use crate::args::{self, Keys, Placement, Sql};
 use crate::attr::wrapper::{self, separate};
-use crate::attr::{no_hooks, no_steps};
 use crate::emit::checks::{embeds, hook_needs, step_impl};
 use crate::emit::docs::Source;
 use crate::emit::fmt::fmt;
@@ -17,7 +19,90 @@ use crate::naming::{snake_case, type_key};
 use crate::sql::analyze::{self, Engine, Kind};
 use crate::sql::template;
 
-pub(crate) fn query(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
+pub(crate) struct QueryArgs {
+    pub(crate) dialect: Type,
+    pub(crate) sql: Option<Sql>,
+    pub(crate) sql_file: Option<LitStr>,
+    pub(crate) name: Option<LitStr>,
+    pub(crate) placement: Option<Placement>,
+    pub(crate) display: Option<Ident>,
+    pub(crate) debug: Option<Ident>,
+    pub(crate) parse_check: Option<LitBool>,
+    pub(crate) separate: Option<Vec<Type>>,
+    pub(crate) grammar: Option<Ident>,
+    pub(crate) row: Option<Type>,
+}
+
+const KEYS: Keys = &[
+    &["cte", "subquery"],
+    &["sql"],
+    &["sql_file"],
+    &["name"],
+    &["display"],
+    &["debug"],
+    &["parse_check"],
+    &["separate"],
+    &["grammar"],
+    &["row"],
+];
+
+impl Parse for QueryArgs {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let mut args = QueryArgs {
+            dialect: input.parse()?,
+            sql: None,
+            sql_file: None,
+            name: None,
+            placement: None,
+            display: None,
+            debug: None,
+            parse_check: None,
+            separate: None,
+            grammar: None,
+            row: None,
+        };
+        args::parse_keys(input, KEYS, |key, input| {
+            match key.to_string().as_str() {
+                "cte" | "subquery" => args.placement = Some(Placement::parse_keyword(input)?),
+                "sql" => args.sql = Some(args::value(input)?),
+                "sql_file" => args.sql_file = Some(args::value(input)?),
+                "name" => args.name = Some(args::value(input)?),
+                "display" => args.display = Some(args::value(input)?),
+                "debug" => args.debug = Some(args::value(input)?),
+                "parse_check" => args.parse_check = Some(args::value(input)?),
+                "separate" => args.separate = Some(args::types(input)?),
+                "grammar" => args.grammar = Some(args::value(input)?),
+                "row" => args.row = Some(args::value(input)?),
+                "before" | "after" => return Err(args::only_tables(key)),
+                "steps" => return Err(args::only_transactions(key)),
+                _ => return Ok(false),
+            }
+            Ok(true)
+        })?;
+        Ok(args)
+    }
+}
+
+pub(crate) struct NamedQuery {
+    sql: LitStr,
+    args: QueryArgs,
+    item: ItemStruct,
+}
+
+impl Parse for NamedQuery {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let sql = input.parse()?;
+        let content;
+        parenthesized!(content in input);
+        Ok(NamedQuery {
+            sql,
+            args: content.parse()?,
+            item: input.parse()?,
+        })
+    }
+}
+
+pub(crate) fn expand(args: QueryArgs, item: ItemStruct) -> syn::Result<TokenStream> {
     let krate = krate();
     if let Some(param) = item
         .generics
@@ -52,8 +137,6 @@ pub(crate) fn query(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
         }
     };
     let track = file.as_ref().map(|(_, track)| track);
-    no_hooks(&args)?;
-    no_steps(&args)?;
     let template = template::parse(sql)?;
     let engine = Engine::of(&args.dialect, args.grammar.as_ref(), &item.generics)?;
     let analysis = analyze::analyze(&template, engine, sql)?;
@@ -71,14 +154,19 @@ pub(crate) fn query(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
             ));
         }
     }
-    let row = row(&args, &item, analysis.returns_rows, Some(&analysis.columns))?;
+    let row = row(
+        args.row.as_ref(),
+        &item,
+        analysis.returns_rows,
+        Some(&analysis.columns),
+    )?;
     let kind = match analysis.kind {
         Kind::Query => quote!(Query),
         Kind::Dml => quote!(Dml),
         Kind::Ddl => quote!(Ddl),
     };
 
-    let wrappers = separate(&args, &item, &template)?;
+    let wrappers = separate(args.separate.as_deref(), &item, &template)?;
     let separate: Vec<(Type, Type)> = wrappers
         .iter()
         .map(|(named, wrapper)| {
@@ -163,7 +251,7 @@ pub(crate) fn query(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
             #test
         }
     });
-    let fmt = fmt(&args, &item, true)?;
+    let fmt = fmt(args.display.as_ref(), args.debug.as_ref(), &item, true)?;
     let step = step_impl(&item, row.as_ref());
     let mut documented = item.clone();
     documented
@@ -195,7 +283,7 @@ pub(crate) fn query(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
     })
 }
 
-pub(crate) fn template_file(file: &LitStr) -> syn::Result<(LitStr, TokenStream)> {
+fn template_file(file: &LitStr) -> syn::Result<(LitStr, TokenStream)> {
     let root = std::env::var_os("CARGO_MANIFEST_DIR").ok_or_else(|| {
         syn::Error::new(
             file.span(),
@@ -237,6 +325,6 @@ pub(crate) fn named_query(named: NamedQuery) -> syn::Result<TokenStream> {
         Some(Sql::Named(name)) => Some(quote!(const _: &str = #name;)),
         _ => None,
     };
-    let query = query(args, item)?;
+    let query = expand(args, item)?;
     Ok(quote!(#used #query))
 }
