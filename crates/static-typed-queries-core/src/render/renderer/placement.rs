@@ -7,6 +7,7 @@ use crate::render::error::fail;
 
 // A table is always written as its name, whatever placement the reference asks for, so a generic
 // field marked for queries can hold one too.
+#[track_caller]
 pub(super) const fn placement<D: Dialect>(from: From, node: &'static Node) -> Inject {
     let inject = from.inject(node);
     let name = node.name.as_str();
@@ -32,6 +33,7 @@ pub(super) const fn placement<D: Dialect>(from: From, node: &'static Node) -> In
     inject
 }
 
+#[track_caller]
 pub(super) const fn attachable<D: Dialect>(node: &'static Node) {
     let name = node.name.as_str();
     match node.kind {
@@ -42,6 +44,7 @@ pub(super) const fn attachable<D: Dialect>(node: &'static Node) {
     }
 }
 
+#[track_caller]
 const fn no_dml_in_cte<D: Dialect>(name: &str) -> ! {
     fail(&[
         "`",

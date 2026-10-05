@@ -2,54 +2,9 @@ error[E0080]: evaluation panicked: `purged` modifies data, which MySQL doesn't a
  --> tests/ui/dml_cte_mysql.rs:9:1
   |
 9 | #[query(MySql, sql = "SELECT count(*) FROM {purged}")]
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ evaluation of `_::<impl static_typed_queries::__private::render::Render for PurgeCount>::SIZE` failed inside this call
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ evaluation of `_::<impl static_typed_queries::__private::render::Render for PurgeCount>::SIZE` failed here
   |
-note: inside `static_typed_queries::__private::render::measure::<static_typed_queries::dialect::MySql>`
- --> $WORKSPACE/crates/static-typed-queries-core/src/render.rs
-  |
-  |     renderer.statement(root);
-  |     ^^^^^^^^^^^^^^^^^^^^^^^^
-note: inside `static_typed_queries::__private::render::renderer::Renderer::<'_, static_typed_queries::dialect::MySql>::statement`
- --> $WORKSPACE/crates/static-typed-queries-core/src/render/renderer.rs
-  |
-  |         self.single(root, main, path);
-  |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-note: inside `static_typed_queries::__private::render::renderer::Renderer::<'_, static_typed_queries::dialect::MySql>::single`
- --> $WORKSPACE/crates/static-typed-queries-core/src/render/renderer.rs
-  |
-  |         self.collect(node, path);
-  |         ^^^^^^^^^^^^^^^^^^^^^^^^
-note: inside `static_typed_queries::__private::render::renderer::ctes::<impl static_typed_queries::__private::render::renderer::Renderer<'_, static_typed_queries::dialect::MySql>>::collect`
- --> $WORKSPACE/crates/static-typed-queries-core/src/render/renderer/ctes.rs
-  |
-  |                     match placement::<D>(from, child) {
-  |                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
-note: inside `static_typed_queries::__private::render::renderer::placement::placement::<static_typed_queries::dialect::MySql>`
- --> $WORKSPACE/crates/static-typed-queries-core/src/render/renderer/placement.rs
-  |
-  |         (Kind::Dml, Inject::Cte { .. }) => no_dml_in_cte::<D>(name),
-  |                                            ^^^^^^^^^^^^^^^^^^^^^^^^
-note: inside `static_typed_queries::__private::render::renderer::placement::no_dml_in_cte::<static_typed_queries::dialect::MySql>`
- --> $WORKSPACE/crates/static-typed-queries-core/src/render/renderer/placement.rs
-  |
-  | /     fail(&[
-  | |         "`",
-  | |         name,
-  | |         "` modifies data, which ",
-  | |         D::NAME,
-  | |         " doesn't allow in a CTE",
-  | |     ])
-  | |______^
-note: inside `static_typed_queries::__private::render::error::fail`
- --> $RUST/core/src/panic.rs
-  |
-  |         $crate::panicking::panic_display(&$arg);
-  |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the failure occurred here
-  |
- ::: $WORKSPACE/crates/static-typed-queries-core/src/render/error.rs
-  |
-  |         Ok(message) => panic!("{}", message),
-  |                        --------------------- in this macro invocation
+  = note: this error originates in the macro `$crate::impl_render` which comes from the expansion of the attribute macro `query` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 note: erroneous constant encountered
  --> tests/ui/dml_cte_mysql.rs:9:1

@@ -26,6 +26,7 @@ pub(super) struct Attached {
 }
 
 impl<'a, D: Dialect> Renderer<'a, D> {
+    #[track_caller]
     pub(super) const fn attach(&mut self, root: &'static Node, step: Target) {
         let (node, path) = resolve(root, Path::ROOT, step);
         let (node, path) = target(node, path);
@@ -36,6 +37,7 @@ impl<'a, D: Dialect> Renderer<'a, D> {
         );
     }
 
+    #[track_caller]
     pub(super) const fn collect_attached(&mut self) {
         let mut i = 0;
         while let Some(attached) = self.attached.get(i) {
@@ -45,6 +47,7 @@ impl<'a, D: Dialect> Renderer<'a, D> {
         }
     }
 
+    #[track_caller]
     pub(super) const fn collect(&mut self, node: &'static Node, path: Path) {
         let parts = node.parts.0;
         let mut i = 0;
@@ -77,6 +80,7 @@ impl<'a, D: Dialect> Renderer<'a, D> {
         }
     }
 
+    #[track_caller]
     const fn add_cte(&mut self, node: &'static Node, path: Path, recursive: bool) {
         self.recursive |= recursive;
         let path = instance_path(node, path);

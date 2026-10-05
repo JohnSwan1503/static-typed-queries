@@ -7,6 +7,7 @@ use crate::statement::bind::path::Path;
 
 // The node a part refers to from `node`, and the path to its values. A node referenced by type
 // holds no values, so it keeps the path it is reached through.
+#[track_caller]
 pub(super) const fn resolve(
     node: &'static Node,
     path: Path,
@@ -28,6 +29,7 @@ pub(super) const fn resolve(
 }
 
 // An embedded item, looking through a statement wrapper to the statement it names.
+#[track_caller]
 pub(super) const fn embedded(
     node: &'static Node,
     path: Path,
@@ -53,6 +55,7 @@ pub(super) const fn instance_path(node: &'static Node, path: Path) -> Path {
     }
 }
 
+#[track_caller]
 const fn unwrap(node: &'static Node, path: Path) -> (&'static Node, Path) {
     match node.kind {
         Kind::Scope => item(node, path, 0),
@@ -60,6 +63,7 @@ const fn unwrap(node: &'static Node, path: Path) -> (&'static Node, Path) {
     }
 }
 
+#[track_caller]
 const fn item(node: &'static Node, path: Path, index: u16) -> (&'static Node, Path) {
     match path.child(index) {
         Some(path) => (node.items.0[index as usize], path),
@@ -67,6 +71,7 @@ const fn item(node: &'static Node, path: Path, index: u16) -> (&'static Node, Pa
     }
 }
 
+#[track_caller]
 pub(super) const fn target(node: &'static Node, path: Path) -> (&'static Node, Path) {
     let (node, path) = unwrap(node, path);
     match node.kind {

@@ -123,6 +123,7 @@ impl Output {
     }
 }
 
+#[track_caller]
 pub const fn measure<D: Dialect>(root: &'static Node) -> Size {
     let (mut sql, mut binds, mut offsets) = ([], [], []);
     let mut renderer = Renderer::<D>::new(&mut sql, &mut binds, &mut offsets);
@@ -130,6 +131,7 @@ pub const fn measure<D: Dialect>(root: &'static Node) -> Size {
     renderer.size()
 }
 
+#[track_caller]
 pub const fn render<D: Dialect, const S: usize, const B: usize, const N: usize>(
     root: &'static Node,
 ) -> Rendered<S, B, N> {

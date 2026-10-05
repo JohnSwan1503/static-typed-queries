@@ -75,6 +75,7 @@ impl<'a, D: Dialect> Renderer<'a, D> {
         self.size
     }
 
+    #[track_caller]
     pub(super) const fn statement(&mut self, root: &'static Node) {
         if let Kind::Transaction = root.kind {
             self.transaction(root);
@@ -88,6 +89,7 @@ impl<'a, D: Dialect> Renderer<'a, D> {
         self.render_hooks(true);
     }
 
+    #[track_caller]
     const fn transaction(&mut self, root: &'static Node) {
         self.find_hooks(root);
         self.render_hooks(false);
@@ -113,6 +115,7 @@ impl<'a, D: Dialect> Renderer<'a, D> {
         self.render_hooks(true);
     }
 
+    #[track_caller]
     const fn single(&mut self, named: &'static Node, node: &'static Node, path: Path) {
         self.ctes.clear();
         self.recursive = false;

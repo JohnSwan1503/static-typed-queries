@@ -22,6 +22,7 @@ pub(super) struct Numbered {
 }
 
 impl<'a, D: Dialect> Renderer<'a, D> {
+    #[track_caller]
     pub(super) const fn body(&mut self, node: &'static Node, path: Path) {
         let parts = node.parts.0;
         let mut i = 0;
@@ -42,6 +43,7 @@ impl<'a, D: Dialect> Renderer<'a, D> {
         }
     }
 
+    #[track_caller]
     const fn from(&mut self, node: &'static Node, path: Path, from: From) {
         let (child, child_path) = embedded(node, path, from.target());
         match placement::<D>(from, child) {
@@ -62,6 +64,7 @@ impl<'a, D: Dialect> Renderer<'a, D> {
         }
     }
 
+    #[track_caller]
     const fn param(&mut self, node: &'static Node, path: Path, param: Param) {
         self.byte(D::PARAMS.prefix);
         if !D::PARAMS.numbered {
@@ -94,6 +97,7 @@ impl<'a, D: Dialect> Renderer<'a, D> {
         None
     }
 
+    #[track_caller]
     const fn bind(&mut self, node: &'static Node, path: Path, param: Param) {
         if self.size.binds - self.first_bind == u16::MAX as usize {
             fail(&["a statement can't have more than 65535 parameters"]);

@@ -1,5 +1,6 @@
 const MAX_LEN: usize = 256;
 
+#[track_caller]
 pub(super) const fn fail(parts: &[&str]) -> ! {
     let mut buf = [0; MAX_LEN];
     let mut len = 0;

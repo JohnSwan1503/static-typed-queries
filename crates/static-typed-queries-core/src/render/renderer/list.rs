@@ -25,6 +25,7 @@ impl<T: Copy, const N: usize> List<T, N> {
         if i < self.len { self.items[i] } else { None }
     }
 
+    #[track_caller]
     pub(super) const fn push(&mut self, item: T, too_many: &'static str) {
         if self.len == N {
             fail(&[too_many]);

@@ -17,6 +17,7 @@ pub(super) struct Hook {
 }
 
 impl<'a, D: Dialect> Renderer<'a, D> {
+    #[track_caller]
     pub(super) const fn find_hooks(&mut self, node: &'static Node) {
         let node = unwrap_scope(node);
         self.add_hooks(node, false);
@@ -31,6 +32,7 @@ impl<'a, D: Dialect> Renderer<'a, D> {
         }
     }
 
+    #[track_caller]
     const fn add_hooks(&mut self, owner: &'static Node, after: bool) {
         let hooks = if after { owner.after.0 } else { owner.before.0 };
         let mut i = 0;
@@ -68,6 +70,7 @@ impl<'a, D: Dialect> Renderer<'a, D> {
         false
     }
 
+    #[track_caller]
     pub(super) const fn render_hooks(&mut self, after: bool) {
         let mut i = 0;
         while let Some(hook) = self.hooks.get(i) {
@@ -79,6 +82,7 @@ impl<'a, D: Dialect> Renderer<'a, D> {
     }
 }
 
+#[track_caller]
 pub const fn check_hooks(owner: &'static Node) {
     let (before, after) = (owner.before.0, owner.after.0);
     let mut i = 0;
@@ -93,6 +97,7 @@ pub const fn check_hooks(owner: &'static Node) {
     }
 }
 
+#[track_caller]
 const fn hook(owner: &'static Node, hook: &'static Node, path: Path) -> (&'static Node, Path) {
     if let Kind::Table = hook.kind {
         fail(&[

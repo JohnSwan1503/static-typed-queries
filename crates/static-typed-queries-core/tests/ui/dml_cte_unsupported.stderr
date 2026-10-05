@@ -2,7 +2,7 @@ error[E0080]: evaluation panicked: `archived` modifies data, which MySQL doesn't
   --> tests/ui/../support/mod.rs
    |
    |           static_typed_queries_core::impl_statement!($ty);
-   |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ evaluation of `<ArchiveCount as static_typed_queries_core::render::Render>::SIZE` failed inside this call
+   |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ evaluation of `<ArchiveCount as static_typed_queries_core::render::Render>::SIZE` failed here
    |
   ::: tests/ui/dml_cte_unsupported.rs:21:1
    |
@@ -15,52 +15,7 @@ error[E0080]: evaluation panicked: `archived` modifies data, which MySQL doesn't
 28 | | ));
    | |__- in this macro invocation
    |
-note: inside `measure::<MySql>`
-  --> src/render.rs
-   |
-   |     renderer.statement(root);
-   |     ^^^^^^^^^^^^^^^^^^^^^^^^
-note: inside `render::renderer::Renderer::<'_, MySql>::statement`
-  --> src/render/renderer.rs
-   |
-   |         self.single(root, main, path);
-   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-note: inside `render::renderer::Renderer::<'_, MySql>::single`
-  --> src/render/renderer.rs
-   |
-   |         self.collect(node, path);
-   |         ^^^^^^^^^^^^^^^^^^^^^^^^
-note: inside `render::renderer::ctes::<impl render::renderer::Renderer<'_, MySql>>::collect`
-  --> src/render/renderer/ctes.rs
-   |
-   |                     match placement::<D>(from, child) {
-   |                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
-note: inside `render::renderer::placement::placement::<MySql>`
-  --> src/render/renderer/placement.rs
-   |
-   |         (Kind::Dml, Inject::Cte { .. }) => no_dml_in_cte::<D>(name),
-   |                                            ^^^^^^^^^^^^^^^^^^^^^^^^
-note: inside `render::renderer::placement::no_dml_in_cte::<MySql>`
-  --> src/render/renderer/placement.rs
-   |
-   | /     fail(&[
-   | |         "`",
-   | |         name,
-   | |         "` modifies data, which ",
-   | |         D::NAME,
-   | |         " doesn't allow in a CTE",
-   | |     ])
-   | |______^
-note: inside `render::error::fail`
-  --> $RUST/core/src/panic.rs
-   |
-   |         $crate::panicking::panic_display(&$arg);
-   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the failure occurred here
-   |
-  ::: src/render/error.rs
-   |
-   |         Ok(message) => panic!("{}", message),
-   |                        --------------------- in this macro invocation
+   = note: this error originates in the macro `$crate::impl_render` which comes from the expansion of the macro `root` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 note: erroneous constant encountered
   --> tests/ui/../support/mod.rs
