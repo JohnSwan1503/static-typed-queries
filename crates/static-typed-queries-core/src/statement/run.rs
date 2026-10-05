@@ -2,9 +2,9 @@ use core::marker::PhantomData;
 
 use sqlx::{Acquire, Executor, FromRow, IntoArguments, SqlStr};
 
-use super::Statement;
 use super::hook::Hook;
 use super::params::{BindHooks, BindParams, arguments};
+use super::{Rows, Statement};
 use crate::dialect::driver::{Arguments, Connection, Database, Driver, Row};
 
 pub async fn execute<'c, S, V, A>(
@@ -110,9 +110,64 @@ where
     }
 }
 
+pub struct One<T>(PhantomData<T>);
+
+impl<D, T> Fetch<D> for One<T>
+where
+    D: Driver,
+    T: for<'r> FromRow<'r, Row<D>> + Send + Unpin,
+    Arguments<D>: IntoArguments<Database<D>>,
+    for<'e> &'e mut Connection<D>: Executor<'e, Database = Database<D>>,
+{
+    type Output = T;
+
+    async fn fetch(
+        sql: &'static str,
+        args: Arguments<D>,
+        conn: &mut Connection<D>,
+    ) -> Result<T, sqlx::Error> {
+        sqlx::query_as_with(SqlStr::from_static(sql), args)
+            .fetch_one(conn)
+            .await
+    }
+}
+
+pub struct Optional<T>(PhantomData<T>);
+
+impl<D, T> Fetch<D> for Optional<T>
+where
+    D: Driver,
+    T: for<'r> FromRow<'r, Row<D>> + Send + Unpin,
+    Arguments<D>: IntoArguments<Database<D>>,
+    for<'e> &'e mut Connection<D>: Executor<'e, Database = Database<D>>,
+{
+    type Output = Option<T>;
+
+    async fn fetch(
+        sql: &'static str,
+        args: Arguments<D>,
+        conn: &mut Connection<D>,
+    ) -> Result<Option<T>, sqlx::Error> {
+        sqlx::query_as_with(SqlStr::from_static(sql), args)
+            .fetch_optional(conn)
+            .await
+    }
+}
+
+pub struct NoRow;
+
+impl<'r, R: sqlx::Row> FromRow<'r, R> for NoRow {
+    fn from_row(_: &'r R) -> Result<Self, sqlx::Error> {
+        Err(sqlx::Error::Decode("this statement has no row type".into()))
+    }
+}
+
 pub trait Step {
     type Fetch;
+    type Row;
 }
+
+pub const fn rows<S: Rows>() {}
 
 pub type Output<S, D> = <<S as Step>::Fetch as Fetch<D>>::Output;
 

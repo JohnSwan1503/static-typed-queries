@@ -479,6 +479,9 @@ pub fn sql(args: TokenStream, item: TokenStream) -> TokenStream {
 /// them together. If a step outside a savepoint fails, every step rolls back.
 /// It returns a tuple with one element per step: a `Vec` of the step's row
 /// type when it has one, and otherwise the number of rows the step affected.
+/// `Type as one` reads exactly one row instead, failing with
+/// `sqlx::Error::RowNotFound` when there's none, and `Type as optional` reads
+/// an `Option` of one. Both need a step with a row type.
 ///
 /// `savepoint(A, B)` among the steps runs a group in a nested transaction. If
 /// one of its steps fails, only the group rolls back, and the steps after it

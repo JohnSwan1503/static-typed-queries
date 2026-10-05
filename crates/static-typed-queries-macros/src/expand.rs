@@ -8,7 +8,7 @@ use syn::{
 };
 
 use crate::analyze::{self, Analysis, Columns, Engine, Kind};
-use crate::args::{Args, NamedQuery, Placement, Sql, Step};
+use crate::args::{Args, Fetch, NamedQuery, Placement, Sql, Step};
 use crate::docs;
 use crate::naming::{camel, field_name, short_name, snake_case, to_ident, unique};
 use crate::template::{self, Segment, Template};
@@ -1019,9 +1019,9 @@ fn embeds(item: &ItemStruct, items: &[Type], dialect: &Type) -> TokenStream {
 fn step_impl(item: &ItemStruct, row: Option<&Type>) -> TokenStream {
     let krate = krate();
     let run = quote!(#krate::statement::run);
-    let fetch = match row {
-        Some(row) => quote!(#run::AllRows<#row>),
-        None => quote!(#run::Affected),
+    let (fetch, row) = match row {
+        Some(row) => (quote!(#run::AllRows<#row>), quote!(#row)),
+        None => (quote!(#run::Affected), quote!(#run::NoRow)),
     };
     let ident = &item.ident;
     let (impl_generics, ty_generics, where_clause) = item.generics.split_for_impl();
@@ -1029,6 +1029,7 @@ fn step_impl(item: &ItemStruct, row: Option<&Type>) -> TokenStream {
         #krate::__if_sqlx! {
             impl #impl_generics #run::Step for #ident #ty_generics #where_clause {
                 type Fetch = #fetch;
+                type Row = #row;
             }
         }
     }
@@ -1724,7 +1725,9 @@ impl<'a> Params<'a> {
         let steps: Vec<String> = steps
             .iter()
             .map(|step| match step {
-                Step::Run(ty) => self.link(ty),
+                Step::Run(ty, Fetch::Default) => self.link(ty),
+                Step::Run(ty, Fetch::One) => format!("{} as one", self.link(ty)),
+                Step::Run(ty, Fetch::Optional) => format!("{} as optional", self.link(ty)),
                 Step::Savepoint(_, steps) => format!("savepoint({})", self.describe_steps(steps)),
             })
             .collect();
@@ -1747,19 +1750,34 @@ impl<'a> Params<'a> {
         let mut outputs = Vec::new();
         for step in steps {
             match step {
-                Step::Run(ty) => {
+                Step::Run(ty, fetch) => {
                     let name = format_ident!("__step{}", counts.0);
                     let index = Literal::usize_unsuffixed(counts.0);
                     counts.0 += 1;
+                    let row = quote!(<#ty as #run::Step>::Row);
+                    let (fetch, output) = match fetch {
+                        Fetch::Default => (
+                            quote!(<#ty as #run::Step>::Fetch),
+                            quote!(#run::Output<#ty, #dialect>),
+                        ),
+                        Fetch::One => (quote!(#run::One<#row>), row),
+                        Fetch::Optional => (
+                            quote!(#run::Optional<#row>),
+                            quote!(::core::option::Option<#row>),
+                        ),
+                    };
+                    if !matches!(step, Step::Run(_, Fetch::Default)) {
+                        statements.push(quote!(const _: () = #run::rows::<#ty>();));
+                    }
                     statements.push(quote! {
-                        let #name = #run::step::<#dialect, <#ty as #run::Step>::Fetch, _>(
+                        let #name = #run::step::<#dialect, #fetch, _>(
                             &params,
                             &<#ident as #krate::transaction::Transaction>::STEPS[#index],
                             &mut #conn,
                         )
                         .await?;
                     });
-                    outputs.push(quote!(#run::Output<#ty, #dialect>));
+                    outputs.push(output);
                     names.push(name);
                 }
                 Step::Savepoint(_, steps) => {

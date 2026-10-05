@@ -99,6 +99,10 @@ where
     Ok(sqlx::query_as_with(sqlx::SqlStr::from_static(S::SQL), args))
 }
 
+#[diagnostic::on_unimplemented(
+    message = "`{Self}` has no row type",
+    note = "give it `row = Type` or named fields to read one row with `as one` or `as optional`"
+)]
 pub trait Rows: Statement {
     type Row;
 }

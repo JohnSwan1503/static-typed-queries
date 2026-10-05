@@ -104,9 +104,29 @@ mod lite {
 
     #[transaction(Sqlite, steps(savepoint(Double, savepoint(AddItem)), Stock))]
     pub struct Nested;
+
+    #[query(Sqlite, sql = "SELECT id, price FROM {Items} WHERE id = {id: i64}")]
+    #[derive(Debug, PartialEq)]
+    pub struct ItemById {
+        pub id: i64,
+        pub price: i64,
+    }
+
+    #[query(
+        Sqlite,
+        sql = "SELECT id, price FROM {Items} WHERE price < {_: i64} ORDER BY price LIMIT 1"
+    )]
+    #[derive(Debug, PartialEq)]
+    pub struct Cheapest {
+        pub id: i64,
+        pub price: i64,
+    }
+
+    #[transaction(Sqlite, steps(Double, ItemById as one, Cheapest as optional))]
+    pub struct Lookup;
 }
 
-use lite::{Bump, Careful, Nested, Note, Restock, Stock};
+use lite::{Bump, Careful, Cheapest, ItemById, Lookup, Nested, Note, Restock, Stock};
 use sqlx::{Connection, SqliteConnection};
 
 async fn connect() -> sqlx::Result<SqliteConnection> {
@@ -257,5 +277,38 @@ async fn savepoints_nest() -> sqlx::Result<()> {
         stock,
         [Stock { id: 1, price: 5 }, Stock { id: 2, price: 40 }]
     );
+    Ok(())
+}
+
+async fn lookup(
+    conn: &mut SqliteConnection,
+    id: i64,
+    below: i64,
+) -> sqlx::Result<(u64, ItemById, Option<Cheapest>)> {
+    Lookup::builder()
+        .double()
+        .price(10)
+        .item_by_id()
+        .id(id)
+        .cheapest()
+        .price(below)
+        .with(Bump::builder().name("runs".to_owned()))
+        .with(Note::builder().note("lookup".to_owned()))
+        .run(conn)
+        .await
+}
+
+#[tokio::test]
+async fn steps_can_read_one_row_or_an_optional_row() -> sqlx::Result<()> {
+    let mut conn = connect().await?;
+    let (_, item, cheapest) = lookup(&mut conn, 2, 10).await?;
+    assert_eq!(item, ItemById { id: 2, price: 40 });
+    assert_eq!(cheapest, Some(Cheapest { id: 1, price: 5 }));
+
+    let (_, _, none) = lookup(&mut connect().await?, 1, 1).await?;
+    assert_eq!(none, None);
+
+    let error = lookup(&mut conn, 9, 10).await.unwrap_err();
+    assert!(matches!(error, sqlx::Error::RowNotFound), "{error}");
     Ok(())
 }

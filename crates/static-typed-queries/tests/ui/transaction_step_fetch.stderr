@@ -1,0 +1,23 @@
+error: expected `one` or `optional`
+  --> tests/ui/transaction_step_fetch.rs:12:40
+   |
+12 | #[transaction(Postgres, steps(Purge as many))]
+   |                                        ^^^^
+
+error[E0277]: `Purge` has no row type
+ --> tests/ui/transaction_step_fetch.rs:9:31
+  |
+9 | #[transaction(Postgres, steps(Purge as one))]
+  |                               ^^^^^ unsatisfied trait bound
+  |
+help: the trait `Rows` is not implemented for `Purge`
+ --> tests/ui/transaction_step_fetch.rs:7:1
+  |
+7 | pub struct Purge;
+  | ^^^^^^^^^^^^^^^^
+  = note: give it `row = Type` or named fields to read one row with `as one` or `as optional`
+note: required by a bound in `static_typed_queries::__private::statement::run::rows`
+ --> $WORKSPACE/crates/static-typed-queries-core/src/statement/run.rs
+  |
+  | pub const fn rows<S: Rows>() {}
+  |                      ^^^^ required by this bound in `rows`

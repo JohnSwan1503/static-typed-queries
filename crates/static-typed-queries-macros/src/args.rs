@@ -60,15 +60,22 @@ impl Parse for Sql {
     }
 }
 
+#[derive(Clone, Copy)]
+pub(crate) enum Fetch {
+    Default,
+    One,
+    Optional,
+}
+
 pub(crate) enum Step {
-    Run(Type),
+    Run(Type, Fetch),
     Savepoint(Ident, Vec<Step>),
 }
 
 impl Step {
     pub(crate) fn span(&self) -> Span {
         match self {
-            Step::Run(ty) => ty.span(),
+            Step::Run(ty, _) => ty.span(),
             Step::Savepoint(keyword, _) => keyword.span(),
         }
     }
@@ -76,7 +83,7 @@ impl Step {
     pub(crate) fn flatten<'a>(steps: &'a [Step], out: &mut Vec<&'a Type>) {
         for step in steps {
             match step {
-                Step::Run(ty) => out.push(ty),
+                Step::Run(ty, _) => out.push(ty),
                 Step::Savepoint(_, steps) => Step::flatten(steps, out),
             }
         }
@@ -104,7 +111,22 @@ impl Parse for Step {
                 return Ok(Step::Savepoint(keyword, steps));
             }
         }
-        Ok(Step::Run(input.parse()?))
+        let ty = input.parse()?;
+        if input.parse::<Option<Token![as]>>()?.is_none() {
+            return Ok(Step::Run(ty, Fetch::Default));
+        }
+        let fetch: Ident = input.parse()?;
+        let fetch = match fetch.to_string().as_str() {
+            "one" => Fetch::One,
+            "optional" => Fetch::Optional,
+            _ => {
+                return Err(syn::Error::new(
+                    fetch.span(),
+                    "expected `one` or `optional`",
+                ));
+            }
+        };
+        Ok(Step::Run(ty, fetch))
     }
 }
 
