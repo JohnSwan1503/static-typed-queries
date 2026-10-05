@@ -1,5 +1,6 @@
 use proc_macro2::TokenStream;
-use quote::{format_ident, quote};
+use quote::{format_ident, quote, quote_spanned};
+use syn::spanned::Spanned;
 use syn::{Ident, ItemStruct, LitBool, Type, WherePredicate, parse_quote};
 
 use crate::emit::run::{Rows, rows};
@@ -27,8 +28,9 @@ pub(crate) fn embeds(
     if item.generics.params.is_empty() {
         let check = |ty: &Type, valueless: bool| {
             let valueless = valueless.then(|| quote!(#krate::valueless::<#ty>();));
+            let written_for = quote_spanned!(ty.span()=> <#ty as #krate::Sql>::Dialect);
             quote! {
-                #krate::embeds::<#dialect, <#ty as #krate::Sql>::Dialect>();
+                #krate::embeds::<#dialect, #written_for>();
                 #krate::checked::<#ty>();
                 #valueless
             }

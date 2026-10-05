@@ -15,7 +15,7 @@ help: the trait `Rows` is not implemented for `Purge`
   |
 7 | pub struct Purge;
   | ^^^^^^^^^^^^^^^^
-  = note: give it `row = Type` or named fields to read one row with `as one` or `as optional`
+  = note: give it `row = Type` to read one row with `as one` or `as optional`
 note: required by a bound in `rows`
  --> $WORKSPACE/crates/static-typed-queries-core/src/statement/run.rs
   |
