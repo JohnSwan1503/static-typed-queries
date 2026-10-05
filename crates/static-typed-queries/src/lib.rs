@@ -1,3 +1,4 @@
+pub use static_typed_queries_core::builder::Build;
 pub use static_typed_queries_core::hooks::HookValues;
 pub use static_typed_queries_core::sql::Sql;
 pub use static_typed_queries_core::statement::hook::Hook;
@@ -15,6 +16,7 @@ pub use static_typed_queries_macros::__query_sql;
 pub use static_typed_queries_core::check;
 
 pub mod state {
+    pub use static_typed_queries_core::builder::{Built, Filled, Missing, Open};
     pub use static_typed_queries_core::hooks::{NoHooks, WithHooks};
 }
 
@@ -42,7 +44,9 @@ pub mod prelude {
     pub use crate::dialect::Postgres;
     #[cfg(feature = "sqlite")]
     pub use crate::dialect::Sqlite;
-    pub use crate::{Sql, Statement, Transaction, query, sql, statement, table, transaction};
+    pub use crate::{
+        Build, Sql, Statement, Transaction, query, sql, statement, table, transaction,
+    };
 }
 
 #[doc(hidden)]

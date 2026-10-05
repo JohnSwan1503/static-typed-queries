@@ -1,4 +1,5 @@
 pub(crate) mod bind;
+pub(crate) mod builder;
 pub(crate) mod checks;
 pub(crate) mod docs;
 pub(crate) mod fmt;

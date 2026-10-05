@@ -7,6 +7,7 @@ use syn::{
 
 use crate::args::{self, Keys, Sql};
 use crate::emit::bind::bind_impl;
+use crate::emit::builder::builder;
 use crate::emit::checks::{embeds, hook_needs, parse_test, step_impl, values};
 use crate::emit::docs::item_docs;
 use crate::emit::fmt::fmt;
@@ -200,6 +201,7 @@ pub(crate) fn expand(args: QueryArgs, mut input: ItemStruct) -> syn::Result<Toke
     let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
     let values = values(&input, !fields.is_empty());
     let bind = bind_impl(&input, &fields);
+    let (definitions, builder) = builder(&input, &fields);
     let parse_check = args.parse_check.as_ref().is_none_or(|check| check.value);
     let test = (input.generics.params.is_empty() && parse_check).then(|| parse_test(ident));
     let statement = input.generics.params.is_empty().then(|| {
@@ -239,6 +241,7 @@ pub(crate) fn expand(args: QueryArgs, mut input: ItemStruct) -> syn::Result<Toke
         #checked
         #hook_needs
         #bind
+        #builder
         #statement
         #step
         #fmt
@@ -246,6 +249,7 @@ pub(crate) fn expand(args: QueryArgs, mut input: ItemStruct) -> syn::Result<Toke
     });
     Ok(quote! {
         #documented
+        #definitions
         #test
         #impls
     })

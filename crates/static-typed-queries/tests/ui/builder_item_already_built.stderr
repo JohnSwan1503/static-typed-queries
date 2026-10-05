@@ -1,0 +1,10 @@
+error[E0599]: no method named `active` found for struct `CountBuilder<Built<ActiveUsers>>` in the current scope
+  --> tests/ui/builder_item_already_built.rs:18:49
+   |
+11 | #[query(Postgres, sql = "SELECT count(*) FROM {active}")]
+   | --------------------------------------------------------- method `active` not found for this struct
+...
+18 |     let _ = Count::builder().active().org_id(1).active();
+   |                                                 ^^^^^^ method not found in `CountBuilder<Built<ActiveUsers>>`
+   |
+   = note: the method was found for `CountBuilder<Open<__B>, __K>`

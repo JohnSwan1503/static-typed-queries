@@ -1,5 +1,5 @@
 use syn::ext::IdentExt;
-use syn::{Attribute, Fields, Ident, ItemStruct, Meta, Type};
+use syn::{Attribute, Fields, Ident, ItemStruct, Meta, Type, Visibility};
 
 use crate::args::Placement;
 
@@ -11,6 +11,8 @@ pub(crate) enum Kind {
 pub(crate) struct Field {
     pub(crate) ident: Ident,
     pub(crate) ty: Type,
+    pub(crate) vis: Visibility,
+    pub(crate) docs: Vec<Attribute>,
     pub(crate) kind: Kind,
 }
 
@@ -43,6 +45,8 @@ pub(crate) fn marked(input: &mut ItemStruct) -> syn::Result<Vec<Field>> {
         fields.push(Field {
             ident: field.ident.clone().expect("a named field"),
             ty: field.ty.clone(),
+            vis: field.vis.clone(),
+            docs: docs(&field.attrs),
             kind: match placement {
                 Some(placement) => Kind::Item(Some(placement)),
                 None => Kind::Value,
@@ -67,6 +71,8 @@ pub(crate) fn items(input: &mut ItemStruct) -> syn::Result<Vec<Field>> {
         fields.push(Field {
             ident: field.ident.clone().expect("a named field"),
             ty: field.ty.clone(),
+            vis: field.vis.clone(),
+            docs: docs(&field.attrs),
             kind: Kind::Item(None),
         });
     }
@@ -89,6 +95,27 @@ fn named(input: &mut ItemStruct) -> syn::Result<Vec<&mut syn::Field>> {
             None => Ok(Vec::new()),
         },
         Fields::Unit => Ok(Vec::new()),
+    }
+}
+
+fn docs(attrs: &[Attribute]) -> Vec<Attribute> {
+    attrs
+        .iter()
+        .filter(|attr| attr.path().is_ident("doc"))
+        .cloned()
+        .collect()
+}
+
+// The names of the fields that hold no value, which a built struct fills with `PhantomData`.
+pub(crate) fn phantoms(input: &ItemStruct) -> Vec<Ident> {
+    match &input.fields {
+        Fields::Named(fields) => fields
+            .named
+            .iter()
+            .filter(|field| is_phantom(&field.ty))
+            .filter_map(|field| field.ident.clone())
+            .collect(),
+        _ => Vec::new(),
     }
 }
 

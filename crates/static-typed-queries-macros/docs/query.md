@@ -1,6 +1,8 @@
 Turns a struct into a SQL statement that is checked, composed and rendered
 at compile time from a template. The struct's fields are the template's
-parameters, and a value of the struct holds their values.
+parameters, and a value of the struct holds their values. `Name::builder()`
+sets them one field at a time, and `build()` returns the struct once every
+field is set.
 
 ```
 use static_typed_queries::prelude::*;
@@ -24,15 +26,17 @@ assert_eq!(
     r#"SELECT id, email FROM "users" WHERE org_id = $1 AND email LIKE $2"#
 );
 
-let query = UsersByOrg {
-    org_id: 7,
-    pattern: "%@example.com".to_owned(),
-};
+let query = UsersByOrg::builder()
+    .org_id(7)
+    .pattern("%@example.com".to_owned())
+    .build();
 assert_eq!(query.org_id, 7);
 ```
 
-With a database feature enabled, `query.query()?` binds the values to the
-SQL as a `sqlx` query.
+The builder checks at compile time that each field is set exactly once.
+The struct literal, `UsersByOrg { org_id: 7, pattern: .. }`, is the same
+value. With a database feature enabled, `query.query()?` binds the values
+to the SQL as a `sqlx` query.
 
 # Arguments
 
@@ -120,11 +124,14 @@ assert_eq!(
     r#"WITH "org_users" AS (SELECT id FROM "users" WHERE org_id = $1) SELECT count(*) FROM "org_users""#
 );
 
-let size = OrgSize {
-    users: OrgUsers { org_id: 7 },
-};
+let size = OrgSize::builder().users().org_id(7).build();
 assert_eq!(size.users.org_id, 7);
 ```
+
+In the builder, a field that holds an item has a method that moves to the
+item's builder for one setter call, which then returns to the outermost
+builder, however deeply items nest. Here `.users()` moves to `OrgUsers`'
+builder, and `.org_id(7)` sets its field and returns to `OrgSize`'s.
 
 Some combinations are only rejected once the whole statement is rendered,
 such as a data-modifying CTE on a dialect that doesn't support one. Those
@@ -134,6 +141,14 @@ show up as compile errors on the outermost query.
 
 For `struct Name`, the macro implements `Sql` and generates:
 
+- `NameBuilder`, returned by `Name::builder()` from the `Build` trait.
+  Its methods follow its state: each field has a setter, named after it,
+  while it is unset, and each field that holds an item has a method that
+  moves to the item's builder while the item has fields left to set.
+  `build()` appears once everything is set and returns the struct. Each
+  setter has its field's visibility, so a struct with private fields is
+  built only where its literal could be written. A struct without fields
+  gets no builder struct.
 - A `Statement` impl and an inherent `Name::SQL` constant holding the
   rendered SQL, for non-generic queries.
 - With a database feature enabled, `query()` and `query_as::<T>()` on the
@@ -155,7 +170,8 @@ a field, which then holds the values of whatever it is instantiated with,
 or be embedded by type with `{T}` when it holds no values. A generic query
 isn't a `Statement` on its own; it is rendered as part of the queries that
 embed it, or named as a [`statement`]. It also can't take `display`,
-`debug` or `row`.
+`debug` or `row`. Its builder needs the item a field holds to implement
+`Build`, as every table and query does.
 
 ```
 # use static_typed_queries::prelude::*;

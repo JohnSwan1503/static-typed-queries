@@ -1,0 +1,10 @@
+error[E0599]: no method named `since` found for struct `SearchBuilder<Since<Filled>, Until<Missing>>` in the current scope
+  --> tests/ui/builder_set_twice.rs:13:40
+   |
+ 6 | #[query(Postgres, sql = "SELECT id FROM {Orders} WHERE created_at BETWEEN {since} AND {until}")]
+   | ------------------------------------------------------------------------------------------------ method `since` not found for this struct
+...
+13 |     let _ = Search::builder().since(1).since(2);
+   |                                        ^^^^^ method not found in `SearchBuilder<Since<Filled>, Until<Missing>>`
+   |
+   = note: the method was found for `SearchBuilder<Since<Missing>, ParamUntil, __K>`

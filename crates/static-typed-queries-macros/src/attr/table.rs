@@ -4,6 +4,7 @@ use syn::parse::{Parse, ParseStream};
 use syn::{Fields, Ident, ItemStruct, LitStr, Type, parse_quote};
 
 use crate::args::{self, Keys};
+use crate::emit::builder::builder;
 use crate::emit::checks::{embeds, hook_needs, step_impl, values};
 use crate::emit::docs::{self, item_docs};
 use crate::emit::fmt::fmt;
@@ -115,6 +116,7 @@ pub(crate) fn expand(args: TableArgs, input: ItemStruct) -> syn::Result<TokenStr
         parse_quote!(__V: #krate::Provides<#hook, #index>)
     });
     let values = values(&input, false);
+    let (_, built) = builder(&input, &[]);
     let step = step_impl(&input, None);
     let fmt = fmt(args.display.as_ref(), args.debug.as_ref(), &input, false)?;
     let mut documented = input.clone();
@@ -134,6 +136,7 @@ pub(crate) fn expand(args: TableArgs, input: ItemStruct) -> syn::Result<TokenStr
 
         #check
         #values
+        #built
         #checked
         #hook_needs
         #step

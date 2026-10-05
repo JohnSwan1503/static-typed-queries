@@ -1,0 +1,10 @@
+error[E0599]: no method named `build` found for struct `CountBuilder<Open<ActiveUsersBuilder<OrgId<Missing>>>>` in the current scope
+  --> tests/ui/builder_nested_incomplete.rs:18:30
+   |
+11 | #[query(Postgres, sql = "SELECT count(*) FROM {active}")]
+   | --------------------------------------------------------- method `build` not found for this struct
+...
+18 |     let _ = Count::builder().build();
+   |                              ^^^^^ method not found in `CountBuilder<Open<ActiveUsersBuilder<OrgId<Missing>>>>`
+   |
+   = note: the method was found for `CountBuilder<Built<ActiveUsers>>`
