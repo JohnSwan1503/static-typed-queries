@@ -98,9 +98,15 @@ mod lite {
 
     #[transaction(Sqlite, steps(Double, AddItem, Stock))]
     pub struct Restock;
+
+    #[transaction(Sqlite, steps(Double, savepoint(AddItem, Double), Stock))]
+    pub struct Careful;
+
+    #[transaction(Sqlite, steps(savepoint(Double, savepoint(AddItem)), Stock))]
+    pub struct Nested;
 }
 
-use lite::{Bump, Note, Restock, Stock};
+use lite::{Bump, Careful, Nested, Note, Restock, Stock};
 use sqlx::{Connection, SqliteConnection};
 
 async fn connect() -> sqlx::Result<SqliteConnection> {
@@ -179,4 +185,77 @@ async fn a_failing_step_rolls_back_every_step() -> sqlx::Result<()> {
 fn runs_are_send() {
     fn send<T: Send>(_: T) {}
     let _ = |conn: &mut SqliteConnection| send(restock(conn, 3, "send"));
+}
+
+async fn careful(
+    conn: &mut SqliteConnection,
+    id: i64,
+) -> sqlx::Result<(u64, sqlx::Result<(u64, u64)>, Vec<Stock>)> {
+    Careful::builder()
+        .double()
+        .price(10)
+        .add_item()
+        .id(id)
+        .add_item()
+        .price(30)
+        .with(Bump::builder().name("runs".to_owned()))
+        .with(Note::builder().note("careful".to_owned()))
+        .run(conn)
+        .await
+}
+
+#[tokio::test]
+async fn a_savepoint_commits_with_the_transaction() -> sqlx::Result<()> {
+    let mut conn = connect().await?;
+    let (doubled, group, stock) = careful(&mut conn, 3).await?;
+    assert_eq!(doubled, 1);
+    assert_eq!(group?, (1, 2));
+    assert_eq!(
+        stock,
+        [
+            Stock { id: 1, price: 5 },
+            Stock { id: 2, price: 80 },
+            Stock { id: 3, price: 60 },
+        ]
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_failing_savepoint_rolls_back_only_its_steps() -> sqlx::Result<()> {
+    let mut conn = connect().await?;
+    let (doubled, group, stock) = careful(&mut conn, 1).await?;
+    assert_eq!(doubled, 1);
+    let error = group.unwrap_err();
+    assert!(error.to_string().contains("UNIQUE"), "{error}");
+    assert_eq!(
+        stock,
+        [Stock { id: 1, price: 5 }, Stock { id: 2, price: 40 }]
+    );
+    assert_eq!(hooks(&mut conn).await?, (1, vec!["careful".to_owned()]));
+    Ok(())
+}
+
+#[tokio::test]
+async fn savepoints_nest() -> sqlx::Result<()> {
+    let mut conn = connect().await?;
+    let (outer, stock) = Nested::builder()
+        .double()
+        .price(10)
+        .add_item()
+        .id(1)
+        .add_item()
+        .price(1)
+        .with(Bump::builder().name("runs".to_owned()))
+        .with(Note::builder().note("nested".to_owned()))
+        .run(&mut conn)
+        .await?;
+    let (doubled, inner) = outer?;
+    assert_eq!(doubled, 1);
+    assert!(inner.is_err());
+    assert_eq!(
+        stock,
+        [Stock { id: 1, price: 5 }, Stock { id: 2, price: 40 }]
+    );
+    Ok(())
 }

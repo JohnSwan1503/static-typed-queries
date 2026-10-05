@@ -19,3 +19,9 @@ error: transactions take only `steps(...)`, not `sql`
    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    |
    = note: this error originates in the attribute macro `transaction` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error: a savepoint needs at least one step
+  --> tests/ui/transaction_arguments.rs:15:36
+   |
+15 | #[transaction(Postgres, steps(One, savepoint()))]
+   |                                    ^^^^^^^^^

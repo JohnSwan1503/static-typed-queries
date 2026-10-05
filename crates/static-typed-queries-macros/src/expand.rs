@@ -8,7 +8,7 @@ use syn::{
 };
 
 use crate::analyze::{self, Analysis, Columns, Engine, Kind};
-use crate::args::{Args, NamedQuery, Placement, Sql};
+use crate::args::{Args, NamedQuery, Placement, Sql, Step};
 use crate::docs;
 use crate::naming::{camel, field_name, short_name, snake_case, to_ident, unique};
 use crate::template::{self, Segment, Template};
@@ -162,8 +162,8 @@ fn hooks(types: Option<&[Type]>) -> syn::Result<Vec<Type>> {
 
 fn no_steps(args: &Args) -> syn::Result<()> {
     match args.steps.iter().flatten().next() {
-        Some(ty) => Err(syn::Error::new_spanned(
-            ty,
+        Some(step) => Err(syn::Error::new(
+            step.span(),
             "only transactions take `steps`",
         )),
         None => Ok(()),
@@ -799,8 +799,10 @@ pub(crate) fn transaction(args: Args, item: ItemStruct) -> syn::Result<TokenStre
     };
     let ident = &item.ident;
     let dialect = &args.dialect;
+    let mut flat = Vec::new();
+    Step::flatten(steps, &mut flat);
     let mut items = Vec::new();
-    for step in steps {
+    for step in &flat {
         add_item(step, &item.generics, &[], &mut items);
     }
     let fields: Vec<Type> = items.iter().map(|(ty, _)| ty.clone()).collect();
@@ -820,7 +822,7 @@ pub(crate) fn transaction(args: Args, item: ItemStruct) -> syn::Result<TokenStre
     let mut params = Params::new(&template, &analysis, &items, &item, &source)?;
     params.runs = false;
     params.steps = Some(steps);
-    let parts = steps
+    let parts = flat
         .iter()
         .map(|step| quote!(#krate::part::expr::Expr::part(<#step as #krate::sql::Sql>::NODE)))
         .collect();
@@ -834,7 +836,7 @@ pub(crate) fn transaction(args: Args, item: ItemStruct) -> syn::Result<TokenStre
         [&[], &[]],
     );
     let mut referenced: Vec<&Type> = Vec::new();
-    for step in steps {
+    for step in flat {
         if !referenced
             .iter()
             .any(|other| type_key(other) == type_key(step))
@@ -1167,7 +1169,7 @@ enum Source<'a> {
     Template(&'a LitStr),
     Statement(&'a Type),
     Table(&'a [Type], &'a [Type]),
-    Transaction(&'a [Type]),
+    Transaction(&'a [Step]),
 }
 
 struct Params<'a> {
@@ -1178,7 +1180,7 @@ struct Params<'a> {
     children: Vec<Child>,
     synthetic: bool,
     runs: bool,
-    steps: Option<&'a [Type]>,
+    steps: Option<&'a [Step]>,
 }
 
 impl<'a> Params<'a> {
@@ -1382,13 +1384,10 @@ impl<'a> Params<'a> {
             Source::Statement(target) => {
                 lines.push(format!("Runs {} as a statement.", self.link(target)))
             }
-            Source::Transaction(steps) => {
-                let links: Vec<String> = steps.iter().map(|ty| self.link(ty)).collect();
-                lines.push(format!(
-                    "Runs {} in one transaction, in this order.",
-                    links.join(", ")
-                ));
-            }
+            Source::Transaction(steps) => lines.push(format!(
+                "Runs {} in one transaction, in this order.",
+                self.describe_steps(steps)
+            )),
             Source::Table(before, after) => {
                 let list = |hooks: &[Type]| {
                     let links: Vec<String> = hooks.iter().map(|ty| self.link(ty)).collect();
@@ -1721,9 +1720,86 @@ impl<'a> Params<'a> {
             .collect()
     }
 
+    fn describe_steps(&self, steps: &[Step]) -> String {
+        let steps: Vec<String> = steps
+            .iter()
+            .map(|step| match step {
+                Step::Run(ty) => self.link(ty),
+                Step::Savepoint(_, steps) => format!("savepoint({})", self.describe_steps(steps)),
+            })
+            .collect();
+        steps.join(", ")
+    }
+
+    fn run_steps(
+        &self,
+        steps: &[Step],
+        dialect: &Type,
+        conn: &Ident,
+        counts: &mut (usize, usize),
+    ) -> (Vec<TokenStream>, Vec<Ident>, Vec<TokenStream>) {
+        let krate = krate();
+        let ident = &self.item.ident;
+        let run = quote!(#krate::statement::run);
+        let sqlx = quote!(#krate::__private::sqlx);
+        let mut statements = Vec::new();
+        let mut names = Vec::new();
+        let mut outputs = Vec::new();
+        for step in steps {
+            match step {
+                Step::Run(ty) => {
+                    let name = format_ident!("__step{}", counts.0);
+                    let index = Literal::usize_unsuffixed(counts.0);
+                    counts.0 += 1;
+                    statements.push(quote! {
+                        let #name = #run::step::<#dialect, <#ty as #run::Step>::Fetch, _>(
+                            &params,
+                            &<#ident as #krate::transaction::Transaction>::STEPS[#index],
+                            &mut #conn,
+                        )
+                        .await?;
+                    });
+                    outputs.push(quote!(#run::Output<#ty, #dialect>));
+                    names.push(name);
+                }
+                Step::Savepoint(_, steps) => {
+                    let name = format_ident!("__group{}", counts.1);
+                    let savepoint = format_ident!("__savepoint{}", counts.1);
+                    counts.1 += 1;
+                    let (inner, inner_names, inner_outputs) =
+                        self.run_steps(steps, dialect, &savepoint, counts);
+                    statements.push(quote! {
+                        let #name = {
+                            let mut #savepoint = #sqlx::Acquire::begin(&mut #conn).await?;
+                            let result = async {
+                                #(#inner)*
+                                ::core::result::Result::Ok::<_, #sqlx::Error>((#(#inner_names,)*))
+                            }
+                            .await;
+                            match result {
+                                ::core::result::Result::Ok(output) => {
+                                    #savepoint.commit().await?;
+                                    ::core::result::Result::Ok(output)
+                                }
+                                ::core::result::Result::Err(error) => {
+                                    #savepoint.rollback().await?;
+                                    ::core::result::Result::Err(error)
+                                }
+                            }
+                        };
+                    });
+                    outputs
+                        .push(quote!(::core::result::Result<(#(#inner_outputs,)*), #sqlx::Error>));
+                    names.push(name);
+                }
+            }
+        }
+        (statements, names, outputs)
+    }
+
     fn transaction_run(
         &self,
-        steps: &[Type],
+        steps: &[Step],
         dialect: &Type,
         complete: &TokenStream,
         finish: &TokenStream,
@@ -1735,27 +1811,8 @@ impl<'a> Params<'a> {
         let driver = quote!(#krate::dialect::driver);
         let sqlx = quote!(#krate::__private::sqlx);
         let transaction = quote!(<#ident as #krate::transaction::Transaction>);
-        let outputs = steps
-            .iter()
-            .map(|step| quote!(#run::Output<#step, #dialect>));
-        let names: Vec<Ident> = (0..steps.len())
-            .map(|i| format_ident!("__step{i}"))
-            .collect();
-        let runs = steps
-            .iter()
-            .zip(&names)
-            .enumerate()
-            .map(|(i, (step, name))| {
-                let i = Literal::usize_unsuffixed(i);
-                quote! {
-                    let #name = #run::step::<#dialect, <#step as #run::Step>::Fetch, _>(
-                        &params,
-                        &#transaction::STEPS[#i],
-                        &mut tx,
-                    )
-                    .await?;
-                }
-            });
+        let tx = format_ident!("tx");
+        let (runs, names, outputs) = self.run_steps(steps, dialect, &tx, &mut (0, 0));
         let generics = self.generics(&[quote!(__H), quote!(__V)]);
         let (impl_generics, _, where_clause) = generics.split_for_impl();
         quote! {

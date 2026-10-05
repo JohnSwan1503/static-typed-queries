@@ -12,4 +12,7 @@ pub struct Empty;
 #[transaction(Postgres, sql = "SELECT 1", steps(One))]
 pub struct WithSql;
 
+#[transaction(Postgres, steps(One, savepoint()))]
+pub struct EmptySavepoint;
+
 fn main() {}

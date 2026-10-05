@@ -476,9 +476,14 @@ pub fn sql(args: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// The complete builder's `run(conn)` takes anything that implements
 /// `sqlx::Acquire`, runs the steps in order in one transaction and commits
-/// them together. If a step fails, every step rolls back. It returns a tuple
-/// with one element per step: a `Vec` of the step's row type when it has one,
-/// and otherwise the number of rows the step affected.
+/// them together. If a step outside a savepoint fails, every step rolls back.
+/// It returns a tuple with one element per step: a `Vec` of the step's row
+/// type when it has one, and otherwise the number of rows the step affected.
+///
+/// `savepoint(A, B)` among the steps runs a group in a nested transaction. If
+/// one of its steps fails, only the group rolls back, and the steps after it
+/// still run and commit. The group's element in the output is a `Result`
+/// holding a tuple of its steps' outputs, or the error. Savepoints can nest.
 ///
 /// The hooks of the tables the steps use run once for the whole transaction,
 /// `before` hooks ahead of the first step and `after` hooks after the last,

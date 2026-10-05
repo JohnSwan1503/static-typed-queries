@@ -60,6 +60,54 @@ impl Parse for Sql {
     }
 }
 
+pub(crate) enum Step {
+    Run(Type),
+    Savepoint(Ident, Vec<Step>),
+}
+
+impl Step {
+    pub(crate) fn span(&self) -> Span {
+        match self {
+            Step::Run(ty) => ty.span(),
+            Step::Savepoint(keyword, _) => keyword.span(),
+        }
+    }
+
+    pub(crate) fn flatten<'a>(steps: &'a [Step], out: &mut Vec<&'a Type>) {
+        for step in steps {
+            match step {
+                Step::Run(ty) => out.push(ty),
+                Step::Savepoint(_, steps) => Step::flatten(steps, out),
+            }
+        }
+    }
+}
+
+impl Parse for Step {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        if input.peek(Ident) && input.peek2(syn::token::Paren) {
+            let keyword: Ident = input.fork().parse()?;
+            if keyword == "savepoint" {
+                input.parse::<Ident>()?;
+                let content;
+                parenthesized!(content in input);
+                let steps: Vec<Step> = content
+                    .parse_terminated(Step::parse, Token![,])?
+                    .into_iter()
+                    .collect();
+                if steps.is_empty() {
+                    return Err(syn::Error::new(
+                        keyword.span(),
+                        "a savepoint needs at least one step",
+                    ));
+                }
+                return Ok(Step::Savepoint(keyword, steps));
+            }
+        }
+        Ok(Step::Run(input.parse()?))
+    }
+}
+
 pub(crate) struct Args {
     pub dialect: Type,
     pub sql: Option<Sql>,
@@ -74,7 +122,7 @@ pub(crate) struct Args {
     pub row: Option<Type>,
     pub before: Option<Vec<Type>>,
     pub after: Option<Vec<Type>>,
-    pub steps: Option<Vec<Type>>,
+    pub steps: Option<Vec<Step>>,
     to_add: ToAdd,
 }
 
@@ -269,7 +317,7 @@ impl Parse for Args {
                 )?,
                 key_str @ "steps" => set(
                     &mut args.steps,
-                    types(input)?,
+                    steps(input)?,
                     &key,
                     &mut args.to_add,
                     key_str,
@@ -300,6 +348,16 @@ impl Parse for NamedQuery {
             item: input.parse()?,
         })
     }
+}
+
+fn steps(input: ParseStream) -> syn::Result<Vec<Step>> {
+    input.parse::<Ident>()?;
+    let content;
+    parenthesized!(content in input);
+    Ok(content
+        .parse_terminated(Step::parse, Token![,])?
+        .into_iter()
+        .collect())
 }
 
 fn types(input: ParseStream) -> syn::Result<Vec<Type>> {
