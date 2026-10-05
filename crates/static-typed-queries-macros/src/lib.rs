@@ -437,3 +437,54 @@ pub fn sql(args: TokenStream, item: TokenStream) -> TokenStream {
         .unwrap_or_else(|error| error.to_compile_error())
         .into()
 }
+
+/// Turns a struct into a transaction: statements, its steps, that run in
+/// order and commit together.
+///
+/// ```
+/// use std::marker::PhantomData;
+///
+/// use static_typed_queries::prelude::*;
+///
+/// #[table(Postgres, name = "orders")]
+/// pub struct Orders;
+///
+/// #[query(Postgres, sql = "DELETE FROM {Orders} WHERE created_at < {before: i64}")]
+/// pub struct Archive;
+///
+/// #[query(T::Dialect, sql = "SELECT count(*) FROM {T}")]
+/// pub struct CountOf<T: Sql>(PhantomData<T>);
+///
+/// #[transaction(Postgres, steps(Archive, CountOf<Orders>))]
+/// pub struct Nightly;
+///
+/// assert_eq!(
+///     Nightly::STEPS[0].sql(),
+///     r#"DELETE FROM "orders" WHERE created_at < $1"#
+/// );
+/// assert_eq!(Nightly::STEPS[1].sql(), r#"SELECT count(*) FROM "orders""#);
+/// let params = Nightly::builder().archive().before(1).build();
+/// assert_eq!(params.archive.before, 1);
+/// ```
+///
+/// The first argument is the dialect, followed by `steps(Type, ...)`: the
+/// statements to run, in order. A step is a [`query`], a [`statement`], or an
+/// instantiation of a generic query such as `CountOf<Orders>`.
+///
+/// ## Generated items
+///
+/// The struct implements `Sql`, `Build` and `Transaction`, whose `STEPS`
+/// holds each step's SQL and binds. Like a query, the transaction lists its
+/// step types once as its items, along with the types in their type
+/// arguments. A step listed twice shares its values, and the type arguments
+/// of a generic step get theirs from the transaction. `NameParams` and
+/// `NameBuilder` work as for [`query`]. The struct can't be generic or have
+/// fields.
+#[proc_macro_attribute]
+pub fn transaction(args: TokenStream, item: TokenStream) -> TokenStream {
+    let args = parse_macro_input!(args as args::Args);
+    let item = parse_macro_input!(item as ItemStruct);
+    expand::transaction(args, item)
+        .unwrap_or_else(|error| error.to_compile_error())
+        .into()
+}

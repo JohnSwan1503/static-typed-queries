@@ -74,6 +74,7 @@ pub(crate) struct Args {
     pub row: Option<Type>,
     pub before: Option<Vec<Type>>,
     pub after: Option<Vec<Type>>,
+    pub steps: Option<Vec<Type>>,
     to_add: ToAdd,
 }
 
@@ -93,6 +94,7 @@ impl ToAdd {
             "row" => &[10],
             "before" => &[11],
             "after" => &[12],
+            "steps" => &[13],
             _ => return,
         };
         for &idx in slots {
@@ -120,8 +122,9 @@ impl Default for ToAdd {
                 Some("row"),
                 Some("before"),
                 Some("after"),
+                Some("steps"),
             ],
-            13,
+            14,
         )
     }
 }
@@ -170,6 +173,7 @@ impl Parse for Args {
             row: None,
             before: None,
             after: None,
+            steps: None,
             to_add: ToAdd::default(),
         };
         while !input.is_empty() {
@@ -258,6 +262,13 @@ impl Parse for Args {
                 )?,
                 key_str @ "after" => set(
                     &mut args.after,
+                    types(input)?,
+                    &key,
+                    &mut args.to_add,
+                    key_str,
+                )?,
+                key_str @ "steps" => set(
+                    &mut args.steps,
                     types(input)?,
                     &key,
                     &mut args.to_add,

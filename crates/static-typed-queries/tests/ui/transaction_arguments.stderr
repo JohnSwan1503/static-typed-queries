@@ -1,0 +1,21 @@
+error: only transactions take `steps`
+ --> tests/ui/transaction_arguments.rs:6:25
+  |
+6 | #[query(Postgres, steps(Orders), sql = "SELECT 1")]
+  |                         ^^^^^^
+
+error: transactions need `steps(Type, ...)`
+ --> tests/ui/transaction_arguments.rs:9:1
+  |
+9 | #[transaction(Postgres)]
+  | ^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: this error originates in the attribute macro `transaction` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error: transactions take only `steps(...)`, not `sql`
+  --> tests/ui/transaction_arguments.rs:12:1
+   |
+12 | #[transaction(Postgres, sql = "SELECT 1", steps(One))]
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: this error originates in the attribute macro `transaction` (in Nightly builds, run with -Z macro-backtrace for more info)

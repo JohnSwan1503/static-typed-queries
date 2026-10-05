@@ -80,6 +80,7 @@ pub(crate) fn table(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
         }
         parts.push(quote!(#krate::part::ident::Ident::part(#segment)));
     }
+    no_steps(&args)?;
     let before = hooks(args.before.as_deref())?;
     let after = hooks(args.after.as_deref())?;
     let template = Template {
@@ -157,6 +158,16 @@ fn hooks(types: Option<&[Type]>) -> syn::Result<Vec<Type>> {
     Ok(hooks)
 }
 
+fn no_steps(args: &Args) -> syn::Result<()> {
+    match args.steps.iter().flatten().next() {
+        Some(ty) => Err(syn::Error::new_spanned(
+            ty,
+            "only transactions take `steps`",
+        )),
+        None => Ok(()),
+    }
+}
+
 fn no_hooks(args: &Args) -> syn::Result<()> {
     match args.before.iter().chain(&args.after).flatten().next() {
         Some(ty) => Err(syn::Error::new_spanned(
@@ -203,6 +214,7 @@ pub(crate) fn query(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
     };
     let track = file.as_ref().map(|(_, track)| track);
     no_hooks(&args)?;
+    no_steps(&args)?;
     let template = template::parse(sql)?;
     let engine = Engine::of(&args.dialect, args.grammar.as_ref(), &item.generics)?;
     let analysis = analyze::analyze(&template, engine, sql)?;
@@ -631,6 +643,7 @@ pub(crate) fn statement(args: Args, item: ItemStruct) -> syn::Result<TokenStream
         }
     }
     no_hooks(&args)?;
+    no_steps(&args)?;
     if !item.generics.params.is_empty() {
         return Err(syn::Error::new_spanned(
             &item.generics,
@@ -732,6 +745,126 @@ pub(crate) fn statement(args: Args, item: ItemStruct) -> syn::Result<TokenStream
 
         #test
         #fmt
+    })
+}
+
+pub(crate) fn transaction(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
+    let krate = krate();
+    for (present, name) in [
+        (args.sql.is_some(), "sql"),
+        (args.sql_file.is_some(), "sql_file"),
+        (args.name.is_some(), "name"),
+        (args.placement.is_some(), "cte` or `subquery"),
+        (args.display.is_some(), "display"),
+        (args.debug.is_some(), "debug"),
+        (args.parse_check.is_some(), "parse_check"),
+        (args.separate.is_some(), "separate"),
+        (args.grammar.is_some(), "grammar"),
+        (args.row.is_some(), "row"),
+    ] {
+        if present {
+            return Err(syn::Error::new(
+                Span::call_site(),
+                format!("transactions take only `steps(...)`, not `{name}`"),
+            ));
+        }
+    }
+    no_hooks(&args)?;
+    if !item.generics.params.is_empty() {
+        return Err(syn::Error::new_spanned(
+            &item.generics,
+            "transactions can't be generic",
+        ));
+    }
+    if !matches!(item.fields, Fields::Unit) {
+        return Err(syn::Error::new_spanned(
+            &item.fields,
+            "transactions can't have fields; each step returns its own rows",
+        ));
+    }
+    let steps = match &args.steps {
+        Some(steps) if !steps.is_empty() => steps,
+        _ => {
+            return Err(syn::Error::new(
+                Span::call_site(),
+                "transactions need `steps(Type, ...)`",
+            ));
+        }
+    };
+    let ident = &item.ident;
+    let dialect = &args.dialect;
+    let mut items = Vec::new();
+    for step in steps {
+        add_item(step, &item.generics, &[], &mut items);
+    }
+    let fields: Vec<Type> = items.iter().map(|(ty, _)| ty.clone()).collect();
+    let template = Template {
+        segments: Vec::new(),
+        params: Vec::new(),
+        children: Vec::new(),
+    };
+    let analysis = Analysis {
+        kind: Kind::Query,
+        returns_rows: false,
+        columns: Columns::default(),
+        refs: Vec::new(),
+        names: Vec::new(),
+    };
+    let source = LitStr::new(&ident.to_string(), Span::call_site());
+    let mut params = Params::new(&template, &analysis, &items, &item, &source)?;
+    params.runs = false;
+    let parts = steps
+        .iter()
+        .map(|step| quote!(#krate::part::expr::Expr::part(<#step as #krate::sql::Sql>::NODE)))
+        .collect();
+    let node = node(
+        &snake_case(&ident.to_string()),
+        fingerprint(ident, &item),
+        quote!(Transaction),
+        quote!(#krate::node::inject::Inject::Subquery),
+        parts,
+        &fields,
+        [&[], &[]],
+    );
+    let mut referenced: Vec<&Type> = Vec::new();
+    for step in steps {
+        if !referenced
+            .iter()
+            .any(|other| type_key(other) == type_key(step))
+        {
+            referenced.push(step);
+        }
+    }
+    let needs: Vec<TokenStream> = referenced.iter().map(|ty| quote!(#ty)).collect();
+    let hook_needs = hook_needs(&item, &needs, quote!(#krate::builder::HookNeeds));
+    let embed_checks = embeds(&item, &fields, dialect);
+    let params_ty = params.ty();
+    let params_struct = params.definition();
+    let derives = params.derives();
+    let bind_params = params.bind_impl();
+    let builder = params.builder(dialect, None);
+    let mut documented = item.clone();
+    documented
+        .attrs
+        .extend(params.item_docs(Source::Transaction(steps)));
+    Ok(quote! {
+        #documented
+
+        #params_struct
+        #derives
+
+        impl #krate::sql::Sql for #ident {
+            type Dialect = #dialect;
+            type Params = #params_ty;
+            const NODE: &'static #krate::node::Node = #node;
+        }
+
+        #embed_checks
+        #hook_needs
+        #bind_params
+        #builder
+
+        #krate::impl_transaction!(#ident);
     })
 }
 
@@ -1009,6 +1142,7 @@ enum Source<'a> {
     Template(&'a LitStr),
     Statement(&'a Type),
     Table(&'a [Type], &'a [Type]),
+    Transaction(&'a [Type]),
 }
 
 struct Params<'a> {
@@ -1220,6 +1354,13 @@ impl<'a> Params<'a> {
             }
             Source::Statement(target) => {
                 lines.push(format!("Runs {} as a statement.", self.link(target)))
+            }
+            Source::Transaction(steps) => {
+                let links: Vec<String> = steps.iter().map(|ty| self.link(ty)).collect();
+                lines.push(format!(
+                    "Runs {} in one transaction, in this order.",
+                    links.join(", ")
+                ));
             }
             Source::Table(before, after) => {
                 let list = |hooks: &[Type]| {
