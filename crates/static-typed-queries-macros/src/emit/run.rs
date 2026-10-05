@@ -153,13 +153,14 @@ fn statement_api(dialect: &Type, row: Option<&Type>, receiver: &Receiver) -> Tok
             #krate::query_as::<#subject, O, __I>(#statement)
         }
 
-        /// Gives the values of a hook with parameters. Each hook takes its values once and runs once.
-        pub fn with<__H, __G, __I>(
+        /// Gives the values of a hook with parameters, as a value of the hook or its complete builder. Each hook takes its values once and runs once.
+        pub fn with<__B, __H, __G, __I>(
             self,
-            values: __H,
+            values: __B,
         ) -> #krate::With<#subject, (#krate::HookValues<__H>, ())>
         where
             #subject: #krate::Hooked<__G>,
+            __B: #krate::Finish<Output = __H>,
             __H: #krate::Values,
             (#krate::HookValues<__H>, ()): #krate::Provides<__H, __I>,
         {
@@ -241,12 +242,13 @@ fn transaction_api(dialect: &Type, output: &TokenStream, receiver: &Receiver) ->
     let subject = receiver.subject();
     let owned = receiver.owned();
     quote! {
-        /// Gives the values of a hook with parameters. Each hook takes its values once and runs once.
-        pub fn with<__H, __I>(
+        /// Gives the values of a hook with parameters, as a value of the hook or its complete builder. Each hook takes its values once and runs once.
+        pub fn with<__B, __H, __I>(
             self,
-            values: __H,
+            values: __B,
         ) -> #krate::With<#subject, (#krate::HookValues<__H>, ())>
         where
+            __B: #krate::Finish<Output = __H>,
             __H: #krate::Values,
             (#krate::HookValues<__H>, ()): #krate::Provides<__H, __I>,
         {

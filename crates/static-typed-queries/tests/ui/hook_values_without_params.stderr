@@ -1,10 +1,8 @@
 error[E0277]: `Audit` holds no values
-  --> tests/ui/hook_values_without_params.rs:15:38
+  --> tests/ui/hook_values_without_params.rs:15:33
    |
 15 |     let _ = OrderById { id: 1 }.with(Audit);
-   |                                 ---- ^^^^^ has no values
-   |                                 |
-   |                                 required by a bound introduced by this call
+   |                                 ^^^^ has no values
    |
 help: the trait `static_typed_queries::Values` is not implemented for `Audit`
   --> tests/ui/hook_values_without_params.rs:4:1

@@ -1,5 +1,6 @@
 use sqlx::{Acquire, Executor, FromRow, IntoArguments, SqlStr};
 
+use crate::builder::Finish;
 use crate::dialect::driver::{Arguments, Connection, Database, Driver, Row};
 use crate::hooks::{HookNeeds, HookValues, Provides, with};
 use crate::sql::Sql;
@@ -26,14 +27,15 @@ impl<S> With<S, ()> {
 }
 
 impl<S, V> With<S, V> {
-    pub fn with<H, I>(self, values: H) -> With<S, (HookValues<H>, V)>
+    pub fn with<B, H, I>(self, values: B) -> With<S, (HookValues<H>, V)>
     where
+        B: Finish<Output = H>,
         H: Values,
         (HookValues<H>, V): Provides<H, I>,
     {
         With {
             statement: self.statement,
-            values: with(values, self.values),
+            values: with(values.finish(), self.values),
         }
     }
 

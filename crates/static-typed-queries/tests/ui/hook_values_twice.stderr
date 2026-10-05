@@ -13,11 +13,11 @@ note: required by a bound in `With::<S, V>::with`
   --> $WORKSPACE/crates/static-typed-queries-core/src/with.rs
    |
    | impl<S, V> With<S, V> {
-   |     pub fn with<H, I>(self, values: H) -> With<S, (HookValues<H>, V)>
+   |     pub fn with<B, H, I>(self, values: B) -> With<S, (HookValues<H>, V)>
 ...
    |         (HookValues<H>, V): Provides<H, I>,
    |                             ^^^^^^^^^^^^^^ required by this bound in `With::<S, V>::with`
 help: consider specifying the generic arguments
    |
-21 |         .with::<SetTenant, I>(SetTenant {
-   |              ++++++++++++++++
+21 |         .with::<SetTenant, SetTenant, I>(SetTenant {
+   |              +++++++++++++++++++++++++++

@@ -373,3 +373,26 @@ async fn complete_builders_run_with_their_hooks() -> sqlx::Result<()> {
     assert_eq!(reads(&mut conn).await?, (2, 3));
     Ok(())
 }
+
+#[tokio::test]
+async fn with_takes_a_value_or_a_complete_builder() -> sqlx::Result<()> {
+    let mut conn = connect().await?;
+    let events = EventsSince::builder()
+        .since(9)
+        .with(Bump::builder().name("reads".to_owned()))
+        .with(Note::builder().note("builders".to_owned()))
+        .run(&mut conn)
+        .await?;
+    assert_eq!(events.len(), 1);
+
+    let events = EventsSince { since: 9 }
+        .with(Bump::builder().name("reads".to_owned()))
+        .with(Note {
+            note: "mixed".to_owned(),
+        })
+        .run(&mut conn)
+        .await?;
+    assert_eq!(events.len(), 1);
+    assert_eq!(reads(&mut conn).await?, (2, 2));
+    Ok(())
+}

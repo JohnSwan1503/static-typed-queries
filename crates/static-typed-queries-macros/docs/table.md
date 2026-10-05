@@ -39,11 +39,11 @@ the statement's rows when it has `row = Type`, and otherwise the number of
 rows it affected. `run_as(conn)` reads the rows as any other
 `sqlx::FromRow` type, named by annotation or as `run_as::<T, _, _>`.
 
-A hook with values takes them from the run: pass a value of the hook to
-`with`, which returns a `With` that has the same `run` and `run_as`. `run`
-doesn't compile until every hook the statement reaches has its values, and
-the error names the hook that's missing. Giving a hook's values twice
-doesn't compile either.
+A hook with values takes them from the run: pass the hook's complete
+builder, or a value of the hook, to `with`, which returns a `With` that has
+the same `with`, `run` and `run_as`. `run` doesn't compile until every hook
+the statement reaches has its values, and the error names the hook that's
+missing. Giving a hook's values twice doesn't compile either.
 
 ```
 # use static_typed_queries::prelude::*;
@@ -69,9 +69,7 @@ assert_eq!(
 async fn open_orders(conn: &mut sqlx::PgConnection) -> sqlx::Result<u64> {
     ByStatus::builder()
         .status("open".to_owned())
-        .with(SetTenant {
-            tenant: "acme".to_owned(),
-        })
+        .with(SetTenant::builder().tenant("acme".to_owned()))
         .run(conn)
         .await
 }

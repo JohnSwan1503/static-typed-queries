@@ -1,3 +1,5 @@
+use crate::sql::Sql;
+
 pub struct Missing;
 
 pub struct Filled;
@@ -46,10 +48,26 @@ impl<B> And<B> for False {
     type Out = False;
 }
 
+#[diagnostic::on_unimplemented(
+    message = "`{Self}` isn't a value or a complete builder",
+    label = "expected a value or a complete builder",
+    note = "a builder is complete once every field is set"
+)]
 pub trait Finish {
     type Output;
 
     fn finish(self) -> Self::Output;
+}
+
+// A value is finished already. Without `do_not_recommend`, an incomplete builder would be
+// reported as not implementing `Sql`.
+#[diagnostic::do_not_recommend]
+impl<T: Sql> Finish for T {
+    type Output = T;
+
+    fn finish(self) -> T {
+        self
+    }
 }
 
 // An item that holds no values is built from the start.
