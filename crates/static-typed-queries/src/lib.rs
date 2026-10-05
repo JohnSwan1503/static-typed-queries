@@ -24,7 +24,8 @@ pub mod state {
     pub use static_typed_queries_core::embed::{Checked, CteIn, DmlInCte, checked, cte, embeds};
     #[doc(hidden)]
     pub use static_typed_queries_core::hooks::{
-        Free, HasHooks, Here, HookNeeds, Hooked, Provides, Single, There, Unhooked,
+        Free, HasHooks, Here, HookNeeds, Hooked, Provides, Single, Spent, There, Unhooked,
+        Unreached, Used,
     };
     #[doc(hidden)]
     pub use static_typed_queries_core::render::Render;

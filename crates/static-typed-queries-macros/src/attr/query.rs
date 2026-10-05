@@ -184,9 +184,9 @@ pub(crate) fn expand(args: QueryArgs, mut input: ItemStruct) -> syn::Result<Toke
     for ty in items.iter().copied().chain(&template.types) {
         push_unique(&mut referenced, ty);
     }
-    let hook_needs = hook_needs(&input, referenced.len(), |i, index| {
+    let hook_needs = hook_needs(&input, referenced.len(), |i, index, from, to| {
         let ty = &referenced[i];
-        parse_quote!(#ty: #krate::HookNeeds<__V, #index>)
+        parse_quote!(#ty: #krate::HookNeeds<#from, #index, Out = #to>)
     });
     let ident = &input.ident;
     let node_name = args

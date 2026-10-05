@@ -4,7 +4,7 @@ use sqlx::{Acquire, FromRow};
 
 use crate::builder::Finish;
 use crate::dialect::driver::{Connection, Database, Driver, Row};
-use crate::hooks::{HookNeeds, HookValues, Provides};
+use crate::hooks::{HookNeeds, HookValues, Provides, Spent};
 use crate::render::Render;
 use crate::sql::Sql;
 use crate::statement::Statement;
@@ -45,30 +45,36 @@ impl<S, V> With<S, V> {
         }
     }
 
-    pub fn run<'c, I, A>(self, conn: A) -> Running<'c, S::Output>
+    pub fn run<'c, I, W>(
+        self,
+        conn: impl Acquire<'c, Database = Database<S::Dialect>> + Send + 'c,
+    ) -> Running<'c, S::Output>
     where
-        S: Run + HookNeeds<V, I> + Send + Sync + 'c,
+        S: Run + HookNeeds<V, I, Out = W> + Send + Sync + 'c,
+        W: Spent,
         S::Dialect: Driver,
         S::Output: Send,
         V: BindHooks<Database<S::Dialect>> + Send + Sync + 'c,
-        A: Acquire<'c, Database = Database<S::Dialect>> + Send + 'c,
     {
         Box::pin(self.transaction(conn, async |statement, conn| statement.run(conn).await))
     }
 
-    pub fn run_as<'c, O, I, A>(self, conn: A) -> Running<'c, Vec<O>>
+    pub fn run_as<'c, O, I, W>(
+        self,
+        conn: impl Acquire<'c, Database = Database<S::Dialect>> + Send + 'c,
+    ) -> Running<'c, Vec<O>>
     where
         S: Statement
             + Render
-            + HookNeeds<V, I>
+            + HookNeeds<V, I, Out = W>
             + BindParams<Database<S::Dialect>>
             + Send
             + Sync
             + 'c,
+        W: Spent,
         S::Dialect: Driver,
         O: for<'r> FromRow<'r, Row<S::Dialect>> + Send + Unpin + 'c,
         V: BindHooks<Database<S::Dialect>> + Send + Sync + 'c,
-        A: Acquire<'c, Database = Database<S::Dialect>> + Send + 'c,
     {
         Box::pin(self.transaction(conn, async |statement, conn| {
             step::<S::Dialect, AllRows<O>, _>(&statement, &S::OUTPUT.main(), conn).await

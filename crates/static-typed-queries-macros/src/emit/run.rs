@@ -169,7 +169,7 @@ fn statement_api(dialect: &Type, row: Option<&Type>, receiver: &Receiver) -> Tok
             conn: #acquire,
         ) -> #krate::Running<'c, #output>
         where
-            #subject: #krate::Hooked<__G> + #krate::HookNeeds<(), __I>,
+            #subject: #krate::Hooked<__G> + #krate::HookNeeds<(), __I, Out = ()>,
         {
             #krate::With::new(#owned).run(conn)
         }
@@ -184,7 +184,7 @@ fn statement_api(dialect: &Type, row: Option<&Type>, receiver: &Receiver) -> Tok
                 + ::core::marker::Send
                 + ::core::marker::Unpin
                 + 'c,
-            #subject: #krate::Hooked<__G> + #krate::HookNeeds<(), __I>,
+            #subject: #krate::Hooked<__G> + #krate::HookNeeds<(), __I, Out = ()>,
         {
             #krate::With::new(#owned).run_as(conn)
         }
@@ -255,7 +255,7 @@ fn transaction_api(dialect: &Type, output: &TokenStream, receiver: &Receiver) ->
             conn: impl #sqlx::Acquire<'c, Database = #driver::Database<#dialect>> + ::core::marker::Send + 'c,
         ) -> #krate::Running<'c, #output>
         where
-            #subject: #krate::HookNeeds<(), __I>,
+            #subject: #krate::HookNeeds<(), __I, Out = ()>,
         {
             #krate::With::new(#owned).run(conn)
         }

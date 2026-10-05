@@ -112,9 +112,9 @@ pub(crate) fn expand(args: TableArgs, input: ItemStruct) -> syn::Result<TokenStr
             const _: () = #krate::check_hooks(<#ident as #krate::Sql>::NODE);
         }
     });
-    let hook_needs = hook_needs(&input, hook_types.len(), |i, index| {
+    let hook_needs = hook_needs(&input, hook_types.len(), |i, index, from, to| {
         let hook = hook_types[i];
-        parse_quote!(__V: #krate::Provides<#hook, #index>)
+        parse_quote!(#from: #krate::Provides<#hook, #index, Out = #to>)
     });
     let values = values(&input, false);
     let (_, built) = builder(&input, &[], TokenStream::new());

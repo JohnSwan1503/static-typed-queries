@@ -60,20 +60,57 @@ pub struct There<I>(PhantomData<I>);
 
 pub struct Free;
 
+pub struct Used<H>(PhantomData<H>);
+
+// `Out` is the list with `H`'s values marked used, so `run` can refuse values nothing uses.
 #[diagnostic::on_unimplemented(
     message = "no values for the hook `{H}`",
     label = "`{H}` has values",
     note = "give them with `.with({H} {{ .. }})`"
 )]
-pub trait Provides<H, I> {}
+pub trait Provides<H, I> {
+    type Out;
+}
 
 #[diagnostic::do_not_recommend]
-impl<H: Sql, Rest> Provides<H, Here> for (HookValues<H>, Rest) {}
+impl<H: Sql, Rest> Provides<H, Here> for (HookValues<H>, Rest) {
+    type Out = (Used<H>, Rest);
+}
 
 #[diagnostic::do_not_recommend]
-impl<H, X, Rest: Provides<H, I>, I> Provides<H, There<I>> for (X, Rest) {}
+impl<H: Sql, Rest> Provides<H, Here> for (Used<H>, Rest) {
+    type Out = (Used<H>, Rest);
+}
 
 #[diagnostic::do_not_recommend]
-impl<H: Valueless> Provides<H, Free> for () {}
+impl<H, X, Rest: Provides<H, I>, I> Provides<H, There<I>> for (X, Rest) {
+    type Out = (X, Rest::Out);
+}
 
-pub trait HookNeeds<V, I> {}
+#[diagnostic::do_not_recommend]
+impl<H: Valueless> Provides<H, Free> for () {
+    type Out = ();
+}
+
+// `Out` is `V` with the values of every hook the item reaches marked used.
+pub trait HookNeeds<V, I> {
+    type Out;
+}
+
+pub trait Spent {}
+
+#[diagnostic::do_not_recommend]
+impl Spent for () {}
+
+#[diagnostic::do_not_recommend]
+impl<H, Rest: Spent> Spent for (Used<H>, Rest) {}
+
+impl<H: Unreached, Rest: Spent> Spent for (HookValues<H>, Rest) {}
+
+// Never implemented: values left unused name their hook through this.
+#[diagnostic::on_unimplemented(
+    message = "this statement never runs the hook `{Self}`",
+    label = "`{Self}` never runs",
+    note = "remove `.with({Self} {{ .. }})`"
+)]
+pub trait Unreached {}

@@ -105,7 +105,7 @@ pub(crate) fn expand(args: StatementArgs, mut input: ItemStruct) -> syn::Result<
     let hook_needs = hook_needs(
         &input,
         1,
-        |_, index| parse_quote!(#ty: #krate::HookNeeds<__V, #index>),
+        |_, index, from, to| parse_quote!(#ty: #krate::HookNeeds<#from, #index, Out = #to>),
     );
     let values = values(&input, !fields.is_empty());
     let bind = bind_impl(&input, &fields);

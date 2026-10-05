@@ -152,28 +152,34 @@ pub(crate) fn step_impl(item: &ItemStruct, row: Option<&Type>) -> TokenStream {
     }
 }
 
-// `need` turns an index type into the predicate that says the values `__V` cover one item.
+// `need(i, index, from, to)` says the values `from` cover item `i`, with what it uses marked in
+// `to`; the impl's `Out` is the values once every item has marked its hooks.
 pub(crate) fn hook_needs(
     item: &ItemStruct,
     count: usize,
-    need: impl Fn(usize, &Ident) -> WherePredicate,
+    need: impl Fn(usize, &Ident, &Ident, &Ident) -> WherePredicate,
 ) -> TokenStream {
     let krate = krate();
     let ident = &item.ident;
     let indices: Vec<Ident> = (0..count).map(|i| format_ident!("__I{i}")).collect();
+    let values: Vec<Ident> = (0..=count).map(|i| format_ident!("__V{i}")).collect();
     let mut generics = item.generics.clone();
-    generics.params.push(parse_quote!(__V));
-    for index in &indices {
-        generics.params.push(parse_quote!(#index));
+    for param in values.iter().chain(&indices) {
+        generics.params.push(parse_quote!(#param));
     }
     let clause = generics.make_where_clause();
     for (i, index) in indices.iter().enumerate() {
-        clause.predicates.push(need(i, index));
+        clause
+            .predicates
+            .push(need(i, index, &values[i], &values[i + 1]));
     }
     let (impl_generics, _, where_clause) = generics.split_for_impl();
     let (_, ty_generics, _) = item.generics.split_for_impl();
+    let (first, last) = (&values[0], &values[count]);
     quote! {
-        impl #impl_generics #krate::HookNeeds<__V, (#(#indices,)*)> for #ident #ty_generics #where_clause {}
+        impl #impl_generics #krate::HookNeeds<#first, (#(#indices,)*)> for #ident #ty_generics #where_clause {
+            type Out = #last;
+        }
     }
 }
 

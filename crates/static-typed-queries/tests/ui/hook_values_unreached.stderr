@@ -1,0 +1,29 @@
+error[E0277]: this statement never runs the hook `SetUser`
+  --> tests/ui/hook_values_unreached.rs:29:10
+   |
+29 |         .run(conn)
+   |          ^^^ `SetUser` never runs
+   |
+help: the trait `Unreached` is not implemented for `SetUser`
+  --> tests/ui/hook_values_unreached.rs:9:1
+   |
+ 9 | pub struct SetUser {
+   | ^^^^^^^^^^^^^^^^^^
+   = note: remove `.with(SetUser { .. })`
+help: the trait `Spent` is conditionally implemented for `(HookValues<H>, Rest)`
+  --> $WORKSPACE/crates/static-typed-queries-core/src/hooks.rs
+   |
+   | impl<H: Unreached, Rest: Spent> Spent for (HookValues<H>, Rest) {}
+   | ^^^^^^^^---------^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |         |
+   |         unsatisfied requirement introduced here: `_: Unreached`
+   = note: required for `(HookValues<SetUser>, (Used<SetTenant>, ()))` to implement `Spent`
+note: required by a bound in `With::<S, V>::run`
+  --> $WORKSPACE/crates/static-typed-queries-core/src/with.rs
+   |
+   | impl<S, V> With<S, V> {
+...
+   |     pub fn run<'c, I, W>(
+...
+   |         W: Spent,
+   |            ^^^^^ required by this bound in `With::<S, V>::run`

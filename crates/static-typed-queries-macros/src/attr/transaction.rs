@@ -123,9 +123,9 @@ pub(crate) fn expand(args: TransactionArgs, mut input: ItemStruct) -> syn::Resul
         quote!(#checks #runnable),
     );
     let checked = embeds.checked;
-    let hook_needs = hook_needs(&input, referenced.len(), |i, index| {
+    let hook_needs = hook_needs(&input, referenced.len(), |i, index, from, to| {
         let ty = &referenced[i];
-        parse_quote!(#ty: #krate::HookNeeds<__V, #index>)
+        parse_quote!(#ty: #krate::HookNeeds<#from, #index, Out = #to>)
     });
     let values = values(&input, !fields.is_empty());
     let bind = bind_impl(&input, &fields);
