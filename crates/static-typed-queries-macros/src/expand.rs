@@ -108,6 +108,11 @@ pub(crate) fn table(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
     let builder = params.builder(dialect, None);
     let hook_types: Vec<Type> = before.iter().chain(&after).cloned().collect();
     let embed_checks = embeds(&item, &hook_types, dialect);
+    let needs: Vec<TokenStream> = hook_types
+        .iter()
+        .map(|ty| quote!(<#ty as #krate::sql::Sql>::Params))
+        .collect();
+    let hook_needs = hook_needs(&item, &needs, quote!(#krate::builder::Demand));
     let fmt = fmt(&args, &item, false)?;
     let mut documented = item.clone();
     documented
@@ -125,6 +130,7 @@ pub(crate) fn table(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
 
         #check
         #embed_checks
+        #hook_needs
         #builder
         #fmt
     })
@@ -207,6 +213,17 @@ pub(crate) fn query(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
     let items = items(&template, &item.generics, &separate);
     let fields: Vec<Type> = items.iter().map(|(ty, _)| ty.clone()).collect();
     let embed_checks = embeds(&item, &fields, &args.dialect);
+    let mut referenced: Vec<&Type> = Vec::new();
+    for ty in &template.children {
+        if !referenced
+            .iter()
+            .any(|other| type_key(other) == type_key(ty))
+        {
+            referenced.push(ty);
+        }
+    }
+    let needs: Vec<TokenStream> = referenced.iter().map(|ty| quote!(#ty)).collect();
+    let hook_needs = hook_needs(&item, &needs, quote!(#krate::builder::HookNeeds));
     let ident = &item.ident;
     let node_name = args
         .name
@@ -290,6 +307,7 @@ pub(crate) fn query(args: Args, item: ItemStruct) -> syn::Result<TokenStream> {
         }
 
         #embed_checks
+        #hook_needs
         #bind_params
         #builder
         #statement
@@ -527,6 +545,11 @@ pub(crate) fn statement(args: Args, item: ItemStruct) -> syn::Result<TokenStream
     let row = row(&args, &item, true, None)?;
     let builder = params.builder(&dialect, row.as_ref());
     let embed_checks = embeds(&item, &fields, &dialect);
+    let hook_needs = hook_needs(
+        &item,
+        &[quote!(#target)],
+        quote!(#krate::builder::HookNeeds),
+    );
     let fmt = fmt(&args, &item, true)?;
     let rows = row.as_ref().map(|row| {
         quote! {
@@ -567,6 +590,7 @@ pub(crate) fn statement(args: Args, item: ItemStruct) -> syn::Result<TokenStream
         }
 
         #embed_checks
+        #hook_needs
         #bind_params
         #builder
 
@@ -720,6 +744,28 @@ fn embeds(item: &ItemStruct, items: &[Type], dialect: &Type) -> TokenStream {
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
     quote! {
         impl #impl_generics #krate::embed::Checked for #ident #ty_generics #where_clause {}
+    }
+}
+
+fn hook_needs(item: &ItemStruct, needs: &[TokenStream], bound: TokenStream) -> TokenStream {
+    let krate = krate();
+    let ident = &item.ident;
+    let indices: Vec<Ident> = (0..needs.len()).map(|i| format_ident!("__I{i}")).collect();
+    let mut generics = item.generics.clone();
+    generics.params.push(parse_quote!(__V));
+    for index in &indices {
+        generics.params.push(parse_quote!(#index));
+    }
+    let clause = generics.make_where_clause();
+    for (need, index) in needs.iter().zip(&indices) {
+        clause
+            .predicates
+            .push(parse_quote!(#need: #bound<__V, #index>));
+    }
+    let (impl_generics, _, where_clause) = generics.split_for_impl();
+    let (_, ty_generics, _) = item.generics.split_for_impl();
+    quote! {
+        impl #impl_generics #krate::builder::HookNeeds<__V, (#(#indices,)*)> for #ident #ty_generics #where_clause {}
     }
 }
 
@@ -1742,7 +1788,8 @@ impl<'a> Params<'a> {
             });
             let sqlx = quote!(#krate::__private::sqlx);
             let run = quote!(#krate::statement::run);
-            let acquire = quote!(#sqlx::Acquire<'c, Database = #driver::Database<#dialect>>);
+            let acquire = quote!(impl #sqlx::Acquire<'c, Database = #driver::Database<#dialect>>);
+            let covered = quote!(#ident: #b::HookNeeds<__V, __I>);
             let run_main = match row {
                 Some(row) => {
                     let doc = doc(&format!(
@@ -1751,23 +1798,29 @@ impl<'a> Params<'a> {
                     ));
                     quote! {
                         #doc
-                        pub async fn run<'c, A: #acquire>(
+                        pub async fn run<'c, __I>(
                             self,
-                            conn: A,
-                        ) -> ::core::result::Result<::std::vec::Vec<#row>, #error> {
+                            conn: #acquire,
+                        ) -> ::core::result::Result<::std::vec::Vec<#row>, #error>
+                        where
+                            #covered,
+                        {
                             let params = #finish;
-                            #run::fetch_all::<#ident, #row, __V, A>(&params, &self.__values, conn).await
+                            #run::fetch_all::<#ident, #row, __V, _>(&params, &self.__values, conn).await
                         }
                     }
                 }
                 None => quote! {
                     /// Runs the statement and its hooks in one transaction, and returns the number of rows the statement affected.
-                    pub async fn run<'c, A: #acquire>(
+                    pub async fn run<'c, __I>(
                         self,
-                        conn: A,
-                    ) -> ::core::result::Result<u64, #error> {
+                        conn: #acquire,
+                    ) -> ::core::result::Result<u64, #error>
+                    where
+                        #covered,
+                    {
                         let params = #finish;
-                        #run::execute::<#ident, __V, A>(&params, &self.__values, conn).await
+                        #run::execute::<#ident, __V, _>(&params, &self.__values, conn).await
                     }
                 },
             };
@@ -1780,17 +1833,18 @@ impl<'a> Params<'a> {
                         #run_main
 
                         /// Runs the statement and its hooks in one transaction, and reads each row of the statement as `O`.
-                        pub async fn run_as<'c, O, A: #acquire>(
+                        pub async fn run_as<'c, O, __I>(
                             self,
-                            conn: A,
+                            conn: #acquire,
                         ) -> ::core::result::Result<::std::vec::Vec<O>, #error>
                         where
                             O: for<'r> #sqlx::FromRow<'r, #driver::Row<#dialect>>
                                 + ::core::marker::Send
                                 + ::core::marker::Unpin,
+                            #covered,
                         {
                             let params = #finish;
-                            #run::fetch_all::<#ident, O, __V, A>(&params, &self.__values, conn).await
+                            #run::fetch_all::<#ident, O, __V, _>(&params, &self.__values, conn).await
                         }
                     }
                 }

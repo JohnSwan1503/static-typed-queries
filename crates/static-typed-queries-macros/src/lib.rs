@@ -46,11 +46,13 @@ use syn::{ItemStruct, parse_macro_input};
 /// anything that implements `sqlx::Acquire` and runs the hooks and the
 /// statement in one transaction, so a failing hook rolls back the statement
 /// too. `run` returns the statement's rows when it has `row = Type`, and
-/// otherwise the number of rows it affected. `run_as::<T>(conn)` reads the
-/// rows as `T`.
+/// otherwise the number of rows it affected. `run_as(conn)` reads the rows as
+/// any other `sqlx::FromRow` type, named by annotation or as `run_as::<T, _>`.
 ///
 /// A hook with parameters takes its values from the run: pass its complete
-/// builder to `with`, in any order with the other setters.
+/// builder to `with`, in any order with the other setters. `run` doesn't
+/// compile until every hook the statement reaches has its values, and the
+/// error names the hook that's missing.
 ///
 /// ```
 /// # use static_typed_queries::prelude::*;
@@ -152,7 +154,7 @@ pub fn table(args: TokenStream, item: TokenStream) -> TokenStream {
 ///   `sqlx::FromRow`. The complete builder's `query()` then returns a
 ///   `sqlx` `QueryAs` for it, and `run()` a `Vec` of it. Only queries and
 ///   statements with `RETURNING` take it. Every complete builder also has
-///   `query_as::<T>()`, or `run_as::<T>()`, for reading rows as some other
+///   `query_as::<T>()`, or `run_as(conn)`, for reading rows as some other
 ///   type. A struct with named fields is its own row type instead; see
 ///   [Rows](#rows).
 /// - `separate(Type, ...)`: gives each listed generic item its own values for
