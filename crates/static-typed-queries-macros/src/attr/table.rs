@@ -7,9 +7,9 @@ use crate::args::{self, Keys};
 use crate::emit::checks::{embeds, hook_needs, step_impl};
 use crate::emit::docs;
 use crate::emit::fmt::fmt;
-use crate::emit::krate;
 use crate::emit::node::{fingerprint, node};
 use crate::emit::rows::named_fields;
+use crate::emit::{self, krate};
 use crate::model::item::{Item, Role};
 use crate::naming::type_key;
 
@@ -84,9 +84,9 @@ pub(crate) fn expand(args: TableArgs, input: ItemStruct) -> syn::Result<TokenStr
     let mut parts = Vec::new();
     for (i, segment) in table.split('.').enumerate() {
         if i > 0 {
-            parts.push(quote!(#krate::part::lit::Lit::part(".")));
+            parts.push(quote!(#krate::Lit::part(".")));
         }
-        parts.push(quote!(#krate::part::ident::Ident::part(#segment)));
+        parts.push(quote!(#krate::Ident::part(#segment)));
     }
     let before = hooks(&args.before)?;
     let after = hooks(&args.after)?;
@@ -97,14 +97,14 @@ pub(crate) fn expand(args: TableArgs, input: ItemStruct) -> syn::Result<TokenStr
         node_name,
         fingerprint(ident, &input),
         quote!(Table),
-        quote!(#krate::node::inject::Inject::Ident),
+        quote!(#krate::Inject::Ident),
         parts,
         &[],
         [&before, &after],
     );
     let check = (!before.is_empty() || !after.is_empty()).then(|| {
         quote! {
-            const _: () = #krate::render::check_hooks(<#ident as #krate::sql::Sql>::NODE);
+            const _: () = #krate::check_hooks(<#ident as #krate::Sql>::NODE);
         }
     });
     let item = Item::new(
@@ -116,26 +116,24 @@ pub(crate) fn expand(args: TableArgs, input: ItemStruct) -> syn::Result<TokenStr
         Vec::new(),
         Vec::new(),
     );
-    let builder = item.builder(dialect, None);
+    let (definitions, builder) = item.builder(dialect, None);
     let hook_types: Vec<Type> = before.iter().chain(&after).cloned().collect();
     let embed_checks = embeds(&input, &hook_types, dialect);
     let needs: Vec<TokenStream> = hook_types
         .iter()
-        .map(|ty| quote!(<#ty as #krate::sql::Sql>::Params))
+        .map(|ty| quote!(<#ty as #krate::Sql>::Params))
         .collect();
-    let hook_needs = hook_needs(&input, &needs, quote!(#krate::builder::Demand));
+    let hook_needs = hook_needs(&input, &needs, quote!(#krate::Demand));
     let step = step_impl(&input, None);
     let fmt = fmt(args.display.as_ref(), args.debug.as_ref(), &input, false)?;
     let mut documented = input.clone();
     documented.attrs.extend(item.item_docs());
 
-    Ok(quote! {
-        #documented
-
-        impl #krate::sql::Sql for #ident {
+    let impls = emit::scoped(quote! {
+        impl #krate::Sql for #ident {
             type Dialect = #dialect;
             type Params = ();
-            const NODE: &'static #krate::node::Node = #node;
+            const NODE: &'static #krate::Node = #node;
         }
 
         #check
@@ -144,6 +142,11 @@ pub(crate) fn expand(args: TableArgs, input: ItemStruct) -> syn::Result<TokenStr
         #builder
         #step
         #fmt
+    });
+    Ok(quote! {
+        #documented
+        #definitions
+        #impls
     })
 }
 

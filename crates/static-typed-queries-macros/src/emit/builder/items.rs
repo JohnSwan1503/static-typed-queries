@@ -1,25 +1,35 @@
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
-use syn::parse_quote;
+use syn::{Ident, parse_quote};
 
 use super::Builder;
 use crate::emit::doc;
+use crate::model::params::Child;
 use crate::naming::camel;
 
 impl Builder<'_, '_> {
     // An item's method moves into that item's builder, scoped by a hole that holds this builder
     // with the item's slot empty; the item's next setter fills the hole and returns here.
+    pub(super) fn holes(&self) -> TokenStream {
+        let vis = &self.item.input.vis;
+        let holes = self.item.children.iter().map(|child| self.hole(child));
+        quote!(#(#[doc(hidden)] #vis struct #holes<P>(P);)*)
+    }
+
+    fn hole(&self, child: &Child) -> Ident {
+        format_ident!("__{}{}", self.name, camel(&child.name))
+    }
+
     pub(super) fn item_methods(&self) -> TokenStream {
         let b = &self.b;
         let item = self.item;
         let name = self.name;
-        let vis = &item.input.vis;
         let (hooks, values, parent, root) = (&self.hooks, &self.values, &self.parent, &self.root);
         let mut out = TokenStream::new();
         for (index, child) in item.children.iter().enumerate() {
             let slot = item.groups.len() + index;
             let (method, field) = (&child.name, &child.field);
-            let hole = format_ident!("__{}{}", name, camel(method));
+            let hole = self.hole(child);
             let others = self.others(field);
             let vacant = self.ty(&self.states_with(slot, quote!(())), hooks, values, parent);
             let current = self.ty(
@@ -35,9 +45,6 @@ impl Builder<'_, '_> {
                 item.link(&child.named)
             ));
             out.extend(quote! {
-                #[doc(hidden)]
-                #vis struct #hole<P>(P);
-
                 impl #impl_generics #current #where_clause {
                     #doc
                     pub fn #method<__Scoped>(self) -> __Scoped

@@ -1,5 +1,5 @@
 use proc_macro2::{Span, TokenStream};
-use quote::{format_ident, quote};
+use quote::quote;
 use syn::parse::{Parse, ParseStream};
 use syn::{
     GenericParam, Ident, ItemStruct, LitBool, LitStr, Path, Type, parenthesized, parse_quote,
@@ -7,11 +7,11 @@ use syn::{
 
 use crate::args::{self, Keys, Placement, Sql};
 use crate::attr::wrapper::{self, separate};
-use crate::emit::checks::{embeds, hook_needs, step_impl};
+use crate::emit::checks::{embeds, hook_needs, parse_test, step_impl};
 use crate::emit::fmt::fmt;
-use crate::emit::krate;
 use crate::emit::node::{fingerprint, node, parts, placement};
 use crate::emit::rows::{from_row, row, row_docs};
+use crate::emit::{self, krate};
 use crate::model::item::{Item, Role};
 use crate::model::items::items;
 use crate::model::params;
@@ -187,7 +187,7 @@ pub(crate) fn expand(args: QueryArgs, input: ItemStruct) -> syn::Result<TokenStr
         }
     }
     let needs: Vec<TokenStream> = referenced.iter().map(|ty| quote!(#ty)).collect();
-    let hook_needs = hook_needs(&input, &needs, quote!(#krate::builder::HookNeeds));
+    let hook_needs = hook_needs(&input, &needs, quote!(#krate::HookNeeds));
     let ident = &input.ident;
     let node_name = args
         .name
@@ -218,24 +218,13 @@ pub(crate) fn expand(args: QueryArgs, input: ItemStruct) -> syn::Result<TokenStr
     let params_struct = item.definition();
     let derives = item.derives();
     let bind_params = item.bind_impl();
-    let builder = item.builder(dialect, row.as_ref());
+    let (definitions, builder) = item.builder(dialect, row.as_ref());
     let parse_check = args.parse_check.as_ref().is_none_or(|check| check.value);
+    let test = (input.generics.params.is_empty() && parse_check).then(|| parse_test(ident));
     let statement = input.generics.params.is_empty().then(|| {
-        let test = format_ident!("{}_sql_parses", snake_case(&ident.to_string()));
-        let test = parse_check.then(|| {
-            quote! {
-                #krate::__if_parse_check! {
-                    #[cfg(test)]
-                    #[test]
-                    fn #test() {
-                        #krate::check::parse::<#ident>();
-                    }
-                }
-            }
-        });
         let rows = row.as_ref().map(|row| {
             quote! {
-                impl #krate::statement::Rows for #ident {
+                impl #krate::Rows for #ident {
                     type Row = #row;
                 }
             }
@@ -248,10 +237,8 @@ pub(crate) fn expand(args: QueryArgs, input: ItemStruct) -> syn::Result<TokenStr
 
             impl #ident {
                 /// The SQL, rendered at compile time.
-                pub const SQL: &'static str = <Self as #krate::statement::Statement>::SQL;
+                pub const SQL: &'static str = <Self as #krate::Statement>::SQL;
             }
-
-            #test
         }
     });
     let fmt = fmt(args.display.as_ref(), args.debug.as_ref(), &input, true)?;
@@ -260,18 +247,14 @@ pub(crate) fn expand(args: QueryArgs, input: ItemStruct) -> syn::Result<TokenStr
     documented.attrs.extend(item.item_docs());
     documented.attrs.extend(row_docs(&input));
 
-    Ok(quote! {
-        #documented
-
-        #params_struct
-        #derives
-
-        impl #impl_generics #krate::sql::Sql for #ident #ty_generics #where_clause {
+    let impls = emit::scoped(quote! {
+        impl #impl_generics #krate::Sql for #ident #ty_generics #where_clause {
             type Dialect = #dialect;
             type Params = #params_ty;
-            const NODE: &'static #krate::node::Node = #node;
+            const NODE: &'static #krate::Node = #node;
         }
 
+        #derives
         #embed_checks
         #hook_needs
         #bind_params
@@ -279,8 +262,15 @@ pub(crate) fn expand(args: QueryArgs, input: ItemStruct) -> syn::Result<TokenStr
         #statement
         #step
         #fmt
-        #(#wrappers)*
         #track
+    });
+    Ok(quote! {
+        #documented
+        #params_struct
+        #definitions
+        #test
+        #impls
+        #(#wrappers)*
     })
 }
 

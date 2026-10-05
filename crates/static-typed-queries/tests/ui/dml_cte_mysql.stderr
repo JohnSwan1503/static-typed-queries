@@ -2,7 +2,7 @@ error[E0080]: evaluation panicked: `purged` modifies data, which MySql doesn't a
  --> tests/ui/dml_cte_mysql.rs:9:1
   |
 9 | #[query(MySql, sql = "SELECT count(*) FROM {Purged}")]
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ evaluation of `<PurgeCount as static_typed_queries::__private::render::Render>::SIZE` failed inside this call
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ evaluation of `_::<impl static_typed_queries::__private::render::Render for PurgeCount>::SIZE` failed inside this call
   |
 note: inside `static_typed_queries::__private::render::measure::<static_typed_queries::dialect::MySql>`
  --> $WORKSPACE/crates/static-typed-queries-core/src/render.rs
@@ -53,7 +53,7 @@ note: erroneous constant encountered
 9 | #[query(MySql, sql = "SELECT count(*) FROM {Purged}")]
   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
   |
-  = note: this note originates in the macro `::static_typed_queries::__private::impl_statement` which comes from the expansion of the attribute macro `query` (in Nightly builds, run with -Z macro-backtrace for more info)
+  = note: this note originates in the macro `__stq::impl_statement` which comes from the expansion of the attribute macro `query` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 note: erroneous constant encountered
  --> tests/ui/dml_cte_mysql.rs:9:1
@@ -61,7 +61,7 @@ note: erroneous constant encountered
 9 | #[query(MySql, sql = "SELECT count(*) FROM {Purged}")]
   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
   |
-  = note: this note originates in the macro `::static_typed_queries::__private::impl_statement` which comes from the expansion of the attribute macro `query` (in Nightly builds, run with -Z macro-backtrace for more info)
+  = note: this note originates in the macro `__stq::impl_statement` which comes from the expansion of the attribute macro `query` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 note: erroneous constant encountered
  --> tests/ui/dml_cte_mysql.rs:9:1
@@ -69,7 +69,7 @@ note: erroneous constant encountered
 9 | #[query(MySql, sql = "SELECT count(*) FROM {Purged}")]
   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
   |
-  = note: this note originates in the macro `::static_typed_queries::__private::impl_statement` which comes from the expansion of the attribute macro `query` (in Nightly builds, run with -Z macro-backtrace for more info)
+  = note: this note originates in the macro `__stq::impl_statement` which comes from the expansion of the attribute macro `query` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 note: erroneous constant encountered
  --> tests/ui/dml_cte_mysql.rs:9:1
@@ -77,4 +77,4 @@ note: erroneous constant encountered
 9 | #[query(MySql, sql = "SELECT count(*) FROM {Purged}")]
   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
   |
-  = note: this note originates in the macro `::static_typed_queries::__private::impl_statement` which comes from the expansion of the attribute macro `query` (in Nightly builds, run with -Z macro-backtrace for more info)
+  = note: this note originates in the macro `__stq::impl_statement` which comes from the expansion of the attribute macro `query` (in Nightly builds, run with -Z macro-backtrace for more info)

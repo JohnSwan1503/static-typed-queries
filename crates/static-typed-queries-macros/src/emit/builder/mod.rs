@@ -12,14 +12,16 @@ use crate::emit::krate;
 use crate::model::item::Item;
 
 impl<'a> Item<'a> {
-    pub(crate) fn builder(&self, dialect: &Type, row: Option<&Type>) -> TokenStream {
+    // Returns the definitions, which must stay nameable, and the impls, which go in `emit::scoped`.
+    pub(crate) fn builder(&self, dialect: &Type, row: Option<&Type>) -> (TokenStream, TokenStream) {
         if self.is_empty() {
-            return self.no_builder();
+            return (TokenStream::new(), self.no_builder());
         }
         let builder = Builder::new(self);
-        let mut out = TokenStream::new();
-        out.extend(builder.markers());
-        out.extend(builder.definition());
+        let mut definitions = builder.markers();
+        definitions.extend(builder.definition());
+        definitions.extend(builder.holes());
+        let mut out = builder.marker_impls();
         out.extend(builder.ready());
         out.extend(builder.scope());
         out.extend(builder.setters());
@@ -36,7 +38,7 @@ impl<'a> Item<'a> {
             out.extend(builder.transaction_run(steps, dialect));
         }
         out.extend(builder.build());
-        out
+        (definitions, out)
     }
 
     fn no_builder(&self) -> TokenStream {
@@ -44,11 +46,11 @@ impl<'a> Item<'a> {
         let ident = &self.input.ident;
         let (impl_generics, ty_generics, where_clause) = self.input.generics.split_for_impl();
         quote! {
-            impl #impl_generics #krate::builder::Build for #ident #ty_generics #where_clause {
-                type Builder = #krate::builder::NoParams;
+            impl #impl_generics #krate::Build for #ident #ty_generics #where_clause {
+                type Builder = #krate::NoParams;
 
                 fn builder() -> Self::Builder {
-                    #krate::builder::NoParams
+                    #krate::NoParams
                 }
             }
         }
@@ -75,7 +77,7 @@ struct Builder<'i, 'a> {
 impl<'i, 'a> Builder<'i, 'a> {
     fn new(item: &'i Item<'a>) -> Self {
         let krate = krate();
-        let b = quote!(#krate::builder);
+        let b = quote!(#krate);
         Builder {
             root: quote!(#b::Root),
             b,

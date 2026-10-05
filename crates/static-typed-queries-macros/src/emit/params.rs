@@ -3,7 +3,7 @@ use quote::quote;
 use syn::{Ident, parse_quote};
 
 use crate::emit::docs;
-use crate::emit::{doc, krate};
+use crate::emit::{doc, krate, krate_path};
 use crate::model::item::{Item, Role};
 
 impl<'a> Item<'a> {
@@ -34,7 +34,7 @@ impl<'a> Item<'a> {
         if self.is_empty() {
             return None;
         }
-        let krate = krate();
+        let krate = krate_path();
         let vis = &self.input.vis;
         let ident = &self.params_ident;
         let generics = &self.input.generics;
@@ -57,7 +57,7 @@ impl<'a> Item<'a> {
         let children = self.children.iter().map(|child| {
             let (name, ty) = (&child.name, &child.ty);
             let doc = doc(&format!("The parameters of {}.", self.link(&child.named)));
-            quote!(#doc pub #name: <#ty as #krate::sql::Sql>::Params)
+            quote!(#doc pub #name: <#ty as #krate::Sql>::Params)
         });
         let doc = doc(&format!(
             "The parameters of [`{}`], built by [`{}`].",
@@ -104,7 +104,7 @@ impl<'a> Item<'a> {
             })
             .chain(self.children.iter().map(|child| {
                 let ty = &child.ty;
-                (&child.name, quote!(<#ty as #krate::sql::Sql>::Params))
+                (&child.name, quote!(<#ty as #krate::Sql>::Params))
             }))
             .collect();
         let names: Vec<&Ident> = fields.iter().map(|(name, _)| *name).collect();
@@ -164,7 +164,7 @@ impl<'a> Item<'a> {
         let (impl_generics, _, where_clause) = self.input.generics.split_for_impl();
         let item = &self.input.ident;
         out.extend(quote! {
-            impl #impl_generics #krate::builder::ParamsOf for #ident #ty_generics #where_clause {
+            impl #impl_generics #krate::ParamsOf for #ident #ty_generics #where_clause {
                 type Item = #item #ty_generics;
             }
         });

@@ -2,7 +2,7 @@ error[E0080]: evaluation panicked: `purge` modifies data, which MySql doesn't al
   --> tests/ui/transaction_cte_mysql.rs:12:1
    |
 12 | #[transaction(MySql, steps(Purge as cte, OrderCount))]
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ evaluation of `<Sweep as static_typed_queries::__private::render::Render>::SIZE` failed inside this call
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ evaluation of `_::<impl static_typed_queries::__private::render::Render for Sweep>::SIZE` failed inside this call
    |
 note: inside `static_typed_queries::__private::render::measure::<static_typed_queries::dialect::MySql>`
   --> $WORKSPACE/crates/static-typed-queries-core/src/render.rs
@@ -48,7 +48,7 @@ note: erroneous constant encountered
 12 | #[transaction(MySql, steps(Purge as cte, OrderCount))]
    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    |
-   = note: this note originates in the macro `::static_typed_queries::__private::impl_transaction` which comes from the expansion of the attribute macro `transaction` (in Nightly builds, run with -Z macro-backtrace for more info)
+   = note: this note originates in the macro `__stq::impl_transaction` which comes from the expansion of the attribute macro `transaction` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 note: erroneous constant encountered
   --> tests/ui/transaction_cte_mysql.rs:12:1
@@ -56,7 +56,7 @@ note: erroneous constant encountered
 12 | #[transaction(MySql, steps(Purge as cte, OrderCount))]
    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    |
-   = note: this note originates in the macro `::static_typed_queries::__private::impl_transaction` which comes from the expansion of the attribute macro `transaction` (in Nightly builds, run with -Z macro-backtrace for more info)
+   = note: this note originates in the macro `__stq::impl_transaction` which comes from the expansion of the attribute macro `transaction` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 note: erroneous constant encountered
   --> tests/ui/transaction_cte_mysql.rs:12:1
@@ -64,7 +64,7 @@ note: erroneous constant encountered
 12 | #[transaction(MySql, steps(Purge as cte, OrderCount))]
    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    |
-   = note: this note originates in the macro `::static_typed_queries::__private::impl_transaction` which comes from the expansion of the attribute macro `transaction` (in Nightly builds, run with -Z macro-backtrace for more info)
+   = note: this note originates in the macro `__stq::impl_transaction` which comes from the expansion of the attribute macro `transaction` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 note: erroneous constant encountered
   --> tests/ui/transaction_cte_mysql.rs:12:1
@@ -72,4 +72,4 @@ note: erroneous constant encountered
 12 | #[transaction(MySql, steps(Purge as cte, OrderCount))]
    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    |
-   = note: this note originates in the macro `::static_typed_queries::__private::impl_transaction` which comes from the expansion of the attribute macro `transaction` (in Nightly builds, run with -Z macro-backtrace for more info)
+   = note: this note originates in the macro `__stq::impl_transaction` which comes from the expansion of the attribute macro `transaction` (in Nightly builds, run with -Z macro-backtrace for more info)

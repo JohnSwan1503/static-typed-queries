@@ -11,8 +11,8 @@ impl<'a> Item<'a> {
             return None;
         }
         let krate = krate();
-        let sqlx = quote!(#krate::__private::sqlx);
-        let bind = quote!(#krate::statement::params::BindParams);
+        let sqlx = quote!(#krate::sqlx);
+        let bind = quote!(#krate::BindParams);
 
         let mut generics = self.input.generics.clone();
         generics
@@ -29,7 +29,7 @@ impl<'a> Item<'a> {
             let ty = &child.ty;
             where_clause
                 .predicates
-                .push(parse_quote!(<#ty as #krate::sql::Sql>::Params: #bind<__DB>));
+                .push(parse_quote!(<#ty as #krate::Sql>::Params: #bind<__DB>));
         }
         let (impl_generics, _, where_clause) = generics.split_for_impl();
 
@@ -67,7 +67,7 @@ impl<'a> Item<'a> {
                             #(#own)*
                             #(#children)*
                             _ => ::core::result::Result::Err(
-                                #krate::statement::params::unknown(path, slot),
+                                #krate::unknown(path, slot),
                             ),
                         }
                     }

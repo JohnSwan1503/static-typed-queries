@@ -1,15 +1,15 @@
 use proc_macro2::TokenStream;
-use quote::{format_ident, quote};
+use quote::quote;
 use syn::parse::{Parse, ParseStream};
 use syn::{Ident, ItemStruct, LitBool, Type, parse_quote};
 
 use crate::args::{self, Keys};
-use crate::emit::checks::{embeds, hook_needs, step_impl};
+use crate::emit::checks::{embeds, hook_needs, parse_test, step_impl};
 use crate::emit::docs;
 use crate::emit::fmt::fmt;
-use crate::emit::krate;
 use crate::emit::node::{fingerprint, node};
 use crate::emit::rows::{from_row, row, row_docs};
+use crate::emit::{self, krate};
 use crate::model::item::{Item, Role};
 use crate::model::items::add_item;
 use crate::model::params;
@@ -69,7 +69,7 @@ pub(crate) fn expand(args: StatementArgs, input: ItemStruct) -> syn::Result<Toke
         ));
     }
     let ident = &input.ident;
-    let dialect: Type = parse_quote!(<#target as #krate::sql::Sql>::Dialect);
+    let dialect: Type = parse_quote!(<#target as #krate::Sql>::Dialect);
     let mut items = Vec::new();
     add_item(target, &input.generics, &[], &mut items);
     let item = Item::new(
@@ -83,7 +83,7 @@ pub(crate) fn expand(args: StatementArgs, input: ItemStruct) -> syn::Result<Toke
         &snake_case(&ident.to_string()),
         fingerprint(ident, &input),
         quote!(Scope),
-        quote!(#krate::node::inject::Inject::Subquery),
+        quote!(#krate::Inject::Subquery),
         Vec::new(),
         &fields,
         [&[], &[]],
@@ -93,17 +93,13 @@ pub(crate) fn expand(args: StatementArgs, input: ItemStruct) -> syn::Result<Toke
     let derives = item.derives();
     let bind_params = item.bind_impl();
     let row = row(args.row.as_ref(), &input, true, None)?;
-    let builder = item.builder(&dialect, row.as_ref());
+    let (definitions, builder) = item.builder(&dialect, row.as_ref());
     let embed_checks = embeds(&input, &fields, &dialect);
-    let hook_needs = hook_needs(
-        &input,
-        &[quote!(#target)],
-        quote!(#krate::builder::HookNeeds),
-    );
+    let hook_needs = hook_needs(&input, &[quote!(#target)], quote!(#krate::HookNeeds));
     let fmt = fmt(args.display.as_ref(), args.debug.as_ref(), &input, true)?;
     let rows = row.as_ref().map(|row| {
         quote! {
-            impl #krate::statement::Rows for #ident {
+            impl #krate::Rows for #ident {
                 type Row = #row;
             }
         }
@@ -111,33 +107,18 @@ pub(crate) fn expand(args: StatementArgs, input: ItemStruct) -> syn::Result<Toke
     let from_row = from_row(&input, &dialect);
     let step = step_impl(&input, row.as_ref());
     let parse_check = args.parse_check.as_ref().is_none_or(|check| check.value);
-    let test = parse_check.then(|| {
-        let test = format_ident!("{}_sql_parses", snake_case(&ident.to_string()));
-        quote! {
-            #krate::__if_parse_check! {
-                #[cfg(test)]
-                #[test]
-                fn #test() {
-                    #krate::check::parse::<#ident>();
-                }
-            }
-        }
-    });
+    let test = parse_check.then(|| parse_test(ident));
     let mut documented = input.clone();
     documented.attrs.extend(item.item_docs());
     documented.attrs.extend(row_docs(&input));
-    Ok(quote! {
-        #documented
-
-        #params_struct
-        #derives
-
-        impl #krate::sql::Sql for #ident {
+    let impls = emit::scoped(quote! {
+        impl #krate::Sql for #ident {
             type Dialect = #dialect;
             type Params = #params_ty;
-            const NODE: &'static #krate::node::Node = #node;
+            const NODE: &'static #krate::Node = #node;
         }
 
+        #derives
         #embed_checks
         #hook_needs
         #bind_params
@@ -150,10 +131,16 @@ pub(crate) fn expand(args: StatementArgs, input: ItemStruct) -> syn::Result<Toke
 
         impl #ident {
             /// The SQL, rendered at compile time.
-            pub const SQL: &'static str = <Self as #krate::statement::Statement>::SQL;
+            pub const SQL: &'static str = <Self as #krate::Statement>::SQL;
         }
 
-        #test
         #fmt
+    });
+    Ok(quote! {
+        #documented
+        #params_struct
+        #definitions
+        #test
+        #impls
     })
 }

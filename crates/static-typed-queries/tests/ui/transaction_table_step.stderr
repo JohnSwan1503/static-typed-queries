@@ -2,7 +2,7 @@ error[E0080]: evaluation panicked: `orders` is a table, not a statement
  --> tests/ui/transaction_table_step.rs:6:1
   |
 6 | #[transaction(Postgres, steps(Orders))]
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ evaluation of `<Nightly as static_typed_queries::__private::render::Render>::SIZE` failed inside this call
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ evaluation of `_::<impl static_typed_queries::__private::render::Render for Nightly>::SIZE` failed inside this call
   |
 note: inside `static_typed_queries::__private::render::measure::<static_typed_queries::dialect::Postgres>`
  --> $WORKSPACE/crates/static-typed-queries-core/src/render.rs
@@ -41,7 +41,7 @@ note: erroneous constant encountered
 6 | #[transaction(Postgres, steps(Orders))]
   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
   |
-  = note: this note originates in the macro `::static_typed_queries::__private::impl_transaction` which comes from the expansion of the attribute macro `transaction` (in Nightly builds, run with -Z macro-backtrace for more info)
+  = note: this note originates in the macro `__stq::impl_transaction` which comes from the expansion of the attribute macro `transaction` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 note: erroneous constant encountered
  --> tests/ui/transaction_table_step.rs:6:1
@@ -49,7 +49,7 @@ note: erroneous constant encountered
 6 | #[transaction(Postgres, steps(Orders))]
   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
   |
-  = note: this note originates in the macro `::static_typed_queries::__private::impl_transaction` which comes from the expansion of the attribute macro `transaction` (in Nightly builds, run with -Z macro-backtrace for more info)
+  = note: this note originates in the macro `__stq::impl_transaction` which comes from the expansion of the attribute macro `transaction` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 note: erroneous constant encountered
  --> tests/ui/transaction_table_step.rs:6:1
@@ -57,7 +57,7 @@ note: erroneous constant encountered
 6 | #[transaction(Postgres, steps(Orders))]
   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
   |
-  = note: this note originates in the macro `::static_typed_queries::__private::impl_transaction` which comes from the expansion of the attribute macro `transaction` (in Nightly builds, run with -Z macro-backtrace for more info)
+  = note: this note originates in the macro `__stq::impl_transaction` which comes from the expansion of the attribute macro `transaction` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 note: erroneous constant encountered
  --> tests/ui/transaction_table_step.rs:6:1
@@ -65,4 +65,4 @@ note: erroneous constant encountered
 6 | #[transaction(Postgres, steps(Orders))]
   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
   |
-  = note: this note originates in the macro `::static_typed_queries::__private::impl_transaction` which comes from the expansion of the attribute macro `transaction` (in Nightly builds, run with -Z macro-backtrace for more info)
+  = note: this note originates in the macro `__stq::impl_transaction` which comes from the expansion of the attribute macro `transaction` (in Nightly builds, run with -Z macro-backtrace for more info)

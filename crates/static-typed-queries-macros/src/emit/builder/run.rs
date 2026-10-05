@@ -10,8 +10,8 @@ impl Builder<'_, '_> {
     pub(super) fn query(&self, dialect: &Type, row: Option<&Type>) -> TokenStream {
         let (b, krate) = (&self.b, &self.krate);
         let ident = &self.item.input.ident;
-        let driver = quote!(#krate::dialect::driver);
-        let error = quote!(#krate::__private::sqlx::Error);
+        let driver = quote!(#krate::driver);
+        let error = quote!(#krate::sqlx::Error);
         let unhooked = self.complete(&quote!(#b::NoHooks), &quote!(()));
         let query = match row {
             Some(row) => {
@@ -24,7 +24,7 @@ impl Builder<'_, '_> {
                     pub fn query<'q>(
                         self,
                     ) -> ::core::result::Result<#driver::QueryAs<'q, #dialect, #row>, #error> {
-                        #krate::statement::query_as::<#ident, #row>(&#b::Finish::finish(self))
+                        #krate::query_as::<#ident, #row>(&#b::Finish::finish(self))
                     }
                 }
             }
@@ -33,7 +33,7 @@ impl Builder<'_, '_> {
                 pub fn query<'q>(
                     self,
                 ) -> ::core::result::Result<#driver::Query<'q, #dialect>, #error> {
-                    #krate::statement::query::<#ident>(&#b::Finish::finish(self))
+                    #krate::query::<#ident>(&#b::Finish::finish(self))
                 }
             },
         };
@@ -47,9 +47,9 @@ impl Builder<'_, '_> {
                         self,
                     ) -> ::core::result::Result<#driver::QueryAs<'q, #dialect, O>, #error>
                     where
-                        O: for<'r> #krate::__private::sqlx::FromRow<'r, #driver::Row<#dialect>>,
+                        O: for<'r> #krate::sqlx::FromRow<'r, #driver::Row<#dialect>>,
                     {
-                        #krate::statement::query_as::<#ident, O>(&#b::Finish::finish(self))
+                        #krate::query_as::<#ident, O>(&#b::Finish::finish(self))
                     }
                 }
             }
@@ -59,10 +59,10 @@ impl Builder<'_, '_> {
     pub(super) fn run(&self, dialect: &Type, row: Option<&Type>) -> TokenStream {
         let (b, krate) = (&self.b, &self.krate);
         let ident = &self.item.input.ident;
-        let driver = quote!(#krate::dialect::driver);
-        let sqlx = quote!(#krate::__private::sqlx);
+        let driver = quote!(#krate::driver);
+        let sqlx = quote!(#krate::sqlx);
         let error = quote!(#sqlx::Error);
-        let run = quote!(#krate::statement::run);
+        let run = quote!(#krate::run);
         let acquire = quote!(impl #sqlx::Acquire<'c, Database = #driver::Database<#dialect>>);
         let covered = quote!(#ident: #b::HookNeeds<__V, __I>);
         let hooked = self.complete(&quote!(#b::WithHooks), &self.values);
@@ -105,7 +105,7 @@ impl Builder<'_, '_> {
             #krate::__if_sqlx! {
                 impl<__V> #hooked
                 where
-                    __V: #krate::statement::params::BindHooks<#driver::Database<#dialect>>,
+                    __V: #krate::BindHooks<#driver::Database<#dialect>>,
                 {
                     #run_main
 
@@ -150,7 +150,7 @@ impl Builder<'_, '_> {
                 where
                     __B: #b::Finish,
                     __B::Params: #b::ParamsOf<Item = __Hook>,
-                    __Hook: #krate::sql::Sql,
+                    __Hook: #krate::Sql,
                     (#b::HookValues<__Hook>, __V): #b::Provides<__Hook, __Once>,
                 {
                     #name {
@@ -167,10 +167,10 @@ impl Builder<'_, '_> {
     pub(super) fn transaction_run(&self, steps: &[Step], dialect: &Type) -> TokenStream {
         let (b, krate) = (&self.b, &self.krate);
         let ident = &self.item.input.ident;
-        let run = quote!(#krate::statement::run);
-        let driver = quote!(#krate::dialect::driver);
-        let sqlx = quote!(#krate::__private::sqlx);
-        let transaction = quote!(<#ident as #krate::transaction::Transaction>);
+        let run = quote!(#krate::run);
+        let driver = quote!(#krate::driver);
+        let sqlx = quote!(#krate::sqlx);
+        let transaction = quote!(<#ident as #krate::Transaction>);
         let tx = format_ident!("tx");
         let (runs, names, outputs) = self.run_steps(steps, dialect, &tx, &mut (0, 0));
         let complete = self.complete(&self.hooks, &self.values);
@@ -187,7 +187,7 @@ impl Builder<'_, '_> {
                     ) -> ::core::result::Result<(#(#outputs,)*), #sqlx::Error>
                     where
                         #ident: #b::HookNeeds<__V, __I>,
-                        __V: #krate::statement::params::BindHooks<#driver::Database<#dialect>>,
+                        __V: #krate::BindHooks<#driver::Database<#dialect>>,
                     {
                         let params = #params;
                         let mut tx = #sqlx::Acquire::begin(conn).await?;
@@ -211,8 +211,8 @@ impl Builder<'_, '_> {
     ) -> (Vec<TokenStream>, Vec<Ident>, Vec<TokenStream>) {
         let krate = &self.krate;
         let ident = &self.item.input.ident;
-        let run = quote!(#krate::statement::run);
-        let sqlx = quote!(#krate::__private::sqlx);
+        let run = quote!(#krate::run);
+        let sqlx = quote!(#krate::sqlx);
         let mut statements = Vec::new();
         let mut names = Vec::new();
         let mut outputs = Vec::new();
@@ -242,7 +242,7 @@ impl Builder<'_, '_> {
                     statements.push(quote! {
                         let #name = #run::step::<#dialect, #fetch, _>(
                             &params,
-                            &<#ident as #krate::transaction::Transaction>::STEPS[#index],
+                            &<#ident as #krate::Transaction>::STEPS[#index],
                             &mut #conn,
                         )
                         .await?;

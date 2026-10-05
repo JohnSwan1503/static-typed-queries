@@ -76,8 +76,8 @@ pub(crate) fn from_row(item: &ItemStruct, dialect: &Type) -> Option<TokenStream>
         return None;
     }
     let krate = krate();
-    let sqlx = quote!(#krate::__private::sqlx);
-    let driver = quote!(#krate::dialect::driver);
+    let sqlx = quote!(#krate::sqlx);
+    let driver = quote!(#krate::driver);
     let ident = &item.ident;
     let reads = fields.iter().map(|field| {
         let (name, ty) = (&field.ident, &field.ty);

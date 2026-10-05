@@ -5,8 +5,8 @@ use syn::{Fields, ItemStruct, Type};
 
 use crate::args::{self, Fetch, Keys, Step};
 use crate::emit::checks::{embeds, hook_needs};
-use crate::emit::krate;
 use crate::emit::node::{fingerprint, node};
+use crate::emit::{self, krate};
 use crate::model::item::{Item, Role};
 use crate::model::items::add_item;
 use crate::model::params;
@@ -82,16 +82,16 @@ pub(crate) fn expand(args: TransactionArgs, input: ItemStruct) -> syn::Result<To
     let parts = flat
         .iter()
         .map(|(step, fetch)| {
-            let node = quote!(<#step as #krate::sql::Sql>::NODE);
+            let node = quote!(<#step as #krate::Sql>::NODE);
             match fetch {
                 Fetch::Cte => quote! {
-                    #krate::part::from::From::part(
+                    #krate::From::part(
                         #node,
-                        #krate::part::from::rule::AliasRule::NodeName,
-                        ::core::option::Option::Some(#krate::node::inject::Inject::cte(false)),
+                        #krate::AliasRule::NodeName,
+                        ::core::option::Option::Some(#krate::Inject::cte(false)),
                     )
                 },
-                _ => quote!(#krate::part::expr::Expr::part(#node)),
+                _ => quote!(#krate::Expr::part(#node)),
             }
         })
         .collect();
@@ -99,7 +99,7 @@ pub(crate) fn expand(args: TransactionArgs, input: ItemStruct) -> syn::Result<To
         &snake_case(&ident.to_string()),
         fingerprint(ident, &input),
         quote!(Transaction),
-        quote!(#krate::node::inject::Inject::Subquery),
+        quote!(#krate::Inject::Subquery),
         parts,
         &fields,
         [&[], &[]],
@@ -114,32 +114,34 @@ pub(crate) fn expand(args: TransactionArgs, input: ItemStruct) -> syn::Result<To
         }
     }
     let needs: Vec<TokenStream> = referenced.iter().map(|ty| quote!(#ty)).collect();
-    let hook_needs = hook_needs(&input, &needs, quote!(#krate::builder::HookNeeds));
+    let hook_needs = hook_needs(&input, &needs, quote!(#krate::HookNeeds));
     let embed_checks = embeds(&input, &fields, dialect);
     let params_ty = item.ty();
     let params_struct = item.definition();
     let derives = item.derives();
     let bind_params = item.bind_impl();
-    let builder = item.builder(dialect, None);
+    let (definitions, builder) = item.builder(dialect, None);
     let mut documented = input.clone();
     documented.attrs.extend(item.item_docs());
-    Ok(quote! {
-        #documented
-
-        #params_struct
-        #derives
-
-        impl #krate::sql::Sql for #ident {
+    let impls = emit::scoped(quote! {
+        impl #krate::Sql for #ident {
             type Dialect = #dialect;
             type Params = #params_ty;
-            const NODE: &'static #krate::node::Node = #node;
+            const NODE: &'static #krate::Node = #node;
         }
 
+        #derives
         #embed_checks
         #hook_needs
         #bind_params
         #builder
 
         #krate::impl_transaction!(#ident);
+    });
+    Ok(quote! {
+        #documented
+        #params_struct
+        #definitions
+        #impls
     })
 }

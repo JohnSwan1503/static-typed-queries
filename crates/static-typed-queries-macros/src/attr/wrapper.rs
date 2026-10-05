@@ -4,8 +4,8 @@ use syn::{ItemStruct, Type, parse_quote};
 
 use crate::emit::checks::embeds;
 use crate::emit::docs;
-use crate::emit::krate;
 use crate::emit::node::{fingerprint, node};
+use crate::emit::{self, krate};
 use crate::model::item::{Item, Role};
 use crate::model::items::{add_item, type_args};
 use crate::model::params;
@@ -80,7 +80,7 @@ pub(crate) fn expand(named: &Type, input: &ItemStruct, dialect: &Type) -> TokenS
         &snake_case(&ident.to_string()),
         fingerprint(ident, input),
         quote!(Scope),
-        quote!(#krate::node::inject::Inject::Subquery),
+        quote!(#krate::Inject::Subquery),
         Vec::new(),
         &fields,
         [&[], &[]],
@@ -89,23 +89,24 @@ pub(crate) fn expand(named: &Type, input: &ItemStruct, dialect: &Type) -> TokenS
     let params_struct = item.definition();
     let derives = item.derives();
     let bind_params = item.bind_impl();
-    let builder = item.builder(dialect, None);
+    let (definitions, builder) = item.builder(dialect, None);
     let embed_checks = embeds(input, &fields, dialect);
-    quote! {
-        #input
-
-        #params_struct
-        #derives
-
-        impl #krate::sql::Sql for #ident {
+    let impls = emit::scoped(quote! {
+        impl #krate::Sql for #ident {
             type Dialect = #dialect;
             type Params = #params_ty;
-            const NODE: &'static #krate::node::Node = #node;
+            const NODE: &'static #krate::Node = #node;
         }
 
+        #derives
         #embed_checks
-
         #bind_params
         #builder
+    });
+    quote! {
+        #input
+        #params_struct
+        #definitions
+        #impls
     }
 }

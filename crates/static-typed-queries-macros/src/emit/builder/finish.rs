@@ -16,7 +16,7 @@ impl Builder<'_, '_> {
             })
             .chain(self.item.children.iter().map(|child| {
                 let ty = &child.ty;
-                quote!(#b::Built<<#ty as #krate::sql::Sql>::Params>)
+                quote!(#b::Built<<#ty as #krate::Sql>::Params>)
             }))
             .collect();
         self.ty(&states, hooks, values, &self.root)

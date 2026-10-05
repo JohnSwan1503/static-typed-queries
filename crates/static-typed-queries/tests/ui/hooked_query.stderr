@@ -22,7 +22,7 @@ note: the candidate is defined in the trait `static_typed_queries::Statement`
    | |_______________________________________________________________________________^
    = help: items from traits can only be used if the trait is implemented and in scope
    = note: the following trait defines an item `query`, perhaps you need to implement it:
-           candidate #1: `static_typed_queries::__private::__private::sqlx::Statement`
+           candidate #1: `static_typed_queries::__private::codegen::sqlx::Statement`
 help: use associated function syntax instead
    |
 13 -     let _ = OrderById::builder().id(1).query();

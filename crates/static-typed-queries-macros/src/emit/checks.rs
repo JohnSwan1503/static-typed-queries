@@ -2,7 +2,8 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use syn::{Ident, ItemStruct, Type, parse_quote};
 
-use crate::emit::krate;
+use crate::emit::{krate, krate_path};
+use crate::naming::snake_case;
 
 pub(crate) fn embeds(item: &ItemStruct, items: &[Type], dialect: &Type) -> TokenStream {
     let krate = krate();
@@ -11,13 +12,13 @@ pub(crate) fn embeds(item: &ItemStruct, items: &[Type], dialect: &Type) -> Token
         let checks = items.iter().map(|ty| {
             quote! {
                 const _: () = {
-                    #krate::embed::embeds::<#dialect, <#ty as #krate::sql::Sql>::Dialect>();
-                    #krate::embed::checked::<#ty>();
+                    #krate::embeds::<#dialect, <#ty as #krate::Sql>::Dialect>();
+                    #krate::checked::<#ty>();
                 };
             }
         });
         return quote! {
-            impl #krate::embed::Checked for #ident {}
+            impl #krate::Checked for #ident {}
 
             #(#checks)*
         };
@@ -26,21 +27,19 @@ pub(crate) fn embeds(item: &ItemStruct, items: &[Type], dialect: &Type) -> Token
     let clause = generics.make_where_clause();
     for ty in items {
         clause.predicates.push(parse_quote!(
-            <#ty as #krate::sql::Sql>::Dialect: #krate::embed::EmbedsIn<#dialect>
+            <#ty as #krate::Sql>::Dialect: #krate::EmbedsIn<#dialect>
         ));
-        clause
-            .predicates
-            .push(parse_quote!(#ty: #krate::embed::Checked));
+        clause.predicates.push(parse_quote!(#ty: #krate::Checked));
     }
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
     quote! {
-        impl #impl_generics #krate::embed::Checked for #ident #ty_generics #where_clause {}
+        impl #impl_generics #krate::Checked for #ident #ty_generics #where_clause {}
     }
 }
 
 pub(crate) fn step_impl(item: &ItemStruct, row: Option<&Type>) -> TokenStream {
     let krate = krate();
-    let run = quote!(#krate::statement::run);
+    let run = quote!(#krate::run);
     let (fetch, row) = match row {
         Some(row) => (quote!(#run::AllRows<#row>), quote!(#row)),
         None => (quote!(#run::Affected), quote!(#run::NoRow)),
@@ -79,6 +78,20 @@ pub(crate) fn hook_needs(
     let (impl_generics, _, where_clause) = generics.split_for_impl();
     let (_, ty_generics, _) = item.generics.split_for_impl();
     quote! {
-        impl #impl_generics #krate::builder::HookNeeds<__V, (#(#indices,)*)> for #ident #ty_generics #where_clause {}
+        impl #impl_generics #krate::HookNeeds<__V, (#(#indices,)*)> for #ident #ty_generics #where_clause {}
+    }
+}
+
+pub(crate) fn parse_test(ident: &Ident) -> TokenStream {
+    let krate = krate_path();
+    let test = format_ident!("{}_sql_parses", snake_case(&ident.to_string()));
+    quote! {
+        #krate::__if_parse_check! {
+            #[cfg(test)]
+            #[test]
+            fn #test() {
+                #krate::check::parse::<#ident>();
+            }
+        }
     }
 }

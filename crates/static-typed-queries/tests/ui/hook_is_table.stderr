@@ -2,7 +2,7 @@ error[E0080]: evaluation panicked: `users` is a table, so it can't be a hook of 
  --> tests/ui/hook_is_table.rs:6:1
   |
 6 | #[table(Postgres, name = "orders", before(Users))]
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ evaluation of `_` failed inside this call
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ evaluation of `_::_` failed inside this call
   |
 note: inside `static_typed_queries::__private::render::check_hooks`
  --> $WORKSPACE/crates/static-typed-queries-core/src/render.rs

@@ -9,11 +9,11 @@ error[E0283]: type annotations needed
              where H: Sql;
            - impl<H, X, Rest, I> static_typed_queries::__private::builder::Provides<H, static_typed_queries::__private::builder::There<I>> for (X, Rest)
              where Rest: static_typed_queries::__private::builder::Provides<H, I>;
-note: required by a bound in `OrderByIdBuilder::<ParamId, ItemOrders, WithHooks, __V>::with`
+note: required by a bound in `_::<impl OrderByIdBuilder<ParamId, ItemOrders, WithHooks, __V>>::with`
   --> tests/ui/hook_values_twice.rs:9:1
    |
  9 | #[query(Postgres, sql = "SELECT id FROM {Orders} WHERE id = {_: i64}")]
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `OrderByIdBuilder::<ParamId, ItemOrders, WithHooks, __V>::with`
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `_::<impl OrderByIdBuilder<ParamId, ItemOrders, WithHooks, __V>>::with`
    = note: this error originates in the attribute macro `query` (in Nightly builds, run with -Z macro-backtrace for more info)
 help: consider specifying the generic arguments
    |

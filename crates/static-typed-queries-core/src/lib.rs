@@ -1,6 +1,8 @@
 pub mod builder;
 #[cfg(feature = "parse-check")]
 pub mod check;
+#[doc(hidden)]
+pub mod codegen;
 pub mod dialect;
 pub mod embed;
 pub mod node;

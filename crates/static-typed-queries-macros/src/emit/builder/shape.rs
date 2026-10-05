@@ -3,43 +3,45 @@ use quote::quote;
 use syn::parse_quote;
 
 use super::Builder;
-use crate::emit::docs;
+use crate::emit::{docs, krate_path};
 use crate::model::item::Role;
 
 impl Builder<'_, '_> {
     pub(super) fn markers(&self) -> TokenStream {
-        let b = &self.b;
         let vis = &self.item.input.vis;
         let module = &self.module;
-        let markers = self.item.groups.iter().map(|group| {
-            let marker = &group.marker;
-            quote! {
-                pub struct #marker<__S>(::core::marker::PhantomData<__S>);
-
-                impl<__S: #b::Ready> #b::Ready for #marker<__S> {
-                    type Out = __S::Out;
-                }
-            }
-        });
+        let markers = self.item.groups.iter().map(|group| &group.marker);
         quote! {
             #[doc(hidden)]
             #vis mod #module {
-                #(#markers)*
+                #(pub struct #markers<__S>(::core::marker::PhantomData<__S>);)*
             }
         }
     }
 
-    pub(super) fn definition(&self) -> TokenStream {
+    pub(super) fn marker_impls(&self) -> TokenStream {
         let b = &self.b;
+        let module = &self.module;
+        let markers = self.item.groups.iter().map(|group| &group.marker);
+        quote! {
+            #(
+                impl<__S: #b::Ready> #b::Ready for #module::#markers<__S> {
+                    type Out = __S::Out;
+                }
+            )*
+        }
+    }
+
+    pub(super) fn definition(&self) -> TokenStream {
+        let krate = krate_path();
         let item = self.item;
         let name = self.name;
         let vis = &item.input.vis;
         let ident = &item.input.ident;
-        let root = &self.root;
         let mut params = self.states.clone();
-        params.push(quote!(__H = #b::NoHooks));
+        params.push(quote!(__H = #krate::NoHooks));
         params.push(quote!(__V = ()));
-        params.push(quote!(__K = #root));
+        params.push(quote!(__K = #krate::Root));
         let generics = self.generics(&params);
         let where_clause = &generics.where_clause;
         let group_fields = item.groups.iter().map(|group| {
@@ -165,7 +167,7 @@ impl Builder<'_, '_> {
             }))
             .collect();
         let hooks = if item.runs_as_statement() || item.steps().is_some() {
-            quote!(<#ident as #krate::render::Render>::Hooks)
+            quote!(<#ident as #krate::Render>::Hooks)
         } else {
             quote!(#b::NoHooks)
         };
