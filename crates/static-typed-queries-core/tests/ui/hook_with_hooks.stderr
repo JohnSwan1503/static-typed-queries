@@ -1,18 +1,18 @@
-error[E0080]: evaluation panicked: `tenant_orders` depends on `before` statements, which need a transaction (not supported yet)
+error[E0080]: evaluation panicked: `audit` is a hook of `payments`, so it can't use items with hooks of its own
   --> tests/ui/../support/mod.rs
    |
    |           static_typed_queries_core::impl_statement!($ty);
-   |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ evaluation of `<TenantOrders as static_typed_queries_core::render::Measure>::SIZE` failed inside this call
+   |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ evaluation of `<Paid as static_typed_queries_core::render::Render>::SIZE` failed inside this call
    |
-  ::: tests/ui/before_needs_transaction.rs:42:1
+  ::: tests/ui/hook_with_hooks.rs:53:1
    |
-42 | / root!(TenantOrders: Postgres = node!(
-43 | |     "tenant_orders",
-44 | |     3,
-45 | |     Query,
+53 | / root!(Paid: Postgres = node!(
+54 | |     "paid",
+55 | |     5,
+56 | |     Query,
 ...  |
-48 | |     items = [ORDERS]
-49 | | ));
+59 | |     items = [PAYMENTS]
+60 | | ));
    | |__- in this macro invocation
    |
 note: inside `measure::<Postgres>`
@@ -23,12 +23,34 @@ note: inside `measure::<Postgres>`
 note: inside `render::renderer::Renderer::<'_, Postgres>::statement`
   --> src/render/renderer.rs
    |
-   | /             fail(&[
-   | |                 "`",
-   | |                 main.name.as_str(),
-   | |                 "` depends on `before` statements, which need a transaction (not supported yet)",
-   | |             ]);
-   | |______________^
+   |         self.find_hooks(main, path);
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+note: inside `render::renderer::Renderer::<'_, Postgres>::find_hooks`
+  --> src/render/renderer.rs
+   |
+   |                 self.find_hooks(child, self.child_path(path, child));
+   |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+note: inside `render::renderer::Renderer::<'_, Postgres>::find_hooks`
+  --> src/render/renderer.rs
+   |
+   |         self.add_hooks(node, path, true);
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+note: inside `render::renderer::Renderer::<'_, Postgres>::add_hooks`
+  --> src/render/renderer.rs
+   |
+   |             let (node, path) = hook(owner, hooks[i], self.child_path(path, hooks[i]));
+   |                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+note: inside `render::renderer::hook`
+  --> src/render/renderer.rs
+   |
+   | /         fail(&[
+   | |             "`",
+   | |             hook.name.as_str(),
+   | |             "` is a hook of `",
+   | |             owner.name.as_str(),
+   | |             "`, so it can't use items with hooks of its own",
+   | |         ]);
+   | |__________^
 note: inside `render::error::fail`
   --> $RUST/core/src/panic.rs
    |
@@ -46,15 +68,15 @@ note: erroneous constant encountered
    |           static_typed_queries_core::impl_statement!($ty);
    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    |
-  ::: tests/ui/before_needs_transaction.rs:42:1
+  ::: tests/ui/hook_with_hooks.rs:53:1
    |
-42 | / root!(TenantOrders: Postgres = node!(
-43 | |     "tenant_orders",
-44 | |     3,
-45 | |     Query,
+53 | / root!(Paid: Postgres = node!(
+54 | |     "paid",
+55 | |     5,
+56 | |     Query,
 ...  |
-48 | |     items = [ORDERS]
-49 | | ));
+59 | |     items = [PAYMENTS]
+60 | | ));
    | |__- in this macro invocation
    |
    = note: this note originates in the macro `static_typed_queries_core::impl_statement` which comes from the expansion of the macro `root` (in Nightly builds, run with -Z macro-backtrace for more info)
@@ -65,15 +87,15 @@ note: erroneous constant encountered
    |           static_typed_queries_core::impl_statement!($ty);
    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    |
-  ::: tests/ui/before_needs_transaction.rs:42:1
+  ::: tests/ui/hook_with_hooks.rs:53:1
    |
-42 | / root!(TenantOrders: Postgres = node!(
-43 | |     "tenant_orders",
-44 | |     3,
-45 | |     Query,
+53 | / root!(Paid: Postgres = node!(
+54 | |     "paid",
+55 | |     5,
+56 | |     Query,
 ...  |
-48 | |     items = [ORDERS]
-49 | | ));
+59 | |     items = [PAYMENTS]
+60 | | ));
    | |__- in this macro invocation
    |
    = note: this note originates in the macro `static_typed_queries_core::impl_statement` which comes from the expansion of the macro `root` (in Nightly builds, run with -Z macro-backtrace for more info)
@@ -84,15 +106,15 @@ note: erroneous constant encountered
    |           static_typed_queries_core::impl_statement!($ty);
    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    |
-  ::: tests/ui/before_needs_transaction.rs:42:1
+  ::: tests/ui/hook_with_hooks.rs:53:1
    |
-42 | / root!(TenantOrders: Postgres = node!(
-43 | |     "tenant_orders",
-44 | |     3,
-45 | |     Query,
+53 | / root!(Paid: Postgres = node!(
+54 | |     "paid",
+55 | |     5,
+56 | |     Query,
 ...  |
-48 | |     items = [ORDERS]
-49 | | ));
+59 | |     items = [PAYMENTS]
+60 | | ));
    | |__- in this macro invocation
    |
    = note: this note originates in the macro `static_typed_queries_core::impl_statement` which comes from the expansion of the macro `root` (in Nightly builds, run with -Z macro-backtrace for more info)
@@ -103,34 +125,15 @@ note: erroneous constant encountered
    |           static_typed_queries_core::impl_statement!($ty);
    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    |
-  ::: tests/ui/before_needs_transaction.rs:42:1
+  ::: tests/ui/hook_with_hooks.rs:53:1
    |
-42 | / root!(TenantOrders: Postgres = node!(
-43 | |     "tenant_orders",
-44 | |     3,
-45 | |     Query,
+53 | / root!(Paid: Postgres = node!(
+54 | |     "paid",
+55 | |     5,
+56 | |     Query,
 ...  |
-48 | |     items = [ORDERS]
-49 | | ));
-   | |__- in this macro invocation
-   |
-   = note: this note originates in the macro `static_typed_queries_core::impl_statement` which comes from the expansion of the macro `root` (in Nightly builds, run with -Z macro-backtrace for more info)
-
-note: erroneous constant encountered
-  --> tests/ui/../support/mod.rs
-   |
-   |           static_typed_queries_core::impl_statement!($ty);
-   |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-   |
-  ::: tests/ui/before_needs_transaction.rs:42:1
-   |
-42 | / root!(TenantOrders: Postgres = node!(
-43 | |     "tenant_orders",
-44 | |     3,
-45 | |     Query,
-...  |
-48 | |     items = [ORDERS]
-49 | | ));
+59 | |     items = [PAYMENTS]
+60 | | ));
    | |__- in this macro invocation
    |
    = note: this note originates in the macro `static_typed_queries_core::impl_statement` which comes from the expansion of the macro `root` (in Nightly builds, run with -Z macro-backtrace for more info)

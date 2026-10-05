@@ -2,7 +2,7 @@ error[E0080]: evaluation panicked: table `users` can only be referenced by name
   --> tests/ui/../support/mod.rs
    |
    |           static_typed_queries_core::impl_statement!($ty);
-   |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ evaluation of `<Derived as static_typed_queries_core::render::Measure>::SIZE` failed inside this call
+   |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ evaluation of `<Derived as static_typed_queries_core::render::Render>::SIZE` failed inside this call
    |
   ::: tests/ui/table_as_subquery.rs:15:1
    |
@@ -23,7 +23,12 @@ note: inside `measure::<Postgres>`
 note: inside `render::renderer::Renderer::<'_, Postgres>::statement`
   --> src/render/renderer.rs
    |
-   |         self.collect(main, path);
+   |         self.single(root.name, main, path);
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+note: inside `render::renderer::Renderer::<'_, Postgres>::single`
+  --> src/render/renderer.rs
+   |
+   |         self.collect(node, path);
    |         ^^^^^^^^^^^^^^^^^^^^^^^^
 note: inside `render::renderer::Renderer::<'_, Postgres>::collect`
   --> src/render/renderer.rs
@@ -45,25 +50,6 @@ note: inside `render::error::fail`
    |
    |         Ok(message) => panic!("{}", message),
    |                        --------------------- in this macro invocation
-
-note: erroneous constant encountered
-  --> tests/ui/../support/mod.rs
-   |
-   |           static_typed_queries_core::impl_statement!($ty);
-   |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-   |
-  ::: tests/ui/table_as_subquery.rs:15:1
-   |
-15 | / root!(Derived: Postgres = node!(
-16 | |     "derived",
-17 | |     2,
-18 | |     Query,
-...  |
-21 | |     items = [USERS]
-22 | | ));
-   | |__- in this macro invocation
-   |
-   = note: this note originates in the macro `static_typed_queries_core::impl_statement` which comes from the expansion of the macro `root` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 note: erroneous constant encountered
   --> tests/ui/../support/mod.rs

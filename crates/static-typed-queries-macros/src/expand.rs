@@ -560,7 +560,8 @@ fn node(
             kind: #krate::node::kind::Kind::#kind,
             inject: #inject,
             parts: #krate::part::Parts(&[#(#parts),*]),
-            before: #krate::node::before::Before(&[]),
+            before: #krate::node::hooks::Hooks(&[]),
+            after: #krate::node::hooks::Hooks(&[]),
             items: #krate::node::items::Items(&[#(<#items as #krate::sql::Sql>::NODE),*]),
         }
     }

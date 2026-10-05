@@ -1,5 +1,5 @@
-pub mod before;
 pub mod fingerprint;
+pub mod hooks;
 pub mod inject;
 pub mod items;
 pub mod kind;
@@ -12,6 +12,7 @@ pub struct Node {
     pub kind: kind::Kind,
     pub inject: inject::Inject,
     pub parts: crate::part::Parts,
-    pub before: before::Before,
+    pub before: hooks::Hooks,
+    pub after: hooks::Hooks,
     pub items: items::Items,
 }

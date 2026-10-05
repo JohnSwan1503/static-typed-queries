@@ -10,7 +10,7 @@ error[E0080]: evaluation panicked: `users` is a table, not a statement
   --> tests/ui/../support/mod.rs
    |
    |         static_typed_queries_core::impl_statement!($ty);
-   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ evaluation of `<UsersStatement as static_typed_queries_core::render::Measure>::SIZE` failed inside this call
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ evaluation of `<UsersStatement as static_typed_queries_core::render::Render>::SIZE` failed inside this call
    |
   ::: tests/ui/table_as_statement.rs:13:1
    |
@@ -25,8 +25,13 @@ note: inside `measure::<Postgres>`
 note: inside `render::renderer::Renderer::<'_, Postgres>::statement`
   --> src/render/renderer.rs
    |
-   |             fail(&["`", main.name.as_str(), "` is a table, not a statement"]);
-   |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |         let (main, path) = target(root, Path::ROOT);
+   |                            ^^^^^^^^^^^^^^^^^^^^^^^^
+note: inside `render::renderer::target`
+  --> src/render/renderer.rs
+   |
+   |         fail(&["`", node.name.as_str(), "` is a table, not a statement"]);
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 note: inside `render::error::fail`
   --> $RUST/core/src/panic.rs
    |
@@ -37,19 +42,6 @@ note: inside `render::error::fail`
    |
    |         Ok(message) => panic!("{}", message),
    |                        --------------------- in this macro invocation
-
-note: erroneous constant encountered
-  --> tests/ui/../support/mod.rs
-   |
-   |         static_typed_queries_core::impl_statement!($ty);
-   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-   |
-  ::: tests/ui/table_as_statement.rs:13:1
-   |
-13 | root!(UsersStatement: Postgres = USERS);
-   | --------------------------------------- in this macro invocation
-   |
-   = note: this note originates in the macro `static_typed_queries_core::impl_statement` which comes from the expansion of the macro `root` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 note: erroneous constant encountered
   --> tests/ui/../support/mod.rs

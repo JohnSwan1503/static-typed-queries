@@ -1,5 +1,6 @@
 pub use static_typed_queries_core::builder::Build;
 pub use static_typed_queries_core::sql::Sql;
+pub use static_typed_queries_core::statement::hook::Hook;
 pub use static_typed_queries_core::statement::{Rows, Statement};
 pub use static_typed_queries_macros::{query, statement, table};
 

@@ -2,7 +2,7 @@ error[E0080]: evaluation panicked: `tree` is recursive and has parameters, so it
   --> tests/ui/../support/mod.rs
    |
    |           static_typed_queries_core::impl_statement!($ty);
-   |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ evaluation of `<Both as static_typed_queries_core::render::Measure>::SIZE` failed inside this call
+   |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ evaluation of `<Both as static_typed_queries_core::render::Render>::SIZE` failed inside this call
    |
   ::: tests/ui/recursive_cte_two_paths.rs:38:1
    |
@@ -23,7 +23,12 @@ note: inside `measure::<Postgres>`
 note: inside `render::renderer::Renderer::<'_, Postgres>::statement`
   --> src/render/renderer.rs
    |
-   |         self.collect(main, path);
+   |         self.single(root.name, main, path);
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+note: inside `render::renderer::Renderer::<'_, Postgres>::single`
+  --> src/render/renderer.rs
+   |
+   |         self.collect(node, path);
    |         ^^^^^^^^^^^^^^^^^^^^^^^^
 note: inside `render::renderer::Renderer::<'_, Postgres>::collect`
   --> src/render/renderer.rs
@@ -49,25 +54,6 @@ note: inside `render::error::fail`
    |
    |         Ok(message) => panic!("{}", message),
    |                        --------------------- in this macro invocation
-
-note: erroneous constant encountered
-  --> tests/ui/../support/mod.rs
-   |
-   |           static_typed_queries_core::impl_statement!($ty);
-   |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-   |
-  ::: tests/ui/recursive_cte_two_paths.rs:38:1
-   |
-38 | / root!(Both: Postgres = node!(
-39 | |     "both",
-40 | |     3,
-41 | |     Query,
-...  |
-49 | |     items = [SUBTREE_SIZE, TREE]
-50 | | ));
-   | |__- in this macro invocation
-   |
-   = note: this note originates in the macro `static_typed_queries_core::impl_statement` which comes from the expansion of the macro `root` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 note: erroneous constant encountered
   --> tests/ui/../support/mod.rs

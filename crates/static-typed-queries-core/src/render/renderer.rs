@@ -1,11 +1,12 @@
 use core::marker::PhantomData;
 
-use super::Size;
 use super::error::fail;
+use super::{Offsets, Size};
 use crate::dialect::Dialect;
 use crate::node::Node;
 use crate::node::inject::Inject;
 use crate::node::kind::Kind;
+use crate::node::name::Name;
 use crate::part::Part;
 use crate::part::from::From;
 use crate::part::from::rule::AliasRule;
@@ -15,6 +16,7 @@ use crate::statement::bind::path::Path;
 use crate::statement::bind::slot::Slot;
 
 const MAX_CTES: usize = 64;
+const MAX_HOOKS: usize = 64;
 const MAX_NUMBERED: usize = 1024;
 
 #[derive(Clone, Copy)]
@@ -22,6 +24,14 @@ struct Cte {
     node: &'static Node,
     path: Path,
     suffix: u16,
+}
+
+#[derive(Clone, Copy)]
+struct Hook {
+    name: Name,
+    node: &'static Node,
+    path: Path,
+    after: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -34,7 +44,11 @@ pub(super) struct Renderer<'a, D> {
     root: Option<&'static Node>,
     sql: &'a mut [u8],
     binds: &'a mut [Bind],
+    offsets: &'a mut [Offsets],
     size: Size,
+    rendered: usize,
+    first_bind: usize,
+    hooks: [Option<Hook>; MAX_HOOKS],
     ctes: [Option<Cte>; MAX_CTES],
     cte_count: usize,
     recursive: bool,
@@ -44,12 +58,25 @@ pub(super) struct Renderer<'a, D> {
 }
 
 impl<'a, D: Dialect> Renderer<'a, D> {
-    pub(super) const fn new(sql: &'a mut [u8], binds: &'a mut [Bind]) -> Self {
+    pub(super) const fn new(
+        sql: &'a mut [u8],
+        binds: &'a mut [Bind],
+        offsets: &'a mut [Offsets],
+    ) -> Self {
         Self {
             root: None,
             sql,
             binds,
-            size: Size { sql: 0, binds: 0 },
+            offsets,
+            size: Size {
+                sql: 0,
+                binds: 0,
+                before: 0,
+                after: 0,
+            },
+            rendered: 0,
+            first_bind: 0,
+            hooks: [None; MAX_HOOKS],
             ctes: [None; MAX_CTES],
             cte_count: 0,
             recursive: false,
@@ -65,23 +92,104 @@ impl<'a, D: Dialect> Renderer<'a, D> {
 
     pub(super) const fn statement(&mut self, root: &'static Node) {
         self.root = Some(root);
-        let (main, path) = match (root.kind, Path::ROOT.child(0)) {
-            (Kind::Scope, Some(path)) => (root.items.0[0], path),
-            _ => (root, Path::ROOT),
-        };
-        if let Kind::Table = main.kind {
-            fail(&["`", main.name.as_str(), "` is a table, not a statement"]);
+        let (main, path) = target(root, Path::ROOT);
+        self.find_hooks(main, path);
+        self.render_hooks(false);
+        self.single(root.name, main, path);
+        self.render_hooks(true);
+    }
+
+    const fn find_hooks(&mut self, node: &'static Node, path: Path) {
+        self.add_hooks(node, path, false);
+        self.add_hooks(node, path, true);
+        let parts = node.parts.0;
+        let mut i = 0;
+        while i < parts.len() {
+            let child = match parts[i] {
+                Part::Expr(expr) => Some(expr.as_ref()),
+                Part::From(from) => Some(from.node()),
+                Part::Lit(_) | Part::Ident(_) | Part::Param(_) => None,
+            };
+            if let Some(child) = child {
+                self.find_hooks(child, self.child_path(path, child));
+            }
+            i += 1;
         }
-        if has_before(main) {
-            fail(&[
-                "`",
-                main.name.as_str(),
-                "` depends on `before` statements, which need a transaction (not supported yet)",
-            ]);
+    }
+
+    const fn add_hooks(&mut self, owner: &'static Node, path: Path, after: bool) {
+        let hooks = if after { owner.after.0 } else { owner.before.0 };
+        let mut i = 0;
+        while i < hooks.len() {
+            let name = hooks[i].name;
+            let (node, path) = hook(owner, hooks[i], self.child_path(path, hooks[i]));
+            if !self.has_hook(node, path, after) {
+                let count = self.size.before + self.size.after;
+                if count == MAX_HOOKS {
+                    fail(&["a statement can't have more than 64 hooks"]);
+                }
+                self.hooks[count] = Some(Hook {
+                    name,
+                    node,
+                    path,
+                    after,
+                });
+                if after {
+                    self.size.after += 1;
+                } else {
+                    self.size.before += 1;
+                }
+            }
+            i += 1;
         }
-        self.collect(main, path);
+    }
+
+    const fn has_hook(&self, node: &'static Node, path: Path, after: bool) -> bool {
+        let path = instance_path(node, path);
+        let mut i = 0;
+        while i < self.size.before + self.size.after {
+            if let Some(hook) = self.hooks[i]
+                && hook.after == after
+                && same_node(hook.node, node)
+                && instance_path(hook.node, hook.path).same(&path)
+            {
+                return true;
+            }
+            i += 1;
+        }
+        false
+    }
+
+    const fn render_hooks(&mut self, after: bool) {
+        let mut i = 0;
+        while i < self.size.before + self.size.after {
+            if let Some(hook) = self.hooks[i]
+                && hook.after == after
+            {
+                self.single(hook.name, hook.node, hook.path);
+            }
+            i += 1;
+        }
+    }
+
+    const fn single(&mut self, name: Name, node: &'static Node, path: Path) {
+        self.ctes = [None; MAX_CTES];
+        self.cte_count = 0;
+        self.recursive = false;
+        self.numbered = [None; MAX_NUMBERED];
+        self.numbered_count = 0;
+        self.first_bind = self.size.binds;
+        self.collect(node, path);
         self.with_clause();
-        self.body(main, path);
+        self.body(node, path);
+        if !self.offsets.is_empty() {
+            self.offsets[self.rendered] = Offsets {
+                name,
+                sql: self.size.sql,
+                binds: self.size.binds,
+            };
+        }
+        self.rendered += 1;
     }
 
     const fn collect(&mut self, node: &'static Node, path: Path) {
@@ -290,7 +398,7 @@ impl<'a, D: Dialect> Renderer<'a, D> {
     }
 
     const fn bind(&mut self, node: &'static Node, path: Path, param: Param) {
-        if self.size.binds == u16::MAX as usize {
+        if self.size.binds - self.first_bind == u16::MAX as usize {
             fail(&["a statement can't have more than 65535 parameters"]);
         }
         if !self.binds.is_empty() {
@@ -449,16 +557,50 @@ const fn instance_path(node: &'static Node, path: Path) -> Path {
     if has_params(node) { path } else { Path::ROOT }
 }
 
-const fn has_before(node: &'static Node) -> bool {
-    if !node.before.0.is_empty() {
+const fn target(node: &'static Node, path: Path) -> (&'static Node, Path) {
+    let (node, path) = match (node.kind, path.child(0)) {
+        (Kind::Scope, Some(path)) => (node.items.0[0], path),
+        _ => (node, path),
+    };
+    if let Kind::Table = node.kind {
+        fail(&["`", node.name.as_str(), "` is a table, not a statement"]);
+    }
+    (node, path)
+}
+
+const fn hook(owner: &'static Node, hook: &'static Node, path: Path) -> (&'static Node, Path) {
+    if let Kind::Table = hook.kind {
+        fail(&[
+            "`",
+            hook.name.as_str(),
+            "` is a table, so it can't be a hook of `",
+            owner.name.as_str(),
+            "`",
+        ]);
+    }
+    let (node, path) = target(hook, path);
+    if has_hooks(node) {
+        fail(&[
+            "`",
+            hook.name.as_str(),
+            "` is a hook of `",
+            owner.name.as_str(),
+            "`, so it can't use items with hooks of its own",
+        ]);
+    }
+    (node, path)
+}
+
+const fn has_hooks(node: &'static Node) -> bool {
+    if !node.before.0.is_empty() || !node.after.0.is_empty() {
         return true;
     }
     let parts = node.parts.0;
     let mut i = 0;
     while i < parts.len() {
         let nested = match parts[i] {
-            Part::Expr(expr) => has_before(expr.as_ref()),
-            Part::From(from) => has_before(from.node()),
+            Part::Expr(expr) => has_hooks(expr.as_ref()),
+            Part::From(from) => has_hooks(from.node()),
             Part::Lit(_) | Part::Ident(_) | Part::Param(_) => false,
         };
         if nested {

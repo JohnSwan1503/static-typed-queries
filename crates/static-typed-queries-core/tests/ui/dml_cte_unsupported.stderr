@@ -2,7 +2,7 @@ error[E0080]: evaluation panicked: `archived` modifies data, which MySql doesn't
   --> tests/ui/../support/mod.rs
    |
    |           static_typed_queries_core::impl_statement!($ty);
-   |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ evaluation of `<ArchiveCount as static_typed_queries_core::render::Measure>::SIZE` failed inside this call
+   |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ evaluation of `<ArchiveCount as static_typed_queries_core::render::Render>::SIZE` failed inside this call
    |
   ::: tests/ui/dml_cte_unsupported.rs:20:1
    |
@@ -23,7 +23,12 @@ note: inside `measure::<MySql>`
 note: inside `render::renderer::Renderer::<'_, MySql>::statement`
   --> src/render/renderer.rs
    |
-   |         self.collect(main, path);
+   |         self.single(root.name, main, path);
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+note: inside `render::renderer::Renderer::<'_, MySql>::single`
+  --> src/render/renderer.rs
+   |
+   |         self.collect(node, path);
    |         ^^^^^^^^^^^^^^^^^^^^^^^^
 note: inside `render::renderer::Renderer::<'_, MySql>::collect`
   --> src/render/renderer.rs
@@ -52,25 +57,6 @@ note: inside `render::error::fail`
    |
    |         Ok(message) => panic!("{}", message),
    |                        --------------------- in this macro invocation
-
-note: erroneous constant encountered
-  --> tests/ui/../support/mod.rs
-   |
-   |           static_typed_queries_core::impl_statement!($ty);
-   |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-   |
-  ::: tests/ui/dml_cte_unsupported.rs:20:1
-   |
-20 | / root!(ArchiveCount: MySql = node!(
-21 | |     "archive_count",
-22 | |     2,
-23 | |     Query,
-...  |
-26 | |     items = [ARCHIVED]
-27 | | ));
-   | |__- in this macro invocation
-   |
-   = note: this note originates in the macro `static_typed_queries_core::impl_statement` which comes from the expansion of the macro `root` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 note: erroneous constant encountered
   --> tests/ui/../support/mod.rs

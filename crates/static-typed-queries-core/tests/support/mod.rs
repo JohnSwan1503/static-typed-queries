@@ -6,6 +6,8 @@ macro_rules! node {
         $inject:expr,
         [$($part:expr),* $(,)?]
         $(, items = [$($item:expr),* $(,)?])?
+        $(, before = [$($before:expr),* $(,)?])?
+        $(, after = [$($after:expr),* $(,)?])?
         $(,)?
     ) => {
         &static_typed_queries_core::node::Node {
@@ -14,7 +16,8 @@ macro_rules! node {
             kind: static_typed_queries_core::node::kind::Kind::$kind,
             inject: $inject,
             parts: static_typed_queries_core::part::Parts(&[$($part),*]),
-            before: static_typed_queries_core::node::before::Before(&[]),
+            before: static_typed_queries_core::node::hooks::Hooks(&[$($($before),*)?]),
+            after: static_typed_queries_core::node::hooks::Hooks(&[$($($after),*)?]),
             items: static_typed_queries_core::node::items::Items(&[$($($item),*)?]),
         }
     };

@@ -1,4 +1,5 @@
 pub mod bind;
+pub mod hook;
 #[cfg(feature = "sqlx")]
 pub mod params;
 
@@ -6,12 +7,15 @@ pub mod params;
 use crate::dialect::driver::{Arguments, Database, Driver, Query, QueryAs, Row};
 use crate::sql::Sql;
 use bind::Bind;
+use hook::Hook;
 #[cfg(feature = "sqlx")]
 use params::BindParams;
 
 pub trait Statement: Sql {
     const SQL: &'static str;
     const BINDS: &'static [Bind];
+    const BEFORE: &'static [Hook];
+    const AFTER: &'static [Hook];
 
     #[cfg(feature = "sqlx")]
     fn arguments(params: &Self::Params) -> Result<Arguments<Self::Dialect>, sqlx::Error>
@@ -35,6 +39,7 @@ pub trait Statement: Sql {
         Self::Params: BindParams<Database<Self::Dialect>>,
         Arguments<Self::Dialect>: sqlx::IntoArguments<Database<Self::Dialect>>,
     {
+        const { unhooked::<Self>() };
         let args = Self::arguments(params)?;
         Ok(sqlx::query_with(sqlx::SqlStr::from_static(Self::SQL), args))
     }
@@ -47,12 +52,21 @@ pub trait Statement: Sql {
         Arguments<Self::Dialect>: sqlx::IntoArguments<Database<Self::Dialect>>,
         O: for<'r> sqlx::FromRow<'r, Row<Self::Dialect>>,
     {
+        const { unhooked::<Self>() };
         let args = Self::arguments(params)?;
         Ok(sqlx::query_as_with(
             sqlx::SqlStr::from_static(Self::SQL),
             args,
         ))
     }
+}
+
+#[cfg(feature = "sqlx")]
+const fn unhooked<S: Statement + ?Sized>() {
+    assert!(
+        S::BEFORE.is_empty() && S::AFTER.is_empty(),
+        "a statement with `before` or `after` hooks can't run as a single query"
+    );
 }
 
 pub trait Rows: Statement {
@@ -62,36 +76,37 @@ pub trait Rows: Statement {
 #[macro_export]
 macro_rules! impl_statement {
     ($($ty:ty),+ $(,)?) => {$(
-        impl $crate::render::Measure for $ty {
+        impl $crate::render::Render for $ty {
             const SIZE: $crate::render::Size = $crate::render::measure::<
                 <$ty as $crate::sql::Sql>::Dialect,
             >(<$ty as $crate::sql::Sql>::NODE);
+            const OUTPUT: $crate::render::Output = {
+                const RENDERED: $crate::render::Rendered<
+                    { <$ty as $crate::render::Render>::SIZE.sql },
+                    { <$ty as $crate::render::Render>::SIZE.binds },
+                    { <$ty as $crate::render::Render>::SIZE.statements() },
+                > = $crate::render::render::<<$ty as $crate::sql::Sql>::Dialect, _, _, _>(
+                    <$ty as $crate::sql::Sql>::NODE,
+                );
+                const STATEMENTS: [$crate::statement::hook::Hook;
+                    <$ty as $crate::render::Render>::SIZE.statements()] = RENDERED.statements();
+                $crate::render::Output::new(&STATEMENTS, RENDERED.before())
+            };
         }
 
         impl $crate::statement::Statement for $ty {
-            const SQL: &'static str = {
-                const BYTES: [u8; <$ty as $crate::render::Measure>::SIZE.sql] =
-                    $crate::render::sql::<
-                        <$ty as $crate::sql::Sql>::Dialect,
-                        { <$ty as $crate::render::Measure>::SIZE.sql },
-                    >(<$ty as $crate::sql::Sql>::NODE);
-                $crate::render::as_str(&BYTES)
-            };
-            const BINDS: &'static [$crate::statement::bind::Bind] = {
-                const BINDS: [$crate::statement::bind::Bind;
-                    <$ty as $crate::render::Measure>::SIZE.binds] = $crate::render::binds::<
-                    <$ty as $crate::sql::Sql>::Dialect,
-                    { <$ty as $crate::render::Measure>::SIZE.binds },
-                >(<$ty as $crate::sql::Sql>::NODE);
-                &BINDS
-            };
+            const SQL: &'static str = <$ty as $crate::render::Render>::OUTPUT.main().sql();
+            const BINDS: &'static [$crate::statement::bind::Bind] =
+                <$ty as $crate::render::Render>::OUTPUT.main().binds();
+            const BEFORE: &'static [$crate::statement::hook::Hook] =
+                <$ty as $crate::render::Render>::OUTPUT.before();
+            const AFTER: &'static [$crate::statement::hook::Hook] =
+                <$ty as $crate::render::Render>::OUTPUT.after();
         }
 
         $crate::__impl_sqlx!($ty);
 
-        const _: $crate::render::Size = <$ty as $crate::render::Measure>::SIZE;
         const _: &str = <$ty as $crate::statement::Statement>::SQL;
-        const _: &[$crate::statement::bind::Bind] = <$ty as $crate::statement::Statement>::BINDS;
     )+};
 }
 
