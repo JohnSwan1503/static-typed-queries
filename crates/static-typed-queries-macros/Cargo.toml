@@ -6,10 +6,6 @@ edition = "2024"
 [lib]
 proc-macro = true
 
-[features]
-default = []
-nightly-spans = []
-
 [dependencies]
 # Procedural Macro Dependencies
 proc-macro2 = { version = "1.0.107", features = ["span-locations"] }

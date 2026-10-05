@@ -1,5 +1,5 @@
 use proc_macro2::Span;
-use quote::format_ident;
+use quote::{ToTokens, format_ident};
 use syn::{GenericArgument, Ident, PathArguments, Type};
 
 pub(crate) fn snake_case(name: &str) -> String {
@@ -101,4 +101,8 @@ pub(crate) fn camel(ident: &Ident) -> String {
                 .unwrap_or_default()
         })
         .collect()
+}
+
+pub(crate) fn type_key(ty: &Type) -> String {
+    ty.to_token_stream().to_string()
 }

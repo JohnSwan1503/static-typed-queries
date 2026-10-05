@@ -1,8 +1,8 @@
-use quote::ToTokens;
 use syn::parse::{Parse, ParseStream};
 use syn::{Ident, LitStr, Token, Type};
 
 use crate::args::Placement;
+use crate::naming::type_key;
 
 pub(crate) enum Segment {
     Lit(String),
@@ -302,8 +302,4 @@ fn last_words(text: &str) -> Vec<&'static str> {
             _ => "",
         })
         .collect()
-}
-
-fn type_key(ty: &Type) -> String {
-    ty.to_token_stream().to_string()
 }

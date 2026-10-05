@@ -2,7 +2,6 @@
 name = "static-typed-queries-core"
 version = "0.0.0"
 edition = "2024"
-build = "build.rs"
 
 [features]
 default = []
@@ -20,6 +19,3 @@ static-typed-queries-core = { path = ".", features = ["mysql", "postgres", "sqli
 sqlx = { workspace = true, features = ["runtime-tokio"] }
 tokio.workspace = true
 trybuild.workspace = true
-
-[build-dependencies]
-version_check = "0.9.5"

@@ -1164,7 +1164,6 @@ dependencies = [
  "static-typed-queries-core",
  "tokio",
  "trybuild",
- "version_check",
 ]
 
 [[package]]

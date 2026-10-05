@@ -10,7 +10,7 @@ use syn::{
 use crate::analyze::{self, Analysis, Columns, Engine, Kind};
 use crate::args::{Args, Fetch, NamedQuery, Placement, Sql, Step};
 use crate::docs;
-use crate::naming::{camel, field_name, short_name, snake_case, to_ident, unique};
+use crate::naming::{camel, field_name, short_name, snake_case, to_ident, type_key, unique};
 use crate::template::{self, Segment, Template};
 
 const RESERVED: &[&str] = &[
@@ -2401,10 +2401,6 @@ fn doc(text: &str) -> TokenStream {
 
 fn builder_field(name: &Ident) -> Ident {
     format_ident!("__{}", name.to_string().trim_start_matches("r#"))
-}
-
-fn type_key(ty: &Type) -> String {
-    ty.to_token_stream().to_string()
 }
 
 fn fmt(args: &Args, item: &ItemStruct, statement: bool) -> syn::Result<TokenStream> {
