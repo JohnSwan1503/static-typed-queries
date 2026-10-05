@@ -1,18 +1,16 @@
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
 use syn::parse::{Parse, ParseStream};
-use syn::{Fields, ItemStruct, LitStr, Type};
+use syn::{Fields, ItemStruct, Type};
 
 use crate::args::{self, Fetch, Keys, Step};
 use crate::emit::checks::{embeds, hook_needs};
-use crate::emit::docs::Source;
 use crate::emit::krate;
 use crate::emit::node::{fingerprint, node};
+use crate::model::item::{Item, Role};
 use crate::model::items::add_item;
-use crate::model::params::Params;
+use crate::model::params;
 use crate::naming::{snake_case, type_key};
-use crate::sql::analyze::{Analysis, Columns, Kind};
-use crate::sql::template::Template;
 
 pub(crate) struct TransactionArgs {
     dialect: Type,
@@ -50,47 +48,37 @@ impl Parse for TransactionArgs {
     }
 }
 
-pub(crate) fn expand(args: TransactionArgs, item: ItemStruct) -> syn::Result<TokenStream> {
+pub(crate) fn expand(args: TransactionArgs, input: ItemStruct) -> syn::Result<TokenStream> {
     let krate = krate();
-    if !item.generics.params.is_empty() {
+    if !input.generics.params.is_empty() {
         return Err(syn::Error::new_spanned(
-            &item.generics,
+            &input.generics,
             "transactions can't be generic",
         ));
     }
-    if !matches!(item.fields, Fields::Unit) {
+    if !matches!(input.fields, Fields::Unit) {
         return Err(syn::Error::new_spanned(
-            &item.fields,
+            &input.fields,
             "transactions can't have fields; each step returns its own rows",
         ));
     }
     let steps = &args.steps;
-    let ident = &item.ident;
+    let ident = &input.ident;
     let dialect = &args.dialect;
     Step::check_ctes(steps)?;
     let mut flat = Vec::new();
     Step::flatten(steps, &mut flat);
     let mut items = Vec::new();
     for (step, _) in &flat {
-        add_item(step, &item.generics, &[], &mut items);
+        add_item(step, &input.generics, &[], &mut items);
     }
     let fields: Vec<Type> = items.iter().map(|(ty, _)| ty.clone()).collect();
-    let template = Template {
-        segments: Vec::new(),
-        params: Vec::new(),
-        children: Vec::new(),
-    };
-    let analysis = Analysis {
-        kind: Kind::Query,
-        returns_rows: false,
-        columns: Columns::default(),
-        refs: Vec::new(),
-        names: Vec::new(),
-    };
-    let source = LitStr::new(&ident.to_string(), Span::call_site());
-    let mut params = Params::new(&template, &analysis, &items, &item, &source)?;
-    params.runs = false;
-    params.steps = Some(steps);
+    let item = Item::new(
+        &input,
+        Role::Transaction { steps },
+        Vec::new(),
+        params::children(&items, &[], &[]),
+    );
     let parts = flat
         .iter()
         .map(|(step, fetch)| {
@@ -109,7 +97,7 @@ pub(crate) fn expand(args: TransactionArgs, item: ItemStruct) -> syn::Result<Tok
         .collect();
     let node = node(
         &snake_case(&ident.to_string()),
-        fingerprint(ident, &item),
+        fingerprint(ident, &input),
         quote!(Transaction),
         quote!(#krate::node::inject::Inject::Subquery),
         parts,
@@ -126,17 +114,15 @@ pub(crate) fn expand(args: TransactionArgs, item: ItemStruct) -> syn::Result<Tok
         }
     }
     let needs: Vec<TokenStream> = referenced.iter().map(|ty| quote!(#ty)).collect();
-    let hook_needs = hook_needs(&item, &needs, quote!(#krate::builder::HookNeeds));
-    let embed_checks = embeds(&item, &fields, dialect);
-    let params_ty = params.ty();
-    let params_struct = params.definition();
-    let derives = params.derives();
-    let bind_params = params.bind_impl();
-    let builder = params.builder(dialect, None);
-    let mut documented = item.clone();
-    documented
-        .attrs
-        .extend(params.item_docs(Source::Transaction(steps)));
+    let hook_needs = hook_needs(&input, &needs, quote!(#krate::builder::HookNeeds));
+    let embed_checks = embeds(&input, &fields, dialect);
+    let params_ty = item.ty();
+    let params_struct = item.definition();
+    let derives = item.derives();
+    let bind_params = item.bind_impl();
+    let builder = item.builder(dialect, None);
+    let mut documented = input.clone();
+    documented.attrs.extend(item.item_docs());
     Ok(quote! {
         #documented
 

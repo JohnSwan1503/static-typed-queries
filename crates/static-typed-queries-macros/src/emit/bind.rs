@@ -3,9 +3,9 @@ use quote::quote;
 use syn::{GenericParam, parse_quote};
 
 use crate::emit::krate;
-use crate::model::params::Params;
+use crate::model::item::Item;
 
-impl<'a> Params<'a> {
+impl<'a> Item<'a> {
     pub(crate) fn bind_impl(&self) -> Option<TokenStream> {
         if self.is_empty() {
             return None;
@@ -14,7 +14,7 @@ impl<'a> Params<'a> {
         let sqlx = quote!(#krate::__private::sqlx);
         let bind = quote!(#krate::statement::params::BindParams);
 
-        let mut generics = self.item.generics.clone();
+        let mut generics = self.input.generics.clone();
         generics
             .params
             .insert(0, GenericParam::Type(parse_quote!(__DB: #sqlx::Database)));

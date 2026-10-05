@@ -8,13 +8,13 @@ use syn::{
 use crate::args::{self, Keys, Placement, Sql};
 use crate::attr::wrapper::{self, separate};
 use crate::emit::checks::{embeds, hook_needs, step_impl};
-use crate::emit::docs::Source;
 use crate::emit::fmt::fmt;
 use crate::emit::krate;
 use crate::emit::node::{fingerprint, node, parts, placement};
 use crate::emit::rows::{from_row, row, row_docs};
+use crate::model::item::{Item, Role};
 use crate::model::items::items;
-use crate::model::params::Params;
+use crate::model::params;
 use crate::naming::{snake_case, type_key};
 use crate::sql::analyze::{self, Engine, Kind};
 use crate::sql::template;
@@ -86,7 +86,7 @@ impl Parse for QueryArgs {
 pub(crate) struct NamedQuery {
     sql: LitStr,
     args: QueryArgs,
-    item: ItemStruct,
+    input: ItemStruct,
 }
 
 impl Parse for NamedQuery {
@@ -97,14 +97,14 @@ impl Parse for NamedQuery {
         Ok(NamedQuery {
             sql,
             args: content.parse()?,
-            item: input.parse()?,
+            input: input.parse()?,
         })
     }
 }
 
-pub(crate) fn expand(args: QueryArgs, item: ItemStruct) -> syn::Result<TokenStream> {
+pub(crate) fn expand(args: QueryArgs, input: ItemStruct) -> syn::Result<TokenStream> {
     let krate = krate();
-    if let Some(param) = item
+    if let Some(param) = input
         .generics
         .params
         .iter()
@@ -138,10 +138,10 @@ pub(crate) fn expand(args: QueryArgs, item: ItemStruct) -> syn::Result<TokenStre
     };
     let track = file.as_ref().map(|(_, track)| track);
     let template = template::parse(sql)?;
-    let engine = Engine::of(&args.dialect, args.grammar.as_ref(), &item.generics)?;
+    let engine = Engine::of(&args.dialect, args.grammar.as_ref(), &input.generics)?;
     let analysis = analyze::analyze(&template, engine, sql)?;
     if let Some(row) = &args.row {
-        if !item.generics.params.is_empty() {
+        if !input.generics.params.is_empty() {
             return Err(syn::Error::new_spanned(
                 row,
                 "generic queries can't take `row`; they aren't statements on their own",
@@ -156,7 +156,7 @@ pub(crate) fn expand(args: QueryArgs, item: ItemStruct) -> syn::Result<TokenStre
     }
     let row = row(
         args.row.as_ref(),
-        &item,
+        &input,
         analysis.returns_rows,
         Some(&analysis.columns),
     )?;
@@ -166,7 +166,7 @@ pub(crate) fn expand(args: QueryArgs, item: ItemStruct) -> syn::Result<TokenStre
         Kind::Ddl => quote!(Ddl),
     };
 
-    let wrappers = separate(args.separate.as_deref(), &item, &template)?;
+    let wrappers = separate(args.separate.as_deref(), &input, &template)?;
     let separate: Vec<(Type, Type)> = wrappers
         .iter()
         .map(|(named, wrapper)| {
@@ -174,9 +174,9 @@ pub(crate) fn expand(args: QueryArgs, item: ItemStruct) -> syn::Result<TokenStre
             (named.clone(), parse_quote!(#wrapper))
         })
         .collect();
-    let items = items(&template, &item.generics, &separate);
+    let items = items(&template, &input.generics, &separate);
     let fields: Vec<Type> = items.iter().map(|(ty, _)| ty.clone()).collect();
-    let embed_checks = embeds(&item, &fields, &args.dialect);
+    let embed_checks = embeds(&input, &fields, &args.dialect);
     let mut referenced: Vec<&Type> = Vec::new();
     for ty in &template.children {
         if !referenced
@@ -187,37 +187,40 @@ pub(crate) fn expand(args: QueryArgs, item: ItemStruct) -> syn::Result<TokenStre
         }
     }
     let needs: Vec<TokenStream> = referenced.iter().map(|ty| quote!(#ty)).collect();
-    let hook_needs = hook_needs(&item, &needs, quote!(#krate::builder::HookNeeds));
-    let ident = &item.ident;
+    let hook_needs = hook_needs(&input, &needs, quote!(#krate::builder::HookNeeds));
+    let ident = &input.ident;
     let node_name = args
         .name
         .as_ref()
         .map_or_else(|| snake_case(&ident.to_string()), LitStr::value);
     let inject = placement(args.placement.unwrap_or(Placement::Subquery));
-    let params = Params::new(&template, &analysis, &items, &item, sql)?;
+    let groups = params::groups(&template, &analysis, sql)?;
+    let aliases = params::aliases(&template, &analysis);
+    let children = params::children(&items, &aliases, &groups);
+    let item = Item::new(&input, Role::Query { sql }, groups, children);
     let node = node(
         &node_name,
-        fingerprint(ident, &item),
+        fingerprint(ident, &input),
         kind,
         inject,
-        parts(&template, &analysis, &params),
+        parts(&template, &analysis, &item),
         &fields,
         [&[], &[]],
     );
-    let wrappers = wrappers
+    let wrappers: Vec<TokenStream> = wrappers
         .iter()
-        .map(|(named, wrapper)| wrapper::wrapper(named, wrapper, &args.dialect, sql))
-        .collect::<syn::Result<Vec<_>>>()?;
+        .map(|(named, wrapper)| wrapper::expand(named, wrapper, &args.dialect))
+        .collect();
 
     let dialect = &args.dialect;
-    let (impl_generics, ty_generics, where_clause) = item.generics.split_for_impl();
-    let params_ty = params.ty();
-    let params_struct = params.definition();
-    let derives = params.derives();
-    let bind_params = params.bind_impl();
-    let builder = params.builder(dialect, row.as_ref());
+    let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
+    let params_ty = item.ty();
+    let params_struct = item.definition();
+    let derives = item.derives();
+    let bind_params = item.bind_impl();
+    let builder = item.builder(dialect, row.as_ref());
     let parse_check = args.parse_check.as_ref().is_none_or(|check| check.value);
-    let statement = item.generics.params.is_empty().then(|| {
+    let statement = input.generics.params.is_empty().then(|| {
         let test = format_ident!("{}_sql_parses", snake_case(&ident.to_string()));
         let test = parse_check.then(|| {
             quote! {
@@ -237,7 +240,7 @@ pub(crate) fn expand(args: QueryArgs, item: ItemStruct) -> syn::Result<TokenStre
                 }
             }
         });
-        let from_row = from_row(&item, dialect);
+        let from_row = from_row(&input, dialect);
         quote! {
             #krate::impl_statement!(#ident);
             #rows
@@ -251,13 +254,11 @@ pub(crate) fn expand(args: QueryArgs, item: ItemStruct) -> syn::Result<TokenStre
             #test
         }
     });
-    let fmt = fmt(args.display.as_ref(), args.debug.as_ref(), &item, true)?;
-    let step = step_impl(&item, row.as_ref());
-    let mut documented = item.clone();
-    documented
-        .attrs
-        .extend(params.item_docs(Source::Template(sql)));
-    documented.attrs.extend(row_docs(&item));
+    let fmt = fmt(args.display.as_ref(), args.debug.as_ref(), &input, true)?;
+    let step = step_impl(&input, row.as_ref());
+    let mut documented = input.clone();
+    documented.attrs.extend(item.item_docs());
+    documented.attrs.extend(row_docs(&input));
 
     Ok(quote! {
         #documented
@@ -311,20 +312,20 @@ fn template_file(file: &LitStr) -> syn::Result<(LitStr, TokenStream)> {
     ))
 }
 
-pub(crate) fn named(name: &Path, args: TokenStream, item: &ItemStruct) -> TokenStream {
-    quote!(#name! { (#args) #item })
+pub(crate) fn named(name: &Path, args: TokenStream, input: &ItemStruct) -> TokenStream {
+    quote!(#name! { (#args) #input })
 }
 
 pub(crate) fn named_query(named: NamedQuery) -> syn::Result<TokenStream> {
     let NamedQuery {
         sql,
         mut args,
-        item,
+        input,
     } = named;
     let used = match args.sql.replace(Sql::Inline(sql)) {
         Some(Sql::Named(name)) => Some(quote!(const _: &str = #name;)),
         _ => None,
     };
-    let query = expand(args, item)?;
+    let query = expand(args, input)?;
     Ok(quote!(#used #query))
 }

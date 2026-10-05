@@ -4,9 +4,9 @@ use syn::{Ident, parse_quote};
 
 use crate::emit::docs;
 use crate::emit::{doc, krate};
-use crate::model::params::Params;
+use crate::model::item::{Item, Role};
 
-impl<'a> Params<'a> {
+impl<'a> Item<'a> {
     pub(crate) fn marker(&self) -> Option<TokenStream> {
         let args = self.item_args();
         (!args.is_empty()).then(|| quote!(::core::marker::PhantomData<fn() -> (#(#args,)*)>))
@@ -21,7 +21,7 @@ impl<'a> Params<'a> {
         if self.is_empty() {
             return quote!(());
         }
-        let ident = &self.ident;
+        let ident = &self.params_ident;
         let args = self.item_args();
         if args.is_empty() {
             quote!(#ident)
@@ -35,9 +35,9 @@ impl<'a> Params<'a> {
             return None;
         }
         let krate = krate();
-        let vis = &self.item.vis;
-        let ident = &self.ident;
-        let generics = &self.item.generics;
+        let vis = &self.input.vis;
+        let ident = &self.params_ident;
+        let generics = &self.input.generics;
         let where_clause = &generics.where_clause;
         let groups = self.groups.iter().map(|group| {
             let (name, ty) = (&group.name, &group.ty);
@@ -61,9 +61,9 @@ impl<'a> Params<'a> {
         });
         let doc = doc(&format!(
             "The parameters of [`{}`], built by [`{}`].",
-            self.item.ident, self.builder
+            self.input.ident, self.builder
         ));
-        let hidden = self.synthetic.then(|| quote!(#[doc(hidden)]));
+        let hidden = matches!(self.role, Role::Wrapper).then(|| quote!(#[doc(hidden)]));
         let marker = self.marker().map(|marker| {
             quote! {
                 #[doc(hidden)]
@@ -85,7 +85,7 @@ impl<'a> Params<'a> {
         if self.is_empty() {
             return None;
         }
-        let ident = &self.ident;
+        let ident = &self.params_ident;
         let name = ident.to_string();
         let krate = krate();
         let fields: Vec<(&Ident, TokenStream)> = self
@@ -114,7 +114,7 @@ impl<'a> Params<'a> {
             .map(|name| name.to_string().trim_start_matches("r#").to_owned())
             .collect();
         let bounded = |bound: TokenStream| {
-            let mut generics = self.item.generics.clone();
+            let mut generics = self.input.generics.clone();
             let where_clause = generics.make_where_clause();
             for (_, ty) in &fields {
                 where_clause
@@ -123,7 +123,7 @@ impl<'a> Params<'a> {
             }
             generics
         };
-        let (_, ty_generics, _) = self.item.generics.split_for_impl();
+        let (_, ty_generics, _) = self.input.generics.split_for_impl();
         let generics = bounded(quote!(::core::clone::Clone));
         let (impl_generics, _, where_clause) = generics.split_for_impl();
         let mut out = quote! {
@@ -161,8 +161,8 @@ impl<'a> Params<'a> {
         out.extend(quote! {
             impl #impl_generics ::core::cmp::Eq for #ident #ty_generics #where_clause {}
         });
-        let (impl_generics, _, where_clause) = self.item.generics.split_for_impl();
-        let item = &self.item.ident;
+        let (impl_generics, _, where_clause) = self.input.generics.split_for_impl();
+        let item = &self.input.ident;
         out.extend(quote! {
             impl #impl_generics #krate::builder::ParamsOf for #ident #ty_generics #where_clause {
                 type Item = #item #ty_generics;

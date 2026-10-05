@@ -1,28 +1,28 @@
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
-use syn::{ItemStruct, LitStr, Type, parse_quote};
+use syn::{ItemStruct, Type, parse_quote};
 
 use crate::emit::checks::embeds;
 use crate::emit::docs;
 use crate::emit::krate;
 use crate::emit::node::{fingerprint, node};
+use crate::model::item::{Item, Role};
 use crate::model::items::{add_item, type_args};
-use crate::model::params::Params;
+use crate::model::params;
 use crate::naming::{camel, field_name, snake_case, type_key};
-use crate::sql::analyze::{Analysis, Columns, Kind};
 use crate::sql::template::Template;
 
 pub(crate) fn separate(
     types: Option<&[Type]>,
-    item: &ItemStruct,
+    input: &ItemStruct,
     template: &Template,
 ) -> syn::Result<Vec<(Type, ItemStruct)>> {
     let Some(types) = types else {
         return Ok(Vec::new());
     };
-    if !item.generics.params.is_empty() {
+    if !input.generics.params.is_empty() {
         return Err(syn::Error::new_spanned(
-            &item.generics,
+            &input.generics,
             "`separate` isn't supported on generic queries",
         ));
     }
@@ -55,58 +55,44 @@ pub(crate) fn separate(
         }
         let ident = format_ident!(
             "__{}{}",
-            item.ident,
+            input.ident,
             camel(&format_ident!("{}", field_name(ty)))
         );
-        let vis = &item.vis;
+        let vis = &input.vis;
         wrappers.push((ty.clone(), parse_quote!(#[doc(hidden)] #vis struct #ident;)));
     }
     Ok(wrappers)
 }
 
-pub(crate) fn wrapper(
-    named: &Type,
-    item: &ItemStruct,
-    dialect: &Type,
-    sql: &LitStr,
-) -> syn::Result<TokenStream> {
+pub(crate) fn expand(named: &Type, input: &ItemStruct, dialect: &Type) -> TokenStream {
     let krate = krate();
     let mut items = Vec::new();
-    add_item(named, &item.generics, &[], &mut items);
-    let template = Template {
-        segments: Vec::new(),
-        params: Vec::new(),
-        children: Vec::new(),
-    };
-    let analysis = Analysis {
-        kind: Kind::Query,
-        returns_rows: false,
-        columns: Columns::default(),
-        refs: Vec::new(),
-        names: Vec::new(),
-    };
-    let mut params = Params::new(&template, &analysis, &items, item, sql)?;
-    params.synthetic = true;
-    params.runs = false;
-    let ident = &item.ident;
+    add_item(named, &input.generics, &[], &mut items);
+    let item = Item::new(
+        input,
+        Role::Wrapper,
+        Vec::new(),
+        params::children(&items, &[], &[]),
+    );
+    let ident = &input.ident;
     let fields: Vec<Type> = items.iter().map(|(ty, _)| ty.clone()).collect();
     let node = node(
         &snake_case(&ident.to_string()),
-        fingerprint(ident, item),
+        fingerprint(ident, input),
         quote!(Scope),
         quote!(#krate::node::inject::Inject::Subquery),
         Vec::new(),
         &fields,
         [&[], &[]],
     );
-    let params_ty = params.ty();
-    let params_struct = params.definition();
-    let derives = params.derives();
-    let bind_params = params.bind_impl();
-    let builder = params.builder(dialect, None);
-    let embed_checks = embeds(item, &fields, dialect);
-    Ok(quote! {
-        #item
+    let params_ty = item.ty();
+    let params_struct = item.definition();
+    let derives = item.derives();
+    let bind_params = item.bind_impl();
+    let builder = item.builder(dialect, None);
+    let embed_checks = embeds(input, &fields, dialect);
+    quote! {
+        #input
 
         #params_struct
         #derives
@@ -121,5 +107,5 @@ pub(crate) fn wrapper(
 
         #bind_params
         #builder
-    })
+    }
 }

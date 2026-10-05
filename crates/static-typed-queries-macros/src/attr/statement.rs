@@ -1,20 +1,19 @@
-use proc_macro2::{Span, TokenStream};
+use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use syn::parse::{Parse, ParseStream};
-use syn::{Ident, ItemStruct, LitBool, LitStr, Type, parse_quote};
+use syn::{Ident, ItemStruct, LitBool, Type, parse_quote};
 
 use crate::args::{self, Keys};
 use crate::emit::checks::{embeds, hook_needs, step_impl};
-use crate::emit::docs::{self, Source};
+use crate::emit::docs;
 use crate::emit::fmt::fmt;
 use crate::emit::krate;
 use crate::emit::node::{fingerprint, node};
 use crate::emit::rows::{from_row, row, row_docs};
+use crate::model::item::{Item, Role};
 use crate::model::items::add_item;
-use crate::model::params::Params;
+use crate::model::params;
 use crate::naming::snake_case;
-use crate::sql::analyze::{Analysis, Columns, Kind};
-use crate::sql::template::Template;
 
 pub(crate) struct StatementArgs {
     target: Type,
@@ -60,56 +59,48 @@ impl Parse for StatementArgs {
     }
 }
 
-pub(crate) fn expand(args: StatementArgs, item: ItemStruct) -> syn::Result<TokenStream> {
+pub(crate) fn expand(args: StatementArgs, input: ItemStruct) -> syn::Result<TokenStream> {
     let krate = krate();
     let target = &args.target;
-    if !item.generics.params.is_empty() {
+    if !input.generics.params.is_empty() {
         return Err(syn::Error::new_spanned(
-            &item.generics,
+            &input.generics,
             "statements can't be generic; name the instantiation instead",
         ));
     }
-    let ident = &item.ident;
+    let ident = &input.ident;
     let dialect: Type = parse_quote!(<#target as #krate::sql::Sql>::Dialect);
     let mut items = Vec::new();
-    add_item(target, &item.generics, &[], &mut items);
-    let source = LitStr::new(&docs::type_string(target), Span::call_site());
-    let template = Template {
-        segments: Vec::new(),
-        params: Vec::new(),
-        children: Vec::new(),
-    };
-    let analysis = Analysis {
-        kind: Kind::Query,
-        returns_rows: true,
-        columns: Columns::default(),
-        refs: Vec::new(),
-        names: Vec::new(),
-    };
-    let params = Params::new(&template, &analysis, &items, &item, &source)?;
+    add_item(target, &input.generics, &[], &mut items);
+    let item = Item::new(
+        &input,
+        Role::Statement { target },
+        Vec::new(),
+        params::children(&items, &[], &[]),
+    );
     let fields: Vec<Type> = items.iter().map(|(ty, _)| ty.clone()).collect();
     let node = node(
         &snake_case(&ident.to_string()),
-        fingerprint(ident, &item),
+        fingerprint(ident, &input),
         quote!(Scope),
         quote!(#krate::node::inject::Inject::Subquery),
         Vec::new(),
         &fields,
         [&[], &[]],
     );
-    let params_ty = params.ty();
-    let params_struct = params.definition();
-    let derives = params.derives();
-    let bind_params = params.bind_impl();
-    let row = row(args.row.as_ref(), &item, true, None)?;
-    let builder = params.builder(&dialect, row.as_ref());
-    let embed_checks = embeds(&item, &fields, &dialect);
+    let params_ty = item.ty();
+    let params_struct = item.definition();
+    let derives = item.derives();
+    let bind_params = item.bind_impl();
+    let row = row(args.row.as_ref(), &input, true, None)?;
+    let builder = item.builder(&dialect, row.as_ref());
+    let embed_checks = embeds(&input, &fields, &dialect);
     let hook_needs = hook_needs(
-        &item,
+        &input,
         &[quote!(#target)],
         quote!(#krate::builder::HookNeeds),
     );
-    let fmt = fmt(args.display.as_ref(), args.debug.as_ref(), &item, true)?;
+    let fmt = fmt(args.display.as_ref(), args.debug.as_ref(), &input, true)?;
     let rows = row.as_ref().map(|row| {
         quote! {
             impl #krate::statement::Rows for #ident {
@@ -117,8 +108,8 @@ pub(crate) fn expand(args: StatementArgs, item: ItemStruct) -> syn::Result<Token
             }
         }
     });
-    let from_row = from_row(&item, &dialect);
-    let step = step_impl(&item, row.as_ref());
+    let from_row = from_row(&input, &dialect);
+    let step = step_impl(&input, row.as_ref());
     let parse_check = args.parse_check.as_ref().is_none_or(|check| check.value);
     let test = parse_check.then(|| {
         let test = format_ident!("{}_sql_parses", snake_case(&ident.to_string()));
@@ -132,11 +123,9 @@ pub(crate) fn expand(args: StatementArgs, item: ItemStruct) -> syn::Result<Token
             }
         }
     });
-    let mut documented = item.clone();
-    documented
-        .attrs
-        .extend(params.item_docs(Source::Statement(target)));
-    documented.attrs.extend(row_docs(&item));
+    let mut documented = input.clone();
+    documented.attrs.extend(item.item_docs());
+    documented.attrs.extend(row_docs(&input));
     Ok(quote! {
         #documented
 

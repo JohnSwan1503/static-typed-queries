@@ -4,7 +4,7 @@ use syn::{Ident, ItemStruct, Type};
 
 use crate::args::Placement;
 use crate::emit::krate;
-use crate::model::params::Params;
+use crate::model::item::Item;
 use crate::sql::analyze::Analysis;
 use crate::sql::template::{Segment, Template};
 
@@ -55,7 +55,7 @@ pub(crate) fn placement(placement: Placement) -> TokenStream {
     }
 }
 
-pub(crate) fn parts(template: &Template, analysis: &Analysis, params: &Params) -> Vec<TokenStream> {
+pub(crate) fn parts(template: &Template, analysis: &Analysis, item: &Item) -> Vec<TokenStream> {
     let krate = krate();
     let mut positions = analysis.refs.iter();
     template
@@ -64,7 +64,7 @@ pub(crate) fn parts(template: &Template, analysis: &Analysis, params: &Params) -
         .map(|segment| match segment {
             Segment::Lit(text) => quote!(#krate::part::lit::Lit::part(#text)),
             Segment::Param(slot) => {
-                let (field, ty) = params.describe(*slot);
+                let (field, ty) = item.describe(*slot);
                 let slot = Literal::u16_unsuffixed(*slot);
                 quote!(#krate::part::param::Param::part(#slot, #field, #ty))
             }

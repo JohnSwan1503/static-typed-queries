@@ -5,10 +5,10 @@ use syn::{Generics, Ident, Type, parse_quote};
 use crate::args::{Fetch, Step};
 use crate::emit::docs;
 use crate::emit::{doc, krate};
-use crate::model::params::Params;
+use crate::model::item::{Item, Role};
 use crate::naming::camel;
 
-impl<'a> Params<'a> {
+impl<'a> Item<'a> {
     pub(crate) fn builder_in(
         &self,
         states: &[TokenStream],
@@ -22,7 +22,7 @@ impl<'a> Params<'a> {
     }
 
     pub(crate) fn generics(&self, extra: &[TokenStream]) -> Generics {
-        let mut generics = self.item.generics.clone();
+        let mut generics = self.input.generics.clone();
         for param in extra {
             generics
                 .params
@@ -39,7 +39,7 @@ impl<'a> Params<'a> {
         counts: &mut (usize, usize),
     ) -> (Vec<TokenStream>, Vec<Ident>, Vec<TokenStream>) {
         let krate = krate();
-        let ident = &self.item.ident;
+        let ident = &self.input.ident;
         let run = quote!(#krate::statement::run);
         let sqlx = quote!(#krate::__private::sqlx);
         let mut statements = Vec::new();
@@ -122,7 +122,7 @@ impl<'a> Params<'a> {
         finish: &TokenStream,
     ) -> TokenStream {
         let krate = krate();
-        let ident = &self.item.ident;
+        let ident = &self.input.ident;
         let b = quote!(#krate::builder);
         let run = quote!(#krate::statement::run);
         let driver = quote!(#krate::dialect::driver);
@@ -159,8 +159,8 @@ impl<'a> Params<'a> {
 
     pub(crate) fn builder(&self, dialect: &Type, row: Option<&Type>) -> TokenStream {
         let krate = krate();
-        let ident = &self.item.ident;
-        let (impl_generics, ty_generics, where_clause) = self.item.generics.split_for_impl();
+        let ident = &self.input.ident;
+        let (impl_generics, ty_generics, where_clause) = self.input.generics.split_for_impl();
         if self.is_empty() {
             return quote! {
                 impl #impl_generics #krate::builder::Build for #ident #ty_generics #where_clause {
@@ -175,7 +175,7 @@ impl<'a> Params<'a> {
 
         let b = quote!(#krate::builder);
         let builder = &self.builder;
-        let vis = &self.item.vis;
+        let vis = &self.input.vis;
         let module = self.module();
         let states = self.states();
         let params_ty = self.ty();
@@ -232,11 +232,11 @@ impl<'a> Params<'a> {
             quote!(#field: #state)
         });
         let group_states = self.groups.iter().map(|group| &group.state);
-        let hidden = self.synthetic.then(|| quote!(#[doc(hidden)]));
+        let hidden = matches!(self.role, Role::Wrapper).then(|| quote!(#[doc(hidden)]));
         let builder_doc = docs::attrs(&[
             format!(
                 "Builds [`{}`]; start with `{}`.",
-                self.ident,
+                self.params_ident,
                 self.constructor()
             ),
             String::new(),
@@ -435,7 +435,7 @@ impl<'a> Params<'a> {
         let complete = self.builder_in(&complete, &hooked, &values, &root);
         let generics = self.generics(&[hooked.clone(), values.clone()]);
         let (impl_generics, _, where_clause) = generics.split_for_impl();
-        let params_ident = &self.ident;
+        let params_ident = &self.params_ident;
         let extract_groups = self.groups.iter().map(|group| {
             let (name, field) = (&group.name, &group.field);
             let expect = quote!(.expect("the builder's type guarantees every parameter is set"));
@@ -473,7 +473,7 @@ impl<'a> Params<'a> {
                 }
             }
         });
-        if self.statement() {
+        if self.runs_as_statement() {
             let driver = quote!(#krate::dialect::driver);
             let error = quote!(#krate::__private::sqlx::Error);
             let query = match row {
@@ -582,7 +582,7 @@ impl<'a> Params<'a> {
             });
         }
 
-        if self.statement() || self.steps.is_some() {
+        if self.runs_as_statement() || self.steps().is_some() {
             let mut params = states.clone();
             params.push(values.clone());
             let generics = self.generics(&params);
@@ -629,17 +629,17 @@ impl<'a> Params<'a> {
                 quote!(<<#ty as #b::Build>::Builder as #b::Settled>::Slot)
             }))
             .collect();
-        if let Some(steps) = self.steps {
+        if let Some(steps) = self.steps() {
             out.extend(self.transaction_run(steps, dialect, &complete, &finish));
         }
 
-        let hooks = if self.statement() || self.steps.is_some() {
+        let hooks = if self.runs_as_statement() || self.steps().is_some() {
             quote!(<#ident as #krate::render::Render>::Hooks)
         } else {
             quote!(#b::NoHooks)
         };
         let initial = self.builder_in(&initial, &hooks, &quote!(()), &root);
-        let mut generics = self.item.generics.clone();
+        let mut generics = self.input.generics.clone();
         for child in &self.children {
             let ty = &child.ty;
             let clause = generics.make_where_clause();

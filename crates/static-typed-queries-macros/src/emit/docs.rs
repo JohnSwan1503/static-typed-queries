@@ -1,8 +1,8 @@
 use quote::ToTokens;
-use syn::{Attribute, Ident, LitStr, Type, parse_quote};
+use syn::{Attribute, Ident, Type, parse_quote};
 
 use crate::args::{Fetch, Step};
-use crate::model::params::Params;
+use crate::model::item::{Item, Role};
 use crate::naming::type_key;
 use crate::sql::analyze::Origin;
 
@@ -127,40 +127,33 @@ pub(crate) fn type_string(ty: &Type) -> String {
     out
 }
 
-pub(crate) enum Source<'a> {
-    Template(&'a LitStr),
-    Statement(&'a Type),
-    Table(&'a [Type], &'a [Type]),
-    Transaction(&'a [Step]),
-}
-
-impl<'a> Params<'a> {
-    pub(crate) fn item_docs(&self, source: Source) -> Vec<syn::Attribute> {
+impl<'a> Item<'a> {
+    pub(crate) fn item_docs(&self) -> Vec<syn::Attribute> {
         let mut lines = Vec::new();
         if self
-            .item
+            .input
             .attrs
             .iter()
             .any(|attr| attr.path().is_ident("doc"))
         {
             lines.push(String::new());
         }
-        match source {
-            Source::Template(sql) => {
+        match self.role {
+            Role::Query { sql } => {
                 lines.push("# Template".to_owned());
                 lines.push(String::new());
                 lines.push("```sql".to_owned());
                 lines.extend(template(&sql.value()));
                 lines.push("```".to_owned());
             }
-            Source::Statement(target) => {
+            Role::Statement { target } => {
                 lines.push(format!("Runs {} as a statement.", self.link(target)))
             }
-            Source::Transaction(steps) => lines.push(format!(
+            Role::Transaction { steps } => lines.push(format!(
                 "Runs {} in one transaction, in this order.",
                 self.describe_steps(steps)
             )),
-            Source::Table(before, after) => {
+            Role::Table { before, after } => {
                 let list = |hooks: &[Type]| {
                     let links: Vec<String> = hooks.iter().map(|ty| self.link(ty)).collect();
                     links.join(", ")
@@ -179,6 +172,7 @@ impl<'a> Params<'a> {
                     "Every statement that uses this table runs {runs}, each hook once. A hook with parameters takes its values from the statement builder's `with`."
                 ));
             }
+            Role::Wrapper => {}
         }
         if !self.is_empty() {
             lines.push(String::new());
