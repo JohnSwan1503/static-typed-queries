@@ -1,7 +1,12 @@
+use sqlx::{Executor, IntoArguments};
+
 use super::Dialect;
 
 pub trait Driver: Dialect {
-    type Database: sqlx::Database;
+    type Database: sqlx::Database<Arguments: IntoArguments<Self::Database>>;
+
+    // sqlx implements `Executor` for each connection type separately; generic code gets it here.
+    fn executor(conn: &mut Connection<Self>) -> impl Executor<'_, Database = Self::Database>;
 
     fn rows_affected(result: &<Self::Database as sqlx::Database>::QueryResult) -> u64;
 }

@@ -1,17 +1,16 @@
 use core::marker::PhantomData;
 
-use sqlx::{Executor, FromRow, IntoArguments, SqlStr};
+use sqlx::{FromRow, SqlStr};
 
 use super::Rows;
 use super::hook::Hook;
 use super::params::{BindHooks, BindParams, arguments};
-use crate::dialect::driver::{Arguments, Connection, Database, Driver, Query, QueryAs, Row};
+use crate::dialect::driver::{Connection, Database, Driver, Query, QueryAs, Row};
 
 pub fn query<'q, D, P>(values: &P, statement: &Hook) -> Result<Query<'q, D>, sqlx::Error>
 where
     D: Driver,
     P: BindParams<Database<D>> + ?Sized,
-    Arguments<D>: IntoArguments<Database<D>>,
 {
     let args = arguments::<D, P>(values, statement.binds())?;
     Ok(sqlx::query_with(SqlStr::from_static(statement.sql()), args))
@@ -22,7 +21,6 @@ where
     D: Driver,
     O: for<'r> FromRow<'r, Row<D>>,
     P: BindParams<Database<D>> + ?Sized,
-    Arguments<D>: IntoArguments<Database<D>>,
 {
     let args = arguments::<D, P>(values, statement.binds())?;
     Ok(sqlx::query_as_with(
@@ -47,12 +45,7 @@ pub trait Fetch<D: Driver> {
     ) -> impl Future<Output = Result<Self::Output, sqlx::Error>>;
 }
 
-impl<D> Fetch<D> for Affected
-where
-    D: Driver,
-    Arguments<D>: IntoArguments<Database<D>>,
-    for<'e> &'e mut Connection<D>: Executor<'e, Database = Database<D>>,
-{
+impl<D: Driver> Fetch<D> for Affected {
     type Output = u64;
 
     fn fetch<P: BindParams<Database<D>> + ?Sized>(
@@ -61,7 +54,7 @@ where
         conn: &mut Connection<D>,
     ) -> impl Future<Output = Result<u64, sqlx::Error>> {
         let query = query::<D, P>(values, statement);
-        async move { Ok(D::rows_affected(&query?.execute(conn).await?)) }
+        async move { Ok(D::rows_affected(&query?.execute(D::executor(conn)).await?)) }
     }
 }
 
@@ -69,8 +62,6 @@ impl<D, T> Fetch<D> for AllRows<T>
 where
     D: Driver,
     T: for<'r> FromRow<'r, Row<D>> + Send + Unpin,
-    Arguments<D>: IntoArguments<Database<D>>,
-    for<'e> &'e mut Connection<D>: Executor<'e, Database = Database<D>>,
 {
     type Output = Vec<T>;
 
@@ -80,7 +71,7 @@ where
         conn: &mut Connection<D>,
     ) -> impl Future<Output = Result<Vec<T>, sqlx::Error>> {
         let query = query_as::<D, T, P>(values, statement);
-        async move { query?.fetch_all(conn).await }
+        async move { query?.fetch_all(D::executor(conn)).await }
     }
 }
 
@@ -90,8 +81,6 @@ impl<D, T> Fetch<D> for One<T>
 where
     D: Driver,
     T: for<'r> FromRow<'r, Row<D>> + Send + Unpin,
-    Arguments<D>: IntoArguments<Database<D>>,
-    for<'e> &'e mut Connection<D>: Executor<'e, Database = Database<D>>,
 {
     type Output = T;
 
@@ -101,7 +90,7 @@ where
         conn: &mut Connection<D>,
     ) -> impl Future<Output = Result<T, sqlx::Error>> {
         let query = query_as::<D, T, P>(values, statement);
-        async move { query?.fetch_one(conn).await }
+        async move { query?.fetch_one(D::executor(conn)).await }
     }
 }
 
@@ -111,8 +100,6 @@ impl<D, T> Fetch<D> for Optional<T>
 where
     D: Driver,
     T: for<'r> FromRow<'r, Row<D>> + Send + Unpin,
-    Arguments<D>: IntoArguments<Database<D>>,
-    for<'e> &'e mut Connection<D>: Executor<'e, Database = Database<D>>,
 {
     type Output = Option<T>;
 
@@ -122,7 +109,7 @@ where
         conn: &mut Connection<D>,
     ) -> impl Future<Output = Result<Option<T>, sqlx::Error>> {
         let query = query_as::<D, T, P>(values, statement);
-        async move { query?.fetch_optional(conn).await }
+        async move { query?.fetch_optional(D::executor(conn)).await }
     }
 }
 
@@ -164,8 +151,6 @@ pub async fn hooks<D, V>(
 where
     D: Driver,
     V: BindHooks<Database<D>>,
-    Arguments<D>: IntoArguments<Database<D>>,
-    for<'e> &'e mut Connection<D>: Executor<'e, Database = Database<D>>,
 {
     for hook in hooks {
         let values = values.values(hook).unwrap_or(&());

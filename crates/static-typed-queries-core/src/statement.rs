@@ -6,7 +6,7 @@ pub mod params;
 pub mod run;
 
 #[cfg(feature = "sqlx")]
-use crate::dialect::driver::{Arguments, Database, Driver, Query, QueryAs, Row};
+use crate::dialect::driver::{Database, Driver, Query, QueryAs, Row};
 use crate::hooks::Single;
 #[cfg(feature = "sqlx")]
 use crate::render::Render;
@@ -34,7 +34,6 @@ pub fn query<'q, S, I>(statement: &S) -> Result<Query<'q, S::Dialect>, sqlx::Err
 where
     S: Statement + Render + Single<I> + BindParams<Database<S::Dialect>>,
     S::Dialect: Driver,
-    Arguments<S::Dialect>: sqlx::IntoArguments<Database<S::Dialect>>,
 {
     run::query::<S::Dialect, S>(statement, &S::OUTPUT.main())
 }
@@ -45,7 +44,6 @@ pub fn query_as<'q, S, O, I>(statement: &S) -> Result<QueryAs<'q, S::Dialect, O>
 where
     S: Statement + Render + Single<I> + BindParams<Database<S::Dialect>>,
     S::Dialect: Driver,
-    Arguments<S::Dialect>: sqlx::IntoArguments<Database<S::Dialect>>,
     O: for<'r> sqlx::FromRow<'r, Row<S::Dialect>>,
 {
     run::query_as::<S::Dialect, O, S>(statement, &S::OUTPUT.main())

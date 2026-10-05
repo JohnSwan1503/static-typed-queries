@@ -37,6 +37,12 @@ macro_rules! dialect {
             impl crate::dialect::driver::Driver for $ty {
                 type Database = sqlx::$ty;
 
+                fn executor(
+                    conn: &mut <sqlx::$ty as sqlx::Database>::Connection,
+                ) -> impl sqlx::Executor<'_, Database = sqlx::$ty> {
+                    conn
+                }
+
                 fn rows_affected(result: &<sqlx::$ty as sqlx::Database>::QueryResult) -> u64 {
                     result.rows_affected()
                 }

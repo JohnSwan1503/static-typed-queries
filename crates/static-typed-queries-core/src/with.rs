@@ -1,7 +1,7 @@
-use sqlx::{Acquire, Executor, FromRow, IntoArguments};
+use sqlx::{Acquire, FromRow};
 
 use crate::builder::Finish;
-use crate::dialect::driver::{Arguments, Connection, Database, Driver, Row};
+use crate::dialect::driver::{Connection, Database, Driver, Row};
 use crate::hooks::{HookNeeds, HookValues, Provides};
 use crate::render::Render;
 use crate::sql::Sql;
@@ -45,8 +45,6 @@ impl<S, V> With<S, V> {
         S::Dialect: Driver,
         V: BindHooks<Database<S::Dialect>>,
         A: Acquire<'c, Database = Database<S::Dialect>>,
-        Arguments<S::Dialect>: IntoArguments<Database<S::Dialect>>,
-        for<'e> &'e mut Connection<S::Dialect>: Executor<'e, Database = Database<S::Dialect>>,
     {
         self.transaction(conn, async |statement, conn| statement.run(conn).await)
             .await
@@ -59,8 +57,6 @@ impl<S, V> With<S, V> {
         O: for<'r> FromRow<'r, Row<S::Dialect>> + Send + Unpin,
         V: BindHooks<Database<S::Dialect>>,
         A: Acquire<'c, Database = Database<S::Dialect>>,
-        Arguments<S::Dialect>: IntoArguments<Database<S::Dialect>>,
-        for<'e> &'e mut Connection<S::Dialect>: Executor<'e, Database = Database<S::Dialect>>,
     {
         self.transaction(conn, async |statement, conn| {
             step::<S::Dialect, AllRows<O>, _>(&statement, &S::OUTPUT.main(), conn).await
@@ -80,8 +76,6 @@ impl<S, V> With<S, V> {
         S::Dialect: Driver,
         V: BindHooks<Database<S::Dialect>>,
         A: Acquire<'c, Database = Database<S::Dialect>>,
-        Arguments<S::Dialect>: IntoArguments<Database<S::Dialect>>,
-        for<'e> &'e mut Connection<S::Dialect>: Executor<'e, Database = Database<S::Dialect>>,
     {
         let mut tx = conn.begin().await?;
         hooks::<S::Dialect, V>(&self.values, S::OUTPUT.before(), &mut tx).await?;
