@@ -71,3 +71,7 @@ pub mod prelude {
 pub mod __private {
     pub use static_typed_queries_core::*;
 }
+
+#[cfg(doctest)]
+#[doc = include_str!("../../../README.md")]
+pub struct ReadmeDoctests;
