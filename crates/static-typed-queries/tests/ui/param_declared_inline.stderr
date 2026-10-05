@@ -1,10 +1,14 @@
 error: parameters are the struct's fields; add `pub total: i64` and write `{total}`
+         SELECT id FROM {Orders} WHERE total > {total: i64}
+                                               ^^^^^^^^^^^^
  --> tests/ui/param_declared_inline.rs:6:25
   |
 6 | #[query(Postgres, sql = "SELECT id FROM {Orders} WHERE total > {total: i64}")]
   |                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 error: parameters are the struct's fields; add `pub name: String` and write `{name}`
+         SELECT id FROM {Orders} WHERE status = {_: String}
+                                                ^^^^^^^^^^^
  --> tests/ui/param_declared_inline.rs:9:25
   |
 9 | #[query(Postgres, sql = "SELECT id FROM {Orders} WHERE status = {_: String}")]

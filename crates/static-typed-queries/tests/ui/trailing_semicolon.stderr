@@ -1,4 +1,6 @@
 error: remove the trailing `;`: templates get embedded in other statements
+         SELECT 1;
+                 ^
  --> tests/ui/trailing_semicolon.rs:3:25
   |
 3 | #[query(Postgres, sql = "SELECT 1;")]

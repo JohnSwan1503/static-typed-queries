@@ -1,6 +1,19 @@
-error: invalid SQL for PostgreSQL: sql parser error: Expected: end of statement, found: ORDER at Line: 1, Column: 58
-         checked: SELECT id FROM (SELECT __stq_r0) WHERE org_id = __stq_p0 ORDER
+error: invalid SQL for PostgreSQL: Expected: end of statement, found: ORDER
+         SELECT id FROM {Users} WHERE org_id = {org_id} ORDER
+                                                        ^^^^^
  --> tests/ui/invalid_sql.rs:6:25
   |
 6 | #[query(Postgres, sql = "SELECT id FROM {Users} WHERE org_id = {org_id} ORDER")]
   |                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: invalid SQL for PostgreSQL: Expected: end of statement, found: {org_id}
+         line 3: WHERE org_id = {org_id} {org_id}
+                                         ^^^^^^^^
+  --> tests/ui/invalid_sql.rs:13:11
+   |
+13 |       sql = "
+   |  ___________^
+14 | |     SELECT id, email FROM {Users}
+15 | |     WHERE org_id = {org_id} {org_id}
+16 | |     ORDER BY email"
+   | |___________________^

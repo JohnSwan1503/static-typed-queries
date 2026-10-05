@@ -1,4 +1,6 @@
 error: `active` is a field, so it is embedded the way the field is marked; write `{active}`
+         SELECT count(*) FROM {active as cte}
+                              ^^^^^^^^^^^^^^^
   --> tests/ui/item_field_marks.rs:11:25
    |
 11 | #[query(Postgres, sql = "SELECT count(*) FROM {active as cte}")]
