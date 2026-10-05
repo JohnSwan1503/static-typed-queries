@@ -2,6 +2,7 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use syn::{Ident, ItemStruct, LitBool, Type, WherePredicate, parse_quote};
 
+use crate::emit::run::{Rows, rows};
 use crate::emit::{krate, krate_path};
 use crate::naming::snake_case;
 
@@ -75,16 +76,12 @@ pub(crate) fn values(item: &ItemStruct, holds_values: bool) -> TokenStream {
 
 pub(crate) fn step_impl(item: &ItemStruct, row: Option<&Type>) -> TokenStream {
     let krate = krate();
-    let run = quote!(#krate::run);
-    let (fetch, row) = match row {
-        Some(row) => (quote!(#run::AllRows<#row>), quote!(#row)),
-        None => (quote!(#run::Affected), quote!(#run::NoRow)),
-    };
+    let Rows { fetch, row, .. } = rows(row);
     let ident = &item.ident;
     let (impl_generics, ty_generics, where_clause) = item.generics.split_for_impl();
     quote! {
         #krate::__if_sqlx! {
-            impl #impl_generics #run::Step for #ident #ty_generics #where_clause {
+            impl #impl_generics #krate::run::Step for #ident #ty_generics #where_clause {
                 type Fetch = #fetch;
                 type Row = #row;
             }

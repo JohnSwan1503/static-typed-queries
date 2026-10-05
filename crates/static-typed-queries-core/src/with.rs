@@ -6,9 +6,8 @@ use crate::hooks::{HookNeeds, HookValues, Provides, with};
 use crate::render::Render;
 use crate::sql::Sql;
 use crate::statement::Statement;
-use crate::statement::hook::Hook;
 use crate::statement::params::{BindHooks, BindParams};
-use crate::statement::run::{AllRows, hooks, step};
+use crate::statement::run::{self, AllRows, Fetch, Step, hooks, step};
 use crate::values::Values;
 
 // A statement or transaction together with the values of its hooks, which `with` adds one hook
@@ -49,10 +48,8 @@ impl<S, V> With<S, V> {
         Arguments<S::Dialect>: IntoArguments<Database<S::Dialect>>,
         for<'e> &'e mut Connection<S::Dialect>: Executor<'e, Database = Database<S::Dialect>>,
     {
-        self.transaction(conn, S::BEFORE, S::AFTER, async |statement, conn| {
-            statement.run(conn).await
-        })
-        .await
+        self.transaction(conn, async |statement, conn| statement.run(conn).await)
+            .await
     }
 
     pub async fn run_as<'c, O, I, A>(self, conn: A) -> Result<Vec<O>, sqlx::Error>
@@ -65,7 +62,7 @@ impl<S, V> With<S, V> {
         Arguments<S::Dialect>: IntoArguments<Database<S::Dialect>>,
         for<'e> &'e mut Connection<S::Dialect>: Executor<'e, Database = Database<S::Dialect>>,
     {
-        self.transaction(conn, S::BEFORE, S::AFTER, async |statement, conn| {
+        self.transaction(conn, async |statement, conn| {
             step::<S::Dialect, AllRows<O>, _>(&statement, &S::OUTPUT.main(), conn).await
         })
         .await
@@ -76,12 +73,10 @@ impl<S, V> With<S, V> {
     async fn transaction<'c, A, T>(
         self,
         conn: A,
-        before: &[Hook],
-        after: &[Hook],
         body: impl AsyncFnOnce(S, &mut Connection<S::Dialect>) -> Result<T, sqlx::Error>,
     ) -> Result<T, sqlx::Error>
     where
-        S: Sql,
+        S: Sql + Render,
         S::Dialect: Driver,
         V: BindHooks<Database<S::Dialect>>,
         A: Acquire<'c, Database = Database<S::Dialect>>,
@@ -89,24 +84,35 @@ impl<S, V> With<S, V> {
         for<'e> &'e mut Connection<S::Dialect>: Executor<'e, Database = Database<S::Dialect>>,
     {
         let mut tx = conn.begin().await?;
-        hooks::<S::Dialect, V>(&self.values, before, &mut tx).await?;
+        hooks::<S::Dialect, V>(&self.values, S::OUTPUT.before(), &mut tx).await?;
         let output = body(self.statement, &mut tx).await?;
-        hooks::<S::Dialect, V>(&self.values, after, &mut tx).await?;
+        hooks::<S::Dialect, V>(&self.values, S::OUTPUT.after(), &mut tx).await?;
         tx.commit().await?;
         Ok(output)
     }
 }
 
-pub trait Run: Sql
+pub trait Run: Sql + Render
 where
     Self::Dialect: Driver,
 {
     type Output;
-    const BEFORE: &'static [Hook];
-    const AFTER: &'static [Hook];
 
     fn run(
         self,
         conn: &mut Connection<Self::Dialect>,
     ) -> impl Future<Output = Result<Self::Output, sqlx::Error>>;
+}
+
+impl<S> Run for S
+where
+    S: Statement + Render + Step + BindParams<Database<S::Dialect>>,
+    S::Dialect: Driver,
+    S::Fetch: Fetch<S::Dialect>,
+{
+    type Output = run::Output<S, S::Dialect>;
+
+    async fn run(self, conn: &mut Connection<S::Dialect>) -> Result<Self::Output, sqlx::Error> {
+        step::<S::Dialect, S::Fetch, S>(&self, &S::OUTPUT.main(), conn).await
+    }
 }

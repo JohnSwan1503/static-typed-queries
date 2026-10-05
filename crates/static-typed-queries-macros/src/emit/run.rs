@@ -38,7 +38,31 @@ impl Receiver<'_> {
     }
 }
 
-// Returns the struct's methods and impls, and the methods of its complete builder.
+// How a statement reads its rows: each one as its `row`, or without one the number affected.
+pub(crate) struct Rows {
+    pub(crate) fetch: TokenStream,
+    pub(crate) output: TokenStream,
+    pub(crate) row: TokenStream,
+}
+
+pub(crate) fn rows(row: Option<&Type>) -> Rows {
+    let krate = krate();
+    let run = quote!(#krate::run);
+    match row {
+        Some(row) => Rows {
+            fetch: quote!(#run::AllRows<#row>),
+            output: quote!(::std::vec::Vec<#row>),
+            row: quote!(#row),
+        },
+        None => Rows {
+            fetch: quote!(#run::Affected),
+            output: quote!(u64),
+            row: quote!(#run::NoRow),
+        },
+    }
+}
+
+// Returns the struct's methods, and the methods of its complete builder.
 pub(crate) fn statement_methods(
     input: &ItemStruct,
     dialect: &Type,
@@ -46,39 +70,11 @@ pub(crate) fn statement_methods(
 ) -> (TokenStream, TokenStream) {
     let krate = krate();
     let ident = &input.ident;
-    let driver = quote!(#krate::driver);
-    let error = quote!(#krate::sqlx::Error);
     let methods = statement_api(dialect, row, &Receiver::Struct);
-    let output = match row {
-        Some(row) => quote!(::std::vec::Vec<#row>),
-        None => quote!(u64),
-    };
-    let fetch = match row {
-        Some(row) => quote!(#krate::run::AllRows<#row>),
-        None => quote!(#krate::run::Affected),
-    };
     let impls = quote! {
         #krate::__if_sqlx! {
             impl #ident {
                 #methods
-            }
-
-            impl #krate::Run for #ident {
-                type Output = #output;
-                const BEFORE: &'static [#krate::Hook] = <Self as #krate::Statement>::BEFORE;
-                const AFTER: &'static [#krate::Hook] = <Self as #krate::Statement>::AFTER;
-
-                async fn run(
-                    self,
-                    conn: &mut #driver::Connection<#dialect>,
-                ) -> ::core::result::Result<#output, #error> {
-                    #krate::run::step::<#dialect, #fetch, Self>(
-                        &self,
-                        &<Self as #krate::Render>::OUTPUT.main(),
-                        conn,
-                    )
-                    .await
-                }
             }
         }
     };
@@ -129,19 +125,14 @@ fn statement_api(dialect: &Type, row: Option<&Type>, receiver: &Receiver) -> Tok
             }
         },
     };
-    let (output, run_doc) = match row {
-        Some(row) => (
-            quote!(::std::vec::Vec<#row>),
-            doc(&format!(
-                "Runs the statement and its hooks in one transaction, and reads each row of the statement as {}.",
-                docs::link(row, &[])
-            )),
-        ),
-        None => (
-            quote!(u64),
-            doc(
-                "Runs the statement and its hooks in one transaction, and returns the number of rows the statement affected.",
-            ),
+    let output = rows(row).output;
+    let run_doc = match row {
+        Some(row) => doc(&format!(
+            "Runs the statement and its hooks in one transaction, and reads each row of the statement as {}.",
+            docs::link(row, &[])
+        )),
+        None => doc(
+            "Runs the statement and its hooks in one transaction, and returns the number of rows the statement affected.",
         ),
     };
     quote! {
@@ -208,7 +199,6 @@ pub(crate) fn transaction_methods(
     let krate = krate();
     let ident = &input.ident;
     let driver = quote!(#krate::driver);
-    let transaction = quote!(<#ident as #krate::Transaction>);
     let conn = format_ident!("conn");
     let (runs, names, outputs) = run_steps(ident, steps, dialect, &conn, &mut (0, 0));
     let output = quote!((#(#outputs,)*));
@@ -221,8 +211,6 @@ pub(crate) fn transaction_methods(
 
             impl #krate::Run for #ident {
                 type Output = #output;
-                const BEFORE: &'static [#krate::Hook] = #transaction::BEFORE;
-                const AFTER: &'static [#krate::Hook] = #transaction::AFTER;
 
                 async fn run(
                     self,
