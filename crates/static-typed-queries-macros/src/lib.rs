@@ -52,7 +52,8 @@ use syn::{ItemStruct, parse_macro_input};
 /// A hook with parameters takes its values from the run: pass its complete
 /// builder to `with`, in any order with the other setters. `run` doesn't
 /// compile until every hook the statement reaches has its values, and the
-/// error names the hook that's missing.
+/// error names the hook that's missing. Giving a hook's values twice doesn't
+/// compile either.
 ///
 /// ```
 /// # use static_typed_queries::prelude::*;

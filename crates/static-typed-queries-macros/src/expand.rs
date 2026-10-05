@@ -1862,12 +1862,13 @@ impl<'a> Params<'a> {
             );
             out.extend(quote! {
                 impl #impl_generics #open #where_clause {
-                    /// Gives the values of a hook with parameters, from its complete builder. Each hook runs once per statement.
-                    pub fn with<__B, __Hook>(self, values: __B) -> #given
+                    /// Gives the values of a hook with parameters, from its complete builder. Each hook takes its values once and runs once per statement.
+                    pub fn with<__B, __Hook, __Once>(self, values: __B) -> #given
                     where
                         __B: #b::Finish,
                         __B::Params: #b::ParamsOf<Item = __Hook>,
                         __Hook: #krate::sql::Sql,
+                        (#b::HookValues<__Hook>, __V): #b::Provides<__Hook, __Once>,
                     {
                         #builder {
                             #(#fields: self.#fields,)*

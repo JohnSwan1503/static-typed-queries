@@ -1,0 +1,21 @@
+error[E0283]: type annotations needed
+  --> tests/ui/hook_values_twice.rs:16:10
+   |
+16 |         .with(SetTenant::builder().tenant("other".to_owned()));
+   |          ^^^^ cannot infer type of the type parameter `__Once` declared on the method `with`
+   |
+   = note: multiple `impl`s satisfying `(HookValues<SetTenant>, (HookValues<SetTenant>, ())): static_typed_queries::__private::builder::Provides<SetTenant, _>` found in the `static_typed_queries_core` crate:
+           - impl<H, Rest> static_typed_queries::__private::builder::Provides<H, static_typed_queries::__private::builder::Here> for (HookValues<H>, Rest)
+             where H: Sql;
+           - impl<H, X, Rest, I> static_typed_queries::__private::builder::Provides<H, static_typed_queries::__private::builder::There<I>> for (X, Rest)
+             where Rest: static_typed_queries::__private::builder::Provides<H, I>;
+note: required by a bound in `OrderByIdBuilder::<ParamId, ItemOrders, WithHooks, __V>::with`
+  --> tests/ui/hook_values_twice.rs:9:1
+   |
+ 9 | #[query(Postgres, sql = "SELECT id FROM {Orders} WHERE id = {_: i64}")]
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `OrderByIdBuilder::<ParamId, ItemOrders, WithHooks, __V>::with`
+   = note: this error originates in the attribute macro `query` (in Nightly builds, run with -Z macro-backtrace for more info)
+help: consider specifying the generic arguments
+   |
+16 |         .with::<SetTenantBuilder<Tenant<Filled>>, SetTenant, __Once>(SetTenant::builder().tenant("other".to_owned()));
+   |              +++++++++++++++++++++++++++++++++++++++++++++++++++++++
