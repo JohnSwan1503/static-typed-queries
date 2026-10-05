@@ -19,8 +19,8 @@ note: inside `static_typed_queries::__private::render::renderer::Renderer::<'_, 
   |
   |                     let (node, path) = target(step, self.child_path(Path::ROOT, step));
   |                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-note: inside `static_typed_queries::__private::render::renderer::target`
- --> $WORKSPACE/crates/static-typed-queries-core/src/render/renderer.rs
+note: inside `static_typed_queries::__private::render::renderer::paths::target`
+ --> $WORKSPACE/crates/static-typed-queries-core/src/render/renderer/paths.rs
   |
   |         Kind::Table => fail(&["`", node.name.as_str(), "` is a table, not a statement"]),
   |                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

@@ -30,13 +30,13 @@ note: inside `render::renderer::Renderer::<'_, Postgres>::single`
    |
    |         self.collect(node, path);
    |         ^^^^^^^^^^^^^^^^^^^^^^^^
-note: inside `render::renderer::Renderer::<'_, Postgres>::collect`
-  --> src/render/renderer.rs
+note: inside `render::renderer::ctes::<impl render::renderer::Renderer<'_, Postgres>>::collect`
+  --> src/render/renderer/ctes.rs
    |
    | ...                   self.add_cte(child, child_path, recursive);
    |                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-note: inside `render::renderer::Renderer::<'_, Postgres>::add_cte`
-  --> src/render/renderer.rs
+note: inside `render::renderer::ctes::<impl render::renderer::Renderer<'_, Postgres>>::add_cte`
+  --> src/render/renderer/ctes.rs
    |
    | /                 fail(&[
    | |                     "`",

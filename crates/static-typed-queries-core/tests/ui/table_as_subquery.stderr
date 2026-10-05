@@ -30,13 +30,13 @@ note: inside `render::renderer::Renderer::<'_, Postgres>::single`
    |
    |         self.collect(node, path);
    |         ^^^^^^^^^^^^^^^^^^^^^^^^
-note: inside `render::renderer::Renderer::<'_, Postgres>::collect`
-  --> src/render/renderer.rs
+note: inside `render::renderer::ctes::<impl render::renderer::Renderer<'_, Postgres>>::collect`
+  --> src/render/renderer/ctes.rs
    |
    |                     match placement::<D>(from) {
    |                           ^^^^^^^^^^^^^^^^^^^^
-note: inside `render::renderer::placement::<Postgres>`
-  --> src/render/renderer.rs
+note: inside `render::renderer::placement::placement::<Postgres>`
+  --> src/render/renderer/placement.rs
    |
    |         (Kind::Table, _) => fail(&["table `", name, "` can only be referenced by name"]),
    |                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

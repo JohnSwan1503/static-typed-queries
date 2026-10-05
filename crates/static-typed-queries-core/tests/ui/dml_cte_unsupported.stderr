@@ -30,13 +30,13 @@ note: inside `render::renderer::Renderer::<'_, MySql>::single`
    |
    |         self.collect(node, path);
    |         ^^^^^^^^^^^^^^^^^^^^^^^^
-note: inside `render::renderer::Renderer::<'_, MySql>::collect`
-  --> src/render/renderer.rs
+note: inside `render::renderer::ctes::<impl render::renderer::Renderer<'_, MySql>>::collect`
+  --> src/render/renderer/ctes.rs
    |
    |                     match placement::<D>(from) {
    |                           ^^^^^^^^^^^^^^^^^^^^
-note: inside `render::renderer::placement::<MySql>`
-  --> src/render/renderer.rs
+note: inside `render::renderer::placement::placement::<MySql>`
+  --> src/render/renderer/placement.rs
    |
    |           (Kind::Dml, Inject::Cte { .. }) => fail(&[
    |  ____________________________________________^

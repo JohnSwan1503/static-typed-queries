@@ -9,13 +9,13 @@ note: inside `static_typed_queries::__private::render::check_hooks`
   |
   |     renderer::check_hooks(owner);
   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-note: inside `static_typed_queries::__private::render::renderer::check_hooks`
- --> $WORKSPACE/crates/static-typed-queries-core/src/render/renderer.rs
+note: inside `static_typed_queries::__private::render::renderer::hooks::check_hooks`
+ --> $WORKSPACE/crates/static-typed-queries-core/src/render/renderer/hooks.rs
   |
   |         hook(owner, node, Path::ROOT);
   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-note: inside `static_typed_queries::__private::render::renderer::hook`
- --> $WORKSPACE/crates/static-typed-queries-core/src/render/renderer.rs
+note: inside `static_typed_queries::__private::render::renderer::hooks::hook`
+ --> $WORKSPACE/crates/static-typed-queries-core/src/render/renderer/hooks.rs
   |
   | /         fail(&[
   | |             "`",

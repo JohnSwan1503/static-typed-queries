@@ -27,8 +27,8 @@ note: inside `render::renderer::Renderer::<'_, Postgres>::statement`
    |
    |         let (main, path) = target(root, Path::ROOT);
    |                            ^^^^^^^^^^^^^^^^^^^^^^^^
-note: inside `render::renderer::target`
-  --> src/render/renderer.rs
+note: inside `render::renderer::paths::target`
+  --> src/render/renderer/paths.rs
    |
    |         Kind::Table => fail(&["`", node.name.as_str(), "` is a table, not a statement"]),
    |                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

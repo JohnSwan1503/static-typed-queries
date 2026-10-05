@@ -24,13 +24,13 @@ note: inside `render::renderer::Renderer::<'_, Postgres>::single`
    |
    |         self.collect(node, path);
    |         ^^^^^^^^^^^^^^^^^^^^^^^^
-note: inside `render::renderer::Renderer::<'_, Postgres>::collect`
-  --> src/render/renderer.rs
+note: inside `render::renderer::ctes::<impl render::renderer::Renderer<'_, Postgres>>::collect`
+  --> src/render/renderer/ctes.rs
    |
    |                     let child_path = self.child_path(path, child);
    |                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-note: inside `render::renderer::Renderer::<'_, Postgres>::child_path`
-  --> src/render/renderer.rs
+note: inside `render::renderer::paths::<impl render::renderer::Renderer<'_, Postgres>>::child_path`
+  --> src/render/renderer/paths.rs
    |
    | /             fail(&[
    | |                 "`",

@@ -17,10 +17,15 @@ note: inside `static_typed_queries::__private::render::renderer::Renderer::<'_, 
 note: inside `static_typed_queries::__private::render::renderer::Renderer::<'_, static_typed_queries::dialect::MySql>::transaction`
   --> $WORKSPACE/crates/static-typed-queries-core/src/render/renderer.rs
    |
-   |                     attachable::<D>(node);
-   |                     ^^^^^^^^^^^^^^^^^^^^^
-note: inside `static_typed_queries::__private::render::renderer::attachable::<static_typed_queries::dialect::MySql>`
-  --> $WORKSPACE/crates/static-typed-queries-core/src/render/renderer.rs
+   |                 Part::From(from) => self.attach(from.node()),
+   |                                     ^^^^^^^^^^^^^^^^^^^^^^^^
+note: inside `static_typed_queries::__private::render::renderer::ctes::<impl static_typed_queries::__private::render::renderer::Renderer<'_, static_typed_queries::dialect::MySql>>::attach`
+  --> $WORKSPACE/crates/static-typed-queries-core/src/render/renderer/ctes.rs
+   |
+   |         attachable::<D>(node);
+   |         ^^^^^^^^^^^^^^^^^^^^^
+note: inside `static_typed_queries::__private::render::renderer::placement::attachable::<static_typed_queries::dialect::MySql>`
+  --> $WORKSPACE/crates/static-typed-queries-core/src/render/renderer/placement.rs
    |
    |           Kind::Dml => fail(&[
    |  ______________________^
