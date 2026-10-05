@@ -11,7 +11,7 @@ use crate::emit::fmt::fmt;
 use crate::emit::node::{fingerprint, node};
 use crate::emit::{self, krate};
 use crate::model::role::Role;
-use crate::naming::type_key;
+use crate::naming::push_unique;
 
 pub(crate) struct TableArgs {
     dialect: Type,
@@ -33,8 +33,8 @@ impl Parse for TableArgs {
             let error = |message: &str| syn::Error::new(key.span(), message);
             match key.to_string().as_str() {
                 "name" => name = Some(args::value(input)?),
-                "before" => before = args::types(input)?,
-                "after" => after = args::types(input)?,
+                "before" => before = args::list(input)?,
+                "after" => after = args::list(input)?,
                 "display" => display = Some(args::value(input)?),
                 "debug" => debug = Some(args::value(input)?),
                 "sql" | "sql_file" => {
@@ -149,15 +149,14 @@ pub(crate) fn expand(args: TableArgs, input: ItemStruct) -> syn::Result<TokenStr
 }
 
 fn hooks(types: &[Type]) -> syn::Result<Vec<Type>> {
-    let mut hooks: Vec<Type> = Vec::new();
+    let mut hooks = Vec::new();
     for ty in types {
-        if hooks.iter().any(|other| type_key(other) == type_key(ty)) {
+        if !push_unique(&mut hooks, ty) {
             return Err(syn::Error::new_spanned(
                 ty,
                 format!("`{}` is listed twice", docs::type_string(ty)),
             ));
         }
-        hooks.push(ty.clone());
     }
     Ok(hooks)
 }

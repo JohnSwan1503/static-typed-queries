@@ -99,13 +99,7 @@ impl Parse for Step {
         if input.peek(Ident) && input.peek2(syn::token::Paren) {
             let keyword: Ident = input.fork().parse()?;
             if keyword == "savepoint" {
-                input.parse::<Ident>()?;
-                let content;
-                parenthesized!(content in input);
-                let steps: Vec<Step> = content
-                    .parse_terminated(Step::parse, Token![,])?
-                    .into_iter()
-                    .collect();
+                let steps: Vec<Step> = list(input)?;
                 if steps.is_empty() {
                     return Err(syn::Error::new(
                         keyword.span(),
@@ -194,22 +188,13 @@ pub(crate) fn only_transactions(key: &Ident) -> syn::Error {
     syn::Error::new(key.span(), "only transactions take `steps`")
 }
 
-pub(crate) fn steps(input: ParseStream) -> syn::Result<Vec<Step>> {
+// Parses `name(a, b, …)`.
+pub(crate) fn list<T: Parse>(input: ParseStream) -> syn::Result<Vec<T>> {
     input.parse::<Ident>()?;
     let content;
     parenthesized!(content in input);
     Ok(content
-        .parse_terminated(Step::parse, Token![,])?
-        .into_iter()
-        .collect())
-}
-
-pub(crate) fn types(input: ParseStream) -> syn::Result<Vec<Type>> {
-    input.parse::<Ident>()?;
-    let content;
-    parenthesized!(content in input);
-    Ok(content
-        .parse_terminated(Type::parse, Token![,])?
+        .parse_terminated(T::parse, Token![,])?
         .into_iter()
         .collect())
 }

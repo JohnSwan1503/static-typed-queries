@@ -13,7 +13,7 @@ use crate::emit::run::transaction_methods;
 use crate::emit::{self, krate};
 use crate::model::fields::{self, Field};
 use crate::model::role::Role;
-use crate::naming::{snake_case, type_key};
+use crate::naming::{push_unique, snake_case};
 
 pub(crate) struct TransactionArgs {
     dialect: Type,
@@ -28,7 +28,7 @@ impl Parse for TransactionArgs {
         let mut steps = Vec::new();
         args::parse_keys(input, KEYS, |key, input| {
             match key.to_string().as_str() {
-                "steps" => steps = args::steps(input)?,
+                "steps" => steps = args::list(input)?,
                 "before" | "after" => return Err(args::only_tables(key)),
                 "sql" | "sql_file" | "name" | "cte" | "subquery" | "display" | "debug"
                 | "parse_check" | "grammar" | "row" => {
@@ -67,8 +67,8 @@ pub(crate) fn expand(args: TransactionArgs, mut input: ItemStruct) -> syn::Resul
     let mut flat = Vec::new();
     Step::flatten(steps, &mut flat);
     let mut used = vec![false; fields.len()];
-    let mut types: Vec<&Type> = Vec::new();
-    let mut referenced: Vec<&Type> = Vec::new();
+    let mut types = Vec::new();
+    let mut referenced = Vec::new();
     let mut parts = Vec::new();
     for (step, fetch) in &flat {
         let (item, ty) = match fields::resolve(step, &fields) {
@@ -77,18 +77,11 @@ pub(crate) fn expand(args: TransactionArgs, mut input: ItemStruct) -> syn::Resul
                 (Some(index), &field.ty)
             }
             None => {
-                if !types.iter().any(|other| type_key(other) == type_key(step)) {
-                    types.push(step);
-                }
+                push_unique(&mut types, step);
                 (None, *step)
             }
         };
-        if !referenced
-            .iter()
-            .any(|other| type_key(other) == type_key(ty))
-        {
-            referenced.push(ty);
-        }
+        push_unique(&mut referenced, ty);
         let step = target(item, ty);
         parts.push(match fetch {
             Fetch::Cte => quote! {
@@ -111,7 +104,6 @@ pub(crate) fn expand(args: TransactionArgs, mut input: ItemStruct) -> syn::Resul
         ));
     }
     let items: Vec<&Type> = fields.iter().map(|field| &field.ty).collect();
-    let types: Vec<Type> = types.into_iter().cloned().collect();
     let embeds = embeds(&input, &items, &types, dialect);
     let node = node(
         &snake_case(&ident.to_string()),
@@ -125,7 +117,7 @@ pub(crate) fn expand(args: TransactionArgs, mut input: ItemStruct) -> syn::Resul
     );
     let checked = embeds.checked;
     let hook_needs = hook_needs(&input, referenced.len(), |i, index| {
-        let ty = referenced[i];
+        let ty = &referenced[i];
         parse_quote!(#ty: #krate::HookNeeds<__V, #index>)
     });
     let values = values(&input, !fields.is_empty());

@@ -16,7 +16,7 @@ use crate::emit::statement::statement;
 use crate::emit::{self, krate};
 use crate::model::fields;
 use crate::model::role::Role;
-use crate::naming::{snake_case, type_key};
+use crate::naming::{push_unique, snake_case};
 use crate::sql::analyze::{self, Engine, Kind};
 use crate::sql::template;
 
@@ -167,17 +167,12 @@ pub(crate) fn expand(args: QueryArgs, mut input: ItemStruct) -> syn::Result<Toke
         .map(|field| &field.ty)
         .collect();
     let embeds = embeds(&input, &items, &template.types, &args.dialect);
-    let mut referenced: Vec<&Type> = Vec::new();
+    let mut referenced = Vec::new();
     for ty in items.iter().copied().chain(&template.types) {
-        if !referenced
-            .iter()
-            .any(|other| type_key(other) == type_key(ty))
-        {
-            referenced.push(ty);
-        }
+        push_unique(&mut referenced, ty);
     }
     let hook_needs = hook_needs(&input, referenced.len(), |i, index| {
-        let ty = referenced[i];
+        let ty = &referenced[i];
         parse_quote!(#ty: #krate::HookNeeds<__V, #index>)
     });
     let ident = &input.ident;

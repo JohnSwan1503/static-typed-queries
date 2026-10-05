@@ -47,6 +47,15 @@ pub(crate) fn unique(name: String, taken: &[String]) -> String {
         .expect("an unused name")
 }
 
-pub(crate) fn type_key(ty: &Type) -> String {
+// Adds `ty` unless an equal type is listed already, and says whether it did.
+pub(crate) fn push_unique(types: &mut Vec<Type>, ty: &Type) -> bool {
+    if types.iter().any(|other| type_key(other) == type_key(ty)) {
+        return false;
+    }
+    types.push(ty.clone());
+    true
+}
+
+fn type_key(ty: &Type) -> String {
     ty.to_token_stream().to_string()
 }

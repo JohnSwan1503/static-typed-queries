@@ -4,7 +4,7 @@ use syn::{Ident, LitStr, Token, Type};
 
 use crate::args::Placement;
 use crate::model::fields::{self, Field, Kind};
-use crate::naming::type_key;
+use crate::naming::push_unique;
 
 pub(crate) enum Segment {
     Lit(String),
@@ -119,7 +119,7 @@ pub(crate) fn parse(sql: &LitStr, fields: &[Field]) -> syn::Result<Template> {
             }
             Raw::Name(name) => {
                 let ty = syn::parse_quote!(#name);
-                add_type(&mut types, &ty);
+                push_unique(&mut types, &ty);
                 segments.push(reference(&raw, i, ty, None, None));
             }
             Raw::Ref(syntax) => {
@@ -131,7 +131,7 @@ pub(crate) fn parse(sql: &LitStr, fields: &[Field]) -> syn::Result<Template> {
                         "`{name}` is a field, so it is embedded the way the field is marked; write `{{{name}}}`"
                     )));
                 }
-                add_type(&mut types, &syntax.ty);
+                push_unique(&mut types, &syntax.ty);
                 segments.push(reference(
                     &raw,
                     i,
@@ -152,12 +152,6 @@ pub(crate) fn parse(sql: &LitStr, fields: &[Field]) -> syn::Result<Template> {
         ));
     }
     Ok(Template { segments, types })
-}
-
-fn add_type(types: &mut Vec<Type>, ty: &Type) {
-    if !types.iter().any(|other| type_key(other) == type_key(ty)) {
-        types.push(ty.clone());
-    }
 }
 
 fn reference(
