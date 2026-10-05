@@ -8,11 +8,11 @@ use syn::{
 use crate::args::{self, Keys, Sql};
 use crate::emit::bind::bind_impl;
 use crate::emit::builder::builder;
-use crate::emit::checks::{embeds, hook_needs, parse_test, step_impl, values};
+use crate::emit::checks::{embeds, hook_needs, step_impl, values};
 use crate::emit::docs::item_docs;
 use crate::emit::fmt::fmt;
 use crate::emit::node::{fingerprint, node, parts};
-use crate::emit::run::statement_methods;
+use crate::emit::statement::statement;
 use crate::emit::{self, krate};
 use crate::model::fields;
 use crate::model::role::Role;
@@ -201,34 +201,12 @@ pub(crate) fn expand(args: QueryArgs, mut input: ItemStruct) -> syn::Result<Toke
     let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
     let values = values(&input, !fields.is_empty());
     let bind = bind_impl(&input, &fields);
-    let generic = !input.generics.params.is_empty();
-    let (methods, delegates) = if generic {
-        Default::default()
+    let (statement, methods, test) = if input.generics.params.is_empty() {
+        statement(&input, dialect, row, args.parse_check.as_ref())
     } else {
-        statement_methods(&input, dialect, row)
+        Default::default()
     };
-    let (definitions, builder) = builder(&input, &fields, delegates);
-    let parse_check = args.parse_check.as_ref().is_none_or(|check| check.value);
-    let test = (!generic && parse_check).then(|| parse_test(ident));
-    let statement = (!generic).then(|| {
-        let rows = row.map(|row| {
-            quote! {
-                impl #krate::Rows for #ident {
-                    type Row = #row;
-                }
-            }
-        });
-        quote! {
-            #krate::impl_statement!(#ident);
-            #rows
-            #methods
-
-            impl #ident {
-                /// The SQL, rendered at compile time.
-                pub const SQL: &'static str = <Self as #krate::Statement>::SQL;
-            }
-        }
-    });
+    let (definitions, builder) = builder(&input, &fields, methods);
     let fmt = fmt(args.display.as_ref(), args.debug.as_ref(), &input, true)?;
     let step = step_impl(&input, row);
     let mut documented = input.clone();

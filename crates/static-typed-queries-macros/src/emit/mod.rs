@@ -5,6 +5,7 @@ pub(crate) mod docs;
 pub(crate) mod fmt;
 pub(crate) mod node;
 pub(crate) mod run;
+pub(crate) mod statement;
 
 use proc_macro2::TokenStream;
 use quote::quote;

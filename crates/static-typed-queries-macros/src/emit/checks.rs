@@ -1,6 +1,6 @@
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
-use syn::{Ident, ItemStruct, Type, WherePredicate, parse_quote};
+use syn::{Ident, ItemStruct, LitBool, Type, WherePredicate, parse_quote};
 
 use crate::emit::{krate, krate_path};
 use crate::naming::snake_case;
@@ -117,16 +117,18 @@ pub(crate) fn hook_needs(
     }
 }
 
-pub(crate) fn parse_test(ident: &Ident) -> TokenStream {
+pub(crate) fn parse_test(ident: &Ident, parse_check: Option<&LitBool>) -> Option<TokenStream> {
     let krate = krate_path();
     let test = format_ident!("{}_sql_parses", snake_case(&ident.to_string()));
-    quote! {
-        #krate::__if_parse_check! {
-            #[cfg(test)]
-            #[test]
-            fn #test() {
-                #krate::check::parse::<#ident>();
+    parse_check.is_none_or(|check| check.value).then(|| {
+        quote! {
+            #krate::__if_parse_check! {
+                #[cfg(test)]
+                #[test]
+                fn #test() {
+                    #krate::check::parse::<#ident>();
+                }
             }
         }
-    }
+    })
 }

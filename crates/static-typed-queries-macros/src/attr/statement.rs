@@ -6,11 +6,11 @@ use syn::{Ident, ItemStruct, LitBool, Type, parse_quote};
 use crate::args::{self, Keys};
 use crate::emit::bind::bind_impl;
 use crate::emit::builder::builder;
-use crate::emit::checks::{embeds, hook_needs, parse_test, step_impl, values};
+use crate::emit::checks::{embeds, hook_needs, step_impl, values};
 use crate::emit::docs::{self, item_docs};
 use crate::emit::fmt::fmt;
 use crate::emit::node::{fingerprint, node};
-use crate::emit::run::statement_methods;
+use crate::emit::statement::statement;
 use crate::emit::{self, krate};
 use crate::model::fields;
 use crate::model::role::Role;
@@ -109,19 +109,10 @@ pub(crate) fn expand(args: StatementArgs, mut input: ItemStruct) -> syn::Result<
     let values = values(&input, !fields.is_empty());
     let bind = bind_impl(&input, &fields);
     let row = args.row.as_ref();
-    let rows = row.map(|row| {
-        quote! {
-            impl #krate::Rows for #ident {
-                type Row = #row;
-            }
-        }
-    });
-    let (methods, delegates) = statement_methods(&input, &dialect, row);
-    let (definitions, builder) = builder(&input, &fields, delegates);
+    let (statement, methods, test) = statement(&input, &dialect, row, args.parse_check.as_ref());
+    let (definitions, builder) = builder(&input, &fields, methods);
     let step = step_impl(&input, row);
     let fmt = fmt(args.display.as_ref(), args.debug.as_ref(), &input, true)?;
-    let parse_check = args.parse_check.as_ref().is_none_or(|check| check.value);
-    let test = parse_check.then(|| parse_test(ident));
     let mut documented = input.clone();
     documented
         .attrs
@@ -137,17 +128,8 @@ pub(crate) fn expand(args: StatementArgs, mut input: ItemStruct) -> syn::Result<
         #hook_needs
         #bind
         #builder
-
-        #krate::impl_statement!(#ident);
-        #rows
-        #methods
+        #statement
         #step
-
-        impl #ident {
-            /// The SQL, rendered at compile time.
-            pub const SQL: &'static str = <Self as #krate::Statement>::SQL;
-        }
-
         #fmt
     });
     Ok(quote! {
