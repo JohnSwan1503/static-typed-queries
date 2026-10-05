@@ -16,10 +16,16 @@ use command::Command;
 #[cfg(feature = "sqlx")]
 use params::BindParams;
 
+/// An item that renders to one SQL statement: a query that isn't generic, or a `#[statement]`.
+/// Everything here is rendered at compile time.
 pub trait Statement: Sql {
+    /// The statement's SQL, with every item it embeds in place.
     const SQL: &'static str;
+    /// What each parameter of [`SQL`](Statement::SQL) binds, in order.
     const BINDS: &'static [Bind];
+    /// The hooks that run before the statement, in order.
     const BEFORE: &'static [Command];
+    /// The hooks that run after the statement, in order.
     const AFTER: &'static [Command];
 }
 
@@ -70,7 +76,9 @@ where
     message = "`{Self}` has no row type",
     note = "give it `row = Type` to read one row with `as one` or `as optional`"
 )]
+/// A statement declared with `row = Type`.
 pub trait Rows: Statement {
+    /// The type each row is read as.
     type Row;
 }
 

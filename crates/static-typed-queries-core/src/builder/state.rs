@@ -53,9 +53,12 @@ impl<B> And<B> for False {
     label = "expected a value or a complete builder",
     note = "a builder is complete once every field is set"
 )]
+/// A value of an item, or its builder with every field set. `with` takes either.
 pub trait Finish {
+    /// The item.
     type Output;
 
+    /// The value, built first if this is a builder.
     fn finish(self) -> Self::Output;
 }
 

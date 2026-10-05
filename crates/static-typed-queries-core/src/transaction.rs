@@ -1,9 +1,15 @@
 use crate::sql::Sql;
 use crate::statement::command::Command;
 
+/// Statements that run in order and commit together, declared with `#[transaction]`. Everything
+/// here is rendered at compile time.
 pub trait Transaction: Sql {
+    /// Each step's SQL and binds, in the order the steps run. A step attached to the next one as
+    /// a CTE is part of that step's SQL.
     const STEPS: &'static [Command];
+    /// The hooks that run before the first step, in order.
     const BEFORE: &'static [Command];
+    /// The hooks that run after the last step, in order.
     const AFTER: &'static [Command];
 }
 
