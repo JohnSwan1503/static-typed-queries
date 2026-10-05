@@ -1,7 +1,8 @@
 use std::marker::PhantomData;
 
-use static_typed_queries::__private::builder::{Hooked, NoHooks, WithHooks};
+use static_typed_queries::__private::render::Render;
 use static_typed_queries::prelude::*;
+use static_typed_queries::state::{NoHooks, WithHooks};
 
 #[query(
     Postgres,
@@ -42,9 +43,9 @@ pub struct OrderCount;
 #[statement(CountOf<Users>)]
 pub struct UserCount;
 
-fn hooked<T: Hooked<Out = WithHooks>>() {}
+fn hooked<T: Render<Hooks = WithHooks>>() {}
 
-fn unhooked<T: Hooked<Out = NoHooks>>() {}
+fn unhooked<T: Render<Hooks = NoHooks>>() {}
 
 #[test]
 fn statements_that_use_a_hooked_table_run_its_hooks() {
@@ -77,15 +78,11 @@ fn hook_parameters_are_set_through_the_table() {
 
 #[test]
 fn hooks_mark_every_statement_that_reaches_the_table() {
-    hooked::<Orders>();
-    hooked::<Events>();
     hooked::<ByStatus>();
     hooked::<BigOrderCount>();
     hooked::<EventCount>();
     hooked::<OrderCount>();
-    unhooked::<Users>();
     unhooked::<SetTenant>();
-    unhooked::<CountOf<Orders>>();
     unhooked::<UserCount>();
 }
 

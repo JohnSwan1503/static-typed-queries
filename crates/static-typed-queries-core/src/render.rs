@@ -41,6 +41,7 @@ impl Offsets {
 pub trait Render {
     const SIZE: Size;
     const OUTPUT: Output;
+    type Hooks;
 }
 
 pub struct Rendered<const S: usize, const B: usize, const N: usize> {
@@ -101,6 +102,10 @@ impl Output {
 
 pub const fn check_hooks(owner: &'static Node) {
     renderer::check_hooks(owner);
+}
+
+pub const fn hooked(root: &'static Node) -> bool {
+    renderer::hooked(root)
 }
 
 pub const fn measure<D: Dialect>(root: &'static Node) -> Size {

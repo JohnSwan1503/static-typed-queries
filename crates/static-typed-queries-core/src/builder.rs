@@ -66,19 +66,17 @@ pub struct NoHooks;
 
 pub struct WithHooks;
 
-pub trait Hooked {
+pub struct HookFlag<const HOOKED: bool>;
+
+pub trait HookState {
     type Out;
 }
 
-pub trait Or<B> {
-    type Out;
+impl HookState for HookFlag<false> {
+    type Out = NoHooks;
 }
 
-impl<B> Or<B> for NoHooks {
-    type Out = B;
-}
-
-impl<B> Or<B> for WithHooks {
+impl HookState for HookFlag<true> {
     type Out = WithHooks;
 }
 

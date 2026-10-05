@@ -15,6 +15,7 @@ note: the candidate is defined in the trait `static_typed_queries::Statement`
    |
    | /     fn query<'q>(params: &Self::Params) -> Result<Query<'q, Self::Dialect>, sqlx::Error>
    | |     where
+   | |         Self: Single,
    | |         Self::Dialect: Driver,
    | |         Self::Params: BindParams<Database<Self::Dialect>>,
    | |         Arguments<Self::Dialect>: sqlx::IntoArguments<Database<Self::Dialect>>,

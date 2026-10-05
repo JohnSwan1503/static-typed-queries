@@ -1,0 +1,54 @@
+error[E0277]: this statement runs `before` or `after` hooks, so it can't run as a single query
+  --> tests/ui/query_with_hooks.rs:14:13
+   |
+14 |     let _ = OrderCount::query(&params);
+   |             ^^^^^^^^^^ has hooks
+   |
+   = help: the trait `static_typed_queries::__private::statement::Unhooked` is not implemented for `WithHooks`
+   = note: run it through its builder's `run`, which wraps the hooks and the statement in a transaction
+help: the trait `static_typed_queries::__private::statement::Unhooked` is implemented for `NoHooks`
+  --> $WORKSPACE/crates/static-typed-queries-core/src/statement.rs
+   |
+   | impl Unhooked for NoHooks {}
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^
+   = note: required for `OrderCount` to implement `static_typed_queries::__private::statement::Single`
+note: required by a bound in `static_typed_queries::Statement::query`
+  --> $WORKSPACE/crates/static-typed-queries-core/src/statement.rs
+   |
+   | pub trait Statement: Sql {
+...
+   |     fn query<'q>(params: &Self::Params) -> Result<Query<'q, Self::Dialect>, sqlx::Error>
+   |     where
+   |         Self: Single,
+   |               ^^^^^^ required by this bound in `Statement::query`
+
+error[E0277]: this statement runs `before` or `after` hooks, so it can't run as a single query
+  --> tests/ui/query_with_hooks.rs:15:25
+   |
+15 |     let _ = sqlx::query(OrderCount);
+   |             ----------- ^^^^^^^^^^ has hooks
+   |             |
+   |             required by a bound introduced by this call
+   |
+   = help: the trait `static_typed_queries::__private::statement::Unhooked` is not implemented for `WithHooks`
+   = note: run it through its builder's `run`, which wraps the hooks and the statement in a transaction
+help: the trait `static_typed_queries::__private::statement::Unhooked` is implemented for `NoHooks`
+  --> $WORKSPACE/crates/static-typed-queries-core/src/statement.rs
+   |
+   | impl Unhooked for NoHooks {}
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^
+   = note: required for `OrderCount` to implement `static_typed_queries::__private::statement::Single`
+   = note: required for `&OrderCount` to implement `static_typed_queries::__private::statement::SingleRef`
+note: required for `OrderCount` to implement `SqlSafeStr`
+  --> tests/ui/query_with_hooks.rs:9:1
+   |
+ 9 | #[query(Postgres, sql = "SELECT count(*) FROM {Orders}")]
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unsatisfied trait bound introduced here
+10 | pub struct OrderCount;
+   |            ^^^^^^^^^^
+note: required by a bound in `sqlx::query`
+  --> $CARGO/sqlx-core-$VERSION/src/query.rs
+   |
+   | pub fn query<'a, DB>(sql: impl SqlSafeStr) -> Query<'a, DB, <DB as Database>::Arguments>
+   |                                ^^^^^^^^^^ required by this bound in `query`
+   = note: this error originates in the macro `$crate::__impl_sqlx` which comes from the expansion of the attribute macro `query` (in Nightly builds, run with -Z macro-backtrace for more info)

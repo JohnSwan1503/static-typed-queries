@@ -605,6 +605,13 @@ const fn hook(owner: &'static Node, hook: &'static Node, path: Path) -> (&'stati
     (node, path)
 }
 
+pub(super) const fn hooked(root: &'static Node) -> bool {
+    match root.kind {
+        Kind::Scope => has_hooks(root.items.0[0]),
+        _ => has_hooks(root),
+    }
+}
+
 const fn has_hooks(node: &'static Node) -> bool {
     if !node.before.0.is_empty() || !node.after.0.is_empty() {
         return true;

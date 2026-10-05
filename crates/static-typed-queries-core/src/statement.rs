@@ -5,8 +5,10 @@ pub mod params;
 #[cfg(feature = "sqlx")]
 pub mod run;
 
+use crate::builder::NoHooks;
 #[cfg(feature = "sqlx")]
 use crate::dialect::driver::{Arguments, Database, Driver, Query, QueryAs, Row};
+use crate::render::Render;
 use crate::sql::Sql;
 use bind::Bind;
 use hook::Hook;
@@ -31,38 +33,70 @@ pub trait Statement: Sql {
     #[cfg(feature = "sqlx")]
     fn query<'q>(params: &Self::Params) -> Result<Query<'q, Self::Dialect>, sqlx::Error>
     where
+        Self: Single,
         Self::Dialect: Driver,
         Self::Params: BindParams<Database<Self::Dialect>>,
         Arguments<Self::Dialect>: sqlx::IntoArguments<Database<Self::Dialect>>,
     {
-        const { unhooked::<Self>() };
-        let args = Self::arguments(params)?;
-        Ok(sqlx::query_with(sqlx::SqlStr::from_static(Self::SQL), args))
+        query::<Self>(params)
     }
 
     #[cfg(feature = "sqlx")]
     fn query_as<'q, O>(params: &Self::Params) -> Result<QueryAs<'q, Self::Dialect, O>, sqlx::Error>
     where
+        Self: Single,
         Self::Dialect: Driver,
         Self::Params: BindParams<Database<Self::Dialect>>,
         Arguments<Self::Dialect>: sqlx::IntoArguments<Database<Self::Dialect>>,
         O: for<'r> sqlx::FromRow<'r, Row<Self::Dialect>>,
     {
-        const { unhooked::<Self>() };
-        let args = Self::arguments(params)?;
-        Ok(sqlx::query_as_with(
-            sqlx::SqlStr::from_static(Self::SQL),
-            args,
-        ))
+        query_as::<Self, O>(params)
     }
 }
 
+#[diagnostic::on_unimplemented(
+    message = "this statement runs `before` or `after` hooks, so it can't run as a single query",
+    label = "has hooks",
+    note = "run it through its builder's `run`, which wraps the hooks and the statement in a transaction"
+)]
+pub trait Unhooked {}
+
+impl Unhooked for NoHooks {}
+
+pub trait Single: Statement {}
+
+impl<S: Statement + Render> Single for S where S::Hooks: Unhooked {}
+
+#[doc(hidden)]
+pub trait SingleRef {}
+
+impl<S: Single> SingleRef for &S {}
+
 #[cfg(feature = "sqlx")]
-const fn unhooked<S: Statement + ?Sized>() {
-    assert!(
-        S::BEFORE.is_empty() && S::AFTER.is_empty(),
-        "a statement with `before` or `after` hooks can't run as a single query"
-    );
+#[doc(hidden)]
+pub fn query<'q, S>(params: &S::Params) -> Result<Query<'q, S::Dialect>, sqlx::Error>
+where
+    S: Statement + ?Sized,
+    S::Dialect: Driver,
+    S::Params: BindParams<Database<S::Dialect>>,
+    Arguments<S::Dialect>: sqlx::IntoArguments<Database<S::Dialect>>,
+{
+    let args = S::arguments(params)?;
+    Ok(sqlx::query_with(sqlx::SqlStr::from_static(S::SQL), args))
+}
+
+#[cfg(feature = "sqlx")]
+#[doc(hidden)]
+pub fn query_as<'q, S, O>(params: &S::Params) -> Result<QueryAs<'q, S::Dialect, O>, sqlx::Error>
+where
+    S: Statement + ?Sized,
+    S::Dialect: Driver,
+    S::Params: BindParams<Database<S::Dialect>>,
+    Arguments<S::Dialect>: sqlx::IntoArguments<Database<S::Dialect>>,
+    O: for<'r> sqlx::FromRow<'r, Row<S::Dialect>>,
+{
+    let args = S::arguments(params)?;
+    Ok(sqlx::query_as_with(sqlx::SqlStr::from_static(S::SQL), args))
 }
 
 pub trait Rows: Statement {
@@ -88,6 +122,9 @@ macro_rules! impl_statement {
                     <$ty as $crate::render::Render>::SIZE.statements()] = RENDERED.statements();
                 $crate::render::Output::new(&STATEMENTS, RENDERED.before())
             };
+            type Hooks = <$crate::builder::HookFlag<
+                { $crate::render::hooked(<$ty as $crate::sql::Sql>::NODE) },
+            > as $crate::builder::HookState>::Out;
         }
 
         impl $crate::statement::Statement for $ty {
@@ -111,7 +148,10 @@ macro_rules! impl_statement {
 #[macro_export]
 macro_rules! __impl_sqlx {
     ($ty:ty) => {
-        impl $crate::__private::sqlx::SqlSafeStr for $ty {
+        impl<'a> $crate::__private::sqlx::SqlSafeStr for $ty
+        where
+            &'a $ty: $crate::statement::SingleRef,
+        {
             fn into_sql_str(self) -> $crate::__private::sqlx::SqlStr {
                 $crate::__private::sqlx::SqlStr::from_static(
                     <$ty as $crate::statement::Statement>::SQL,
