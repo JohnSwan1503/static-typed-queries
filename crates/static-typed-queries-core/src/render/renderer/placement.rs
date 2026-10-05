@@ -47,7 +47,7 @@ const fn no_dml_in_cte<D: Dialect>(name: &str) -> ! {
         "`",
         name,
         "` modifies data, which ",
-        D::NAME.as_str(),
+        D::NAME,
         " doesn't allow in a CTE",
     ])
 }

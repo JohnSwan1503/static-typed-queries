@@ -63,8 +63,8 @@ impl<'a, D: Dialect> Renderer<'a, D> {
     }
 
     const fn param(&mut self, node: &'static Node, path: Path, param: Param) {
-        self.byte(D::PARAMS.prefix());
-        if !D::PARAMS.numbered() {
+        self.byte(D::PARAMS.prefix);
+        if !D::PARAMS.numbered {
             self.bind(node, path, param);
             return;
         }

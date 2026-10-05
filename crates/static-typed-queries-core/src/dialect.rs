@@ -1,6 +1,5 @@
 #[cfg(feature = "sqlx")]
 pub mod driver;
-pub mod name;
 pub mod params;
 pub mod quote;
 
@@ -17,7 +16,7 @@ pub use impls::postgres;
 pub use impls::sqlite;
 
 pub trait Dialect: 'static {
-    const NAME: name::Name;
+    const NAME: &'static str;
     const PARAMS: params::ParamStyle;
     const QUOTE: quote::Quote;
     const DML_IN_CTE: bool;

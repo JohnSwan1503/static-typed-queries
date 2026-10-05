@@ -1,4 +1,4 @@
-error[E0080]: evaluation panicked: `purge` modifies data, which MySql doesn't allow in a CTE
+error[E0080]: evaluation panicked: `purge` modifies data, which MySQL doesn't allow in a CTE
   --> tests/ui/transaction_cte_mysql.rs:12:1
    |
 12 | #[transaction(MySql, steps(Purge as cte, OrderCount))]
@@ -36,7 +36,7 @@ note: inside `static_typed_queries::__private::render::renderer::placement::no_d
    | |         "`",
    | |         name,
    | |         "` modifies data, which ",
-   | |         D::NAME.as_str(),
+   | |         D::NAME,
    | |         " doesn't allow in a CTE",
    | |     ])
    | |______^

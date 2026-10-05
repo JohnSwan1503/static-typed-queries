@@ -20,6 +20,6 @@ fn statement<D: Dialect>(subject: &str, sql: &str) {
     };
     panic!(
         "the SQL of {subject} doesn't parse as {}: {failure}\n  sql: {sql}",
-        D::NAME.as_str(),
+        D::NAME,
     );
 }

@@ -1,4 +1,4 @@
-error[E0080]: evaluation panicked: `archived` modifies data, which MySql doesn't allow in a CTE
+error[E0080]: evaluation panicked: `archived` modifies data, which MySQL doesn't allow in a CTE
   --> tests/ui/../support/mod.rs
    |
    |           static_typed_queries_core::impl_statement!($ty);
@@ -47,7 +47,7 @@ note: inside `render::renderer::placement::no_dml_in_cte::<MySql>`
    | |         "`",
    | |         name,
    | |         "` modifies data, which ",
-   | |         D::NAME.as_str(),
+   | |         D::NAME,
    | |         " doesn't allow in a CTE",
    | |     ])
    | |______^
