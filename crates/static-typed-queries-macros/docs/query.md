@@ -134,9 +134,11 @@ item's builder for one setter call, which then returns to the outermost
 builder, however deeply items nest. Here `.users()` moves to `OrgUsers`'
 builder, and `.org_id(7)` sets its field and returns to `OrgSize`'s.
 
-Some combinations are only rejected once the whole statement is rendered,
-such as a data-modifying CTE on a dialect that doesn't support one. Those
-show up as compile errors on the outermost query.
+A query that modifies data is only placed as a CTE in a dialect that runs
+one, such as PostgreSQL; elsewhere the field or reference doesn't compile.
+A few combinations are only rejected once the whole statement is rendered,
+such as two CTEs of the same name where neither can be renamed. Those show
+up as compile errors on the outermost statement's attribute.
 
 # Generated items
 

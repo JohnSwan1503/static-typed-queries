@@ -35,15 +35,18 @@ reach it. The statement has no `query()` or `query_as()`, since one query
 would skip the hooks. It has `run(conn)` instead, which takes anything that
 implements `sqlx::Acquire` and runs the hooks and the statement in one
 transaction, so a failing hook rolls back the statement too. `run` returns
-the statement's rows when it has `row = Type`, and otherwise the number of
-rows it affected. `run_as(conn)` reads the rows as any other
-`sqlx::FromRow` type, named by annotation or as `run_as::<T, _, _>`.
+a `Running` future of the statement's rows when it has `row = Type`, and
+otherwise of the number of rows it affected. The future is `Send`, so the
+values it binds must be `Send` and `Sync`. `run_as(conn)` reads the rows as
+any other `sqlx::FromRow` type, named by annotation or as
+`run_as::<T, _, _>`.
 
 A hook with values takes them from the run: pass the hook's complete
 builder, or a value of the hook, to `with`, which returns a `With` that has
 the same `with`, `run` and `run_as`. `run` doesn't compile until every hook
 the statement reaches has its values, and the error names the hook that's
-missing. Giving a hook's values twice doesn't compile either.
+missing. Values for a hook the statement never runs don't compile either,
+and neither do a hook's values given twice.
 
 ```
 # use static_typed_queries::prelude::*;
