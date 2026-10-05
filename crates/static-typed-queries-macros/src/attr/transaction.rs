@@ -5,7 +5,7 @@ use syn::{Fields, ItemStruct, Type};
 
 use crate::args::{self, Fetch, Keys, Step};
 use crate::emit::checks::{embeds, hook_needs};
-use crate::emit::node::{fingerprint, node};
+use crate::emit::node::{fingerprint, node, target};
 use crate::emit::{self, krate};
 use crate::model::item::{Item, Role};
 use crate::model::items::add_item;
@@ -82,16 +82,16 @@ pub(crate) fn expand(args: TransactionArgs, input: ItemStruct) -> syn::Result<To
     let parts = flat
         .iter()
         .map(|(step, fetch)| {
-            let node = quote!(<#step as #krate::Sql>::NODE);
+            let step = target(step, &items);
             match fetch {
                 Fetch::Cte => quote! {
                     #krate::From::part(
-                        #node,
+                        #step,
                         #krate::AliasRule::NodeName,
                         ::core::option::Option::Some(#krate::Inject::cte(false)),
                     )
                 },
-                _ => quote!(#krate::Expr::part(#node)),
+                _ => quote!(#krate::Expr::part(#step)),
             }
         })
         .collect();

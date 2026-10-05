@@ -4,15 +4,15 @@ error[E0080]: evaluation panicked: `audit` is a hook of `payments`, so it can't 
    |           static_typed_queries_core::impl_statement!($ty);
    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ evaluation of `<Paid as static_typed_queries_core::render::Render>::SIZE` failed inside this call
    |
-  ::: tests/ui/hook_with_hooks.rs:53:1
+  ::: tests/ui/hook_with_hooks.rs:54:1
    |
-53 | / root!(Paid: Postgres = node!(
-54 | |     "paid",
-55 | |     5,
-56 | |     Query,
+54 | / root!(Paid: Postgres = node!(
+55 | |     "paid",
+56 | |     5,
+57 | |     Query,
 ...  |
-59 | |     items = [PAYMENTS]
-60 | | ));
+60 | |     items = [PAYMENTS]
+61 | | ));
    | |__- in this macro invocation
    |
 note: inside `measure::<Postgres>`
@@ -28,8 +28,8 @@ note: inside `render::renderer::Renderer::<'_, Postgres>::statement`
 note: inside `render::renderer::hooks::<impl render::renderer::Renderer<'_, Postgres>>::find_hooks`
   --> src/render/renderer/hooks.rs
    |
-   |                 Part::From(from) => self.find_hooks(from.node()),
-   |                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |                 Part::From(from) => self.find_hooks(resolve_node(node, from.target())),
+   |                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 note: inside `render::renderer::hooks::<impl render::renderer::Renderer<'_, Postgres>>::find_hooks`
   --> src/render/renderer/hooks.rs
    |
@@ -68,15 +68,15 @@ note: erroneous constant encountered
    |           static_typed_queries_core::impl_statement!($ty);
    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    |
-  ::: tests/ui/hook_with_hooks.rs:53:1
+  ::: tests/ui/hook_with_hooks.rs:54:1
    |
-53 | / root!(Paid: Postgres = node!(
-54 | |     "paid",
-55 | |     5,
-56 | |     Query,
+54 | / root!(Paid: Postgres = node!(
+55 | |     "paid",
+56 | |     5,
+57 | |     Query,
 ...  |
-59 | |     items = [PAYMENTS]
-60 | | ));
+60 | |     items = [PAYMENTS]
+61 | | ));
    | |__- in this macro invocation
    |
    = note: this note originates in the macro `static_typed_queries_core::impl_statement` which comes from the expansion of the macro `root` (in Nightly builds, run with -Z macro-backtrace for more info)
@@ -87,15 +87,15 @@ note: erroneous constant encountered
    |           static_typed_queries_core::impl_statement!($ty);
    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    |
-  ::: tests/ui/hook_with_hooks.rs:53:1
+  ::: tests/ui/hook_with_hooks.rs:54:1
    |
-53 | / root!(Paid: Postgres = node!(
-54 | |     "paid",
-55 | |     5,
-56 | |     Query,
+54 | / root!(Paid: Postgres = node!(
+55 | |     "paid",
+56 | |     5,
+57 | |     Query,
 ...  |
-59 | |     items = [PAYMENTS]
-60 | | ));
+60 | |     items = [PAYMENTS]
+61 | | ));
    | |__- in this macro invocation
    |
    = note: this note originates in the macro `static_typed_queries_core::impl_statement` which comes from the expansion of the macro `root` (in Nightly builds, run with -Z macro-backtrace for more info)
@@ -106,15 +106,15 @@ note: erroneous constant encountered
    |           static_typed_queries_core::impl_statement!($ty);
    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    |
-  ::: tests/ui/hook_with_hooks.rs:53:1
+  ::: tests/ui/hook_with_hooks.rs:54:1
    |
-53 | / root!(Paid: Postgres = node!(
-54 | |     "paid",
-55 | |     5,
-56 | |     Query,
+54 | / root!(Paid: Postgres = node!(
+55 | |     "paid",
+56 | |     5,
+57 | |     Query,
 ...  |
-59 | |     items = [PAYMENTS]
-60 | | ));
+60 | |     items = [PAYMENTS]
+61 | | ));
    | |__- in this macro invocation
    |
    = note: this note originates in the macro `static_typed_queries_core::impl_statement` which comes from the expansion of the macro `root` (in Nightly builds, run with -Z macro-backtrace for more info)
@@ -125,15 +125,15 @@ note: erroneous constant encountered
    |           static_typed_queries_core::impl_statement!($ty);
    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    |
-  ::: tests/ui/hook_with_hooks.rs:53:1
+  ::: tests/ui/hook_with_hooks.rs:54:1
    |
-53 | / root!(Paid: Postgres = node!(
-54 | |     "paid",
-55 | |     5,
-56 | |     Query,
+54 | / root!(Paid: Postgres = node!(
+55 | |     "paid",
+56 | |     5,
+57 | |     Query,
 ...  |
-59 | |     items = [PAYMENTS]
-60 | | ));
+60 | |     items = [PAYMENTS]
+61 | | ));
    | |__- in this macro invocation
    |
    = note: this note originates in the macro `static_typed_queries_core::impl_statement` which comes from the expansion of the macro `root` (in Nightly builds, run with -Z macro-backtrace for more info)

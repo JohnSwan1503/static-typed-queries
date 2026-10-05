@@ -102,10 +102,10 @@ impl<'a, D: Dialect> Renderer<'a, D> {
         while i < parts.len() {
             self.root = Some(root);
             match parts[i] {
-                Part::From(from) => self.attach(from.node()),
+                Part::From(from) => self.attach(root, from.target()),
                 Part::Expr(step) => {
-                    let step = step.as_ref();
-                    let (node, path) = target(step, self.child_path(Path::ROOT, step));
+                    let (step, path) = self.resolve(root, Path::ROOT, step.target());
+                    let (node, path) = target(step, path);
                     self.single(root, step, node, path);
                     self.attached = [None; MAX_CTES];
                     self.attached_count = 0;

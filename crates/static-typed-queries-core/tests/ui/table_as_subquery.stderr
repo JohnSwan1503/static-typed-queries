@@ -4,15 +4,15 @@ error[E0080]: evaluation panicked: table `users` can only be referenced by name
    |           static_typed_queries_core::impl_statement!($ty);
    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ evaluation of `<Derived as static_typed_queries_core::render::Render>::SIZE` failed inside this call
    |
-  ::: tests/ui/table_as_subquery.rs:15:1
+  ::: tests/ui/table_as_subquery.rs:16:1
    |
-15 | / root!(Derived: Postgres = node!(
-16 | |     "derived",
-17 | |     2,
-18 | |     Query,
+16 | / root!(Derived: Postgres = node!(
+17 | |     "derived",
+18 | |     2,
+19 | |     Query,
 ...  |
-21 | |     items = [USERS]
-22 | | ));
+22 | |     items = [USERS]
+23 | | ));
    | |__- in this macro invocation
    |
 note: inside `measure::<Postgres>`
@@ -33,8 +33,8 @@ note: inside `render::renderer::Renderer::<'_, Postgres>::single`
 note: inside `render::renderer::ctes::<impl render::renderer::Renderer<'_, Postgres>>::collect`
   --> src/render/renderer/ctes.rs
    |
-   |                     match placement::<D>(from) {
-   |                           ^^^^^^^^^^^^^^^^^^^^
+   |                     match placement::<D>(from, child) {
+   |                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 note: inside `render::renderer::placement::placement::<Postgres>`
   --> src/render/renderer/placement.rs
    |
@@ -57,15 +57,15 @@ note: erroneous constant encountered
    |           static_typed_queries_core::impl_statement!($ty);
    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    |
-  ::: tests/ui/table_as_subquery.rs:15:1
+  ::: tests/ui/table_as_subquery.rs:16:1
    |
-15 | / root!(Derived: Postgres = node!(
-16 | |     "derived",
-17 | |     2,
-18 | |     Query,
+16 | / root!(Derived: Postgres = node!(
+17 | |     "derived",
+18 | |     2,
+19 | |     Query,
 ...  |
-21 | |     items = [USERS]
-22 | | ));
+22 | |     items = [USERS]
+23 | | ));
    | |__- in this macro invocation
    |
    = note: this note originates in the macro `static_typed_queries_core::impl_statement` which comes from the expansion of the macro `root` (in Nightly builds, run with -Z macro-backtrace for more info)
@@ -76,15 +76,15 @@ note: erroneous constant encountered
    |           static_typed_queries_core::impl_statement!($ty);
    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    |
-  ::: tests/ui/table_as_subquery.rs:15:1
+  ::: tests/ui/table_as_subquery.rs:16:1
    |
-15 | / root!(Derived: Postgres = node!(
-16 | |     "derived",
-17 | |     2,
-18 | |     Query,
+16 | / root!(Derived: Postgres = node!(
+17 | |     "derived",
+18 | |     2,
+19 | |     Query,
 ...  |
-21 | |     items = [USERS]
-22 | | ));
+22 | |     items = [USERS]
+23 | | ));
    | |__- in this macro invocation
    |
    = note: this note originates in the macro `static_typed_queries_core::impl_statement` which comes from the expansion of the macro `root` (in Nightly builds, run with -Z macro-backtrace for more info)
@@ -95,15 +95,15 @@ note: erroneous constant encountered
    |           static_typed_queries_core::impl_statement!($ty);
    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    |
-  ::: tests/ui/table_as_subquery.rs:15:1
+  ::: tests/ui/table_as_subquery.rs:16:1
    |
-15 | / root!(Derived: Postgres = node!(
-16 | |     "derived",
-17 | |     2,
-18 | |     Query,
+16 | / root!(Derived: Postgres = node!(
+17 | |     "derived",
+18 | |     2,
+19 | |     Query,
 ...  |
-21 | |     items = [USERS]
-22 | | ));
+22 | |     items = [USERS]
+23 | | ));
    | |__- in this macro invocation
    |
    = note: this note originates in the macro `static_typed_queries_core::impl_statement` which comes from the expansion of the macro `root` (in Nightly builds, run with -Z macro-backtrace for more info)
@@ -114,15 +114,15 @@ note: erroneous constant encountered
    |           static_typed_queries_core::impl_statement!($ty);
    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    |
-  ::: tests/ui/table_as_subquery.rs:15:1
+  ::: tests/ui/table_as_subquery.rs:16:1
    |
-15 | / root!(Derived: Postgres = node!(
-16 | |     "derived",
-17 | |     2,
-18 | |     Query,
+16 | / root!(Derived: Postgres = node!(
+17 | |     "derived",
+18 | |     2,
+19 | |     Query,
 ...  |
-21 | |     items = [USERS]
-22 | | ));
+22 | |     items = [USERS]
+23 | | ));
    | |__- in this macro invocation
    |
    = note: this note originates in the macro `static_typed_queries_core::impl_statement` which comes from the expansion of the macro `root` (in Nightly builds, run with -Z macro-backtrace for more info)

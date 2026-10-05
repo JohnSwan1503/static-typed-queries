@@ -14,6 +14,7 @@ use static_typed_queries_core::part::from::rule::AliasRule;
 use static_typed_queries_core::part::ident::Ident;
 use static_typed_queries_core::part::lit::Lit;
 use static_typed_queries_core::part::param::Param;
+use static_typed_queries_core::part::target::Target;
 use static_typed_queries_core::statement::Statement;
 use static_typed_queries_core::statement::bind::Bind;
 use static_typed_queries_core::statement::params::{BindParams, unknown};
@@ -38,7 +39,7 @@ const KIND_COUNT: &Node = node!(
     Inject::Subquery,
     [
         Lit::part("SELECT count(*) FROM "),
-        From::part(ORG_EVENTS, AliasRule::NodeName, None),
+        From::part(Target::Item(0), AliasRule::NodeName, None),
         Lit::part(" WHERE kind = "),
         Param::part(0, "kind", "&'static str"),
     ],
@@ -52,9 +53,9 @@ const REPORT: &Node = node!(
     Inject::Subquery,
     [
         Lit::part("SELECT "),
-        Expr::part(KIND_COUNT),
+        Expr::part(Target::Item(0)),
         Lit::part(" AS first, (SELECT max(id) FROM "),
-        From::part(ORG_EVENTS, AliasRule::NodeName, None),
+        From::part(Target::Item(1), AliasRule::NodeName, None),
         Lit::part(" WHERE id < "),
         Param::part(0, "below", "i64"),
         Lit::part(" AND id <> "),
@@ -147,7 +148,7 @@ const USES_SHARED: &Node = node!(
     Inject::Subquery,
     [
         Lit::part("SELECT id FROM "),
-        From::part(SHARED, AliasRule::NodeName, None),
+        From::part(Target::Item(0), AliasRule::NodeName, None),
     ],
     items = [SHARED]
 );
@@ -159,9 +160,9 @@ root!(SharedTwice: Postgres = node!(
     Inject::Subquery,
     [
         Lit::part("SELECT * FROM "),
-        From::part(SHARED, AliasRule::Given, None),
+        From::part(Target::Item(0), AliasRule::Given, None),
         Lit::part(" s WHERE s.id IN "),
-        Expr::part(USES_SHARED),
+        Expr::part(Target::Item(1)),
     ],
     items = [SHARED, USES_SHARED]
 ));

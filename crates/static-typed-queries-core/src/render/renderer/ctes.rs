@@ -3,6 +3,7 @@ use crate::node::Node;
 use crate::node::inject::Inject;
 use crate::node::kind::Kind;
 use crate::part::Part;
+use crate::part::target::Target;
 use crate::render::error::fail;
 use crate::statement::bind::path::Path;
 
@@ -25,8 +26,9 @@ pub(super) struct Attached {
 }
 
 impl<'a, D: Dialect> Renderer<'a, D> {
-    pub(super) const fn attach(&mut self, step: &'static Node) {
-        let (node, path) = target(step, self.child_path(Path::ROOT, step));
+    pub(super) const fn attach(&mut self, root: &'static Node, step: Target) {
+        let (node, path) = self.resolve(root, Path::ROOT, step);
+        let (node, path) = target(node, path);
         attachable::<D>(node);
         if self.attached_count == MAX_CTES {
             fail(&["a step can't have more than 64 CTE steps attached"]);
@@ -52,19 +54,19 @@ impl<'a, D: Dialect> Renderer<'a, D> {
         while i < parts.len() {
             match parts[i] {
                 Part::Expr(expr) => {
-                    if !matches!(expr.kind(), Kind::Query) {
+                    let (child, child_path) = self.embedded(node, path, expr.target());
+                    if !matches!(child.kind, Kind::Query) {
                         fail(&[
                             "`",
-                            expr.name().as_str(),
+                            child.name.as_str(),
                             "` isn't a query, so it can't be used as an expression",
                         ]);
                     }
-                    self.collect(expr.as_ref(), self.child_path(path, expr.as_ref()));
+                    self.collect(child, child_path);
                 }
                 Part::From(from) => {
-                    let child = from.node();
-                    let child_path = self.child_path(path, child);
-                    match placement::<D>(from) {
+                    let (child, child_path) = self.embedded(node, path, from.target());
+                    match placement::<D>(from, child) {
                         Inject::Cte { recursive } => {
                             self.collect(child, child_path);
                             self.add_cte(child, child_path, recursive);

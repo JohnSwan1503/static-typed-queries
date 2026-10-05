@@ -203,7 +203,7 @@ pub(crate) fn expand(args: QueryArgs, input: ItemStruct) -> syn::Result<TokenStr
         fingerprint(ident, &input),
         kind,
         inject,
-        parts(&template, &analysis, &item),
+        parts(&template, &analysis, &item, &items),
         &fields,
         [&[], &[]],
     );

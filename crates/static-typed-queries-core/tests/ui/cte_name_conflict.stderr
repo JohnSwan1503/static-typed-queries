@@ -4,15 +4,15 @@ error[E0080]: evaluation panicked: two different CTEs are named `recent`, and th
    |           static_typed_queries_core::impl_statement!($ty);
    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ evaluation of `<Both as static_typed_queries_core::render::Render>::SIZE` failed inside this call
    |
-  ::: tests/ui/cte_name_conflict.rs:27:1
+  ::: tests/ui/cte_name_conflict.rs:28:1
    |
-27 | / root!(Both: Postgres = node!(
-28 | |     "both",
-29 | |     3,
-30 | |     Query,
+28 | / root!(Both: Postgres = node!(
+29 | |     "both",
+30 | |     3,
+31 | |     Query,
 ...  |
-38 | |     items = [FIRST, SECOND]
-39 | | ));
+39 | |     items = [FIRST, SECOND]
+40 | | ));
    | |__- in this macro invocation
    |
 note: inside `measure::<Postgres>`
@@ -61,15 +61,15 @@ note: erroneous constant encountered
    |           static_typed_queries_core::impl_statement!($ty);
    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    |
-  ::: tests/ui/cte_name_conflict.rs:27:1
+  ::: tests/ui/cte_name_conflict.rs:28:1
    |
-27 | / root!(Both: Postgres = node!(
-28 | |     "both",
-29 | |     3,
-30 | |     Query,
+28 | / root!(Both: Postgres = node!(
+29 | |     "both",
+30 | |     3,
+31 | |     Query,
 ...  |
-38 | |     items = [FIRST, SECOND]
-39 | | ));
+39 | |     items = [FIRST, SECOND]
+40 | | ));
    | |__- in this macro invocation
    |
    = note: this note originates in the macro `static_typed_queries_core::impl_statement` which comes from the expansion of the macro `root` (in Nightly builds, run with -Z macro-backtrace for more info)
@@ -80,15 +80,15 @@ note: erroneous constant encountered
    |           static_typed_queries_core::impl_statement!($ty);
    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    |
-  ::: tests/ui/cte_name_conflict.rs:27:1
+  ::: tests/ui/cte_name_conflict.rs:28:1
    |
-27 | / root!(Both: Postgres = node!(
-28 | |     "both",
-29 | |     3,
-30 | |     Query,
+28 | / root!(Both: Postgres = node!(
+29 | |     "both",
+30 | |     3,
+31 | |     Query,
 ...  |
-38 | |     items = [FIRST, SECOND]
-39 | | ));
+39 | |     items = [FIRST, SECOND]
+40 | | ));
    | |__- in this macro invocation
    |
    = note: this note originates in the macro `static_typed_queries_core::impl_statement` which comes from the expansion of the macro `root` (in Nightly builds, run with -Z macro-backtrace for more info)
@@ -99,15 +99,15 @@ note: erroneous constant encountered
    |           static_typed_queries_core::impl_statement!($ty);
    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    |
-  ::: tests/ui/cte_name_conflict.rs:27:1
+  ::: tests/ui/cte_name_conflict.rs:28:1
    |
-27 | / root!(Both: Postgres = node!(
-28 | |     "both",
-29 | |     3,
-30 | |     Query,
+28 | / root!(Both: Postgres = node!(
+29 | |     "both",
+30 | |     3,
+31 | |     Query,
 ...  |
-38 | |     items = [FIRST, SECOND]
-39 | | ));
+39 | |     items = [FIRST, SECOND]
+40 | | ));
    | |__- in this macro invocation
    |
    = note: this note originates in the macro `static_typed_queries_core::impl_statement` which comes from the expansion of the macro `root` (in Nightly builds, run with -Z macro-backtrace for more info)
@@ -118,15 +118,15 @@ note: erroneous constant encountered
    |           static_typed_queries_core::impl_statement!($ty);
    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    |
-  ::: tests/ui/cte_name_conflict.rs:27:1
+  ::: tests/ui/cte_name_conflict.rs:28:1
    |
-27 | / root!(Both: Postgres = node!(
-28 | |     "both",
-29 | |     3,
-30 | |     Query,
+28 | / root!(Both: Postgres = node!(
+29 | |     "both",
+30 | |     3,
+31 | |     Query,
 ...  |
-38 | |     items = [FIRST, SECOND]
-39 | | ));
+39 | |     items = [FIRST, SECOND]
+40 | | ));
    | |__- in this macro invocation
    |
    = note: this note originates in the macro `static_typed_queries_core::impl_statement` which comes from the expansion of the macro `root` (in Nightly builds, run with -Z macro-backtrace for more info)

@@ -8,6 +8,7 @@ use static_typed_queries_core::node::inject::Inject;
 use static_typed_queries_core::part::from::From;
 use static_typed_queries_core::part::from::rule::AliasRule;
 use static_typed_queries_core::part::lit::Lit;
+use static_typed_queries_core::part::target::Target;
 
 const ARCHIVED: &Node = node!(
     "archived",
@@ -22,7 +23,7 @@ root!(ArchiveCount: MySql = node!(
     2,
     Query,
     Inject::Subquery,
-    [Lit::part("SELECT count(*) FROM "), From::part(ARCHIVED, AliasRule::NodeName, None)],
+    [Lit::part("SELECT count(*) FROM "), From::part(Target::Item(0), AliasRule::NodeName, None)],
     items = [ARCHIVED]
 ));
 

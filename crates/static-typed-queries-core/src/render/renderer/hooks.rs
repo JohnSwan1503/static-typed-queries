@@ -6,7 +6,7 @@ use crate::render::error::fail;
 use crate::statement::bind::path::Path;
 
 use super::names::same_node;
-use super::paths::{target, unwrap_scope};
+use super::paths::{resolve_node, target, unwrap_scope};
 use super::{MAX_HOOKS, Renderer};
 
 #[derive(Clone, Copy)]
@@ -26,8 +26,8 @@ impl<'a, D: Dialect> Renderer<'a, D> {
         let mut i = 0;
         while i < parts.len() {
             match parts[i] {
-                Part::Expr(expr) => self.find_hooks(expr.as_ref()),
-                Part::From(from) => self.find_hooks(from.node()),
+                Part::Expr(expr) => self.find_hooks(resolve_node(node, expr.target())),
+                Part::From(from) => self.find_hooks(resolve_node(node, from.target())),
                 Part::Lit(_) | Part::Ident(_) | Part::Param(_) => {}
             }
             i += 1;
@@ -138,8 +138,8 @@ const fn has_hooks(node: &'static Node) -> bool {
     let mut i = 0;
     while i < parts.len() {
         let nested = match parts[i] {
-            Part::Expr(expr) => has_hooks(expr.as_ref()),
-            Part::From(from) => has_hooks(from.node()),
+            Part::Expr(expr) => has_hooks(resolve_node(node, expr.target())),
+            Part::From(from) => has_hooks(resolve_node(node, from.target())),
             Part::Lit(_) | Part::Ident(_) | Part::Param(_) => false,
         };
         if nested {

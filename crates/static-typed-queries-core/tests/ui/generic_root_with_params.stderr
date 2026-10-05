@@ -4,9 +4,9 @@ error[E0080]: evaluation panicked: `active_users` has parameters, but no query i
    |         static_typed_queries_core::impl_statement!($ty);
    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ evaluation of `<CountActive as static_typed_queries_core::render::Render>::SIZE` failed inside this call
    |
-  ::: tests/ui/generic_root_with_params.rs:44:1
+  ::: tests/ui/generic_root_with_params.rs:45:1
    |
-44 | root!(CountActive: Postgres = CountOf::<ActiveUsers>::NODE);
+45 | root!(CountActive: Postgres = CountOf::<ActiveUsers>::NODE);
    | ----------------------------------------------------------- in this macro invocation
    |
 note: inside `measure::<Postgres>`
@@ -27,8 +27,18 @@ note: inside `render::renderer::Renderer::<'_, Postgres>::single`
 note: inside `render::renderer::ctes::<impl render::renderer::Renderer<'_, Postgres>>::collect`
   --> src/render/renderer/ctes.rs
    |
-   |                     let child_path = self.child_path(path, child);
-   |                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |                     let (child, child_path) = self.embedded(node, path, from.target());
+   |                                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+note: inside `render::renderer::paths::<impl render::renderer::Renderer<'_, Postgres>>::embedded`
+  --> src/render/renderer/paths.rs
+   |
+   |         let (child, path) = self.resolve(node, path, target);
+   |                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+note: inside `render::renderer::paths::<impl render::renderer::Renderer<'_, Postgres>>::resolve`
+  --> src/render/renderer/paths.rs
+   |
+   |             Target::Node(child) => (child, self.child_path(path, child)),
+   |                                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 note: inside `render::renderer::paths::<impl render::renderer::Renderer<'_, Postgres>>::child_path`
   --> src/render/renderer/paths.rs
    |
@@ -55,9 +65,9 @@ note: erroneous constant encountered
    |         static_typed_queries_core::impl_statement!($ty);
    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    |
-  ::: tests/ui/generic_root_with_params.rs:44:1
+  ::: tests/ui/generic_root_with_params.rs:45:1
    |
-44 | root!(CountActive: Postgres = CountOf::<ActiveUsers>::NODE);
+45 | root!(CountActive: Postgres = CountOf::<ActiveUsers>::NODE);
    | ----------------------------------------------------------- in this macro invocation
    |
    = note: this note originates in the macro `static_typed_queries_core::impl_statement` which comes from the expansion of the macro `root` (in Nightly builds, run with -Z macro-backtrace for more info)
@@ -68,9 +78,9 @@ note: erroneous constant encountered
    |         static_typed_queries_core::impl_statement!($ty);
    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    |
-  ::: tests/ui/generic_root_with_params.rs:44:1
+  ::: tests/ui/generic_root_with_params.rs:45:1
    |
-44 | root!(CountActive: Postgres = CountOf::<ActiveUsers>::NODE);
+45 | root!(CountActive: Postgres = CountOf::<ActiveUsers>::NODE);
    | ----------------------------------------------------------- in this macro invocation
    |
    = note: this note originates in the macro `static_typed_queries_core::impl_statement` which comes from the expansion of the macro `root` (in Nightly builds, run with -Z macro-backtrace for more info)
@@ -81,9 +91,9 @@ note: erroneous constant encountered
    |         static_typed_queries_core::impl_statement!($ty);
    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    |
-  ::: tests/ui/generic_root_with_params.rs:44:1
+  ::: tests/ui/generic_root_with_params.rs:45:1
    |
-44 | root!(CountActive: Postgres = CountOf::<ActiveUsers>::NODE);
+45 | root!(CountActive: Postgres = CountOf::<ActiveUsers>::NODE);
    | ----------------------------------------------------------- in this macro invocation
    |
    = note: this note originates in the macro `static_typed_queries_core::impl_statement` which comes from the expansion of the macro `root` (in Nightly builds, run with -Z macro-backtrace for more info)
@@ -94,9 +104,9 @@ note: erroneous constant encountered
    |         static_typed_queries_core::impl_statement!($ty);
    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    |
-  ::: tests/ui/generic_root_with_params.rs:44:1
+  ::: tests/ui/generic_root_with_params.rs:45:1
    |
-44 | root!(CountActive: Postgres = CountOf::<ActiveUsers>::NODE);
+45 | root!(CountActive: Postgres = CountOf::<ActiveUsers>::NODE);
    | ----------------------------------------------------------- in this macro invocation
    |
    = note: this note originates in the macro `static_typed_queries_core::impl_statement` which comes from the expansion of the macro `root` (in Nightly builds, run with -Z macro-backtrace for more info)

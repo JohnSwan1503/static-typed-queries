@@ -9,6 +9,7 @@ use static_typed_queries_core::part::from::From;
 use static_typed_queries_core::part::from::rule::AliasRule;
 use static_typed_queries_core::part::ident::Ident;
 use static_typed_queries_core::part::lit::Lit;
+use static_typed_queries_core::part::target::Target;
 
 const SET_TENANT: &Node = node!(
     "set_tenant",
@@ -35,7 +36,7 @@ const AUDIT: &Node = node!(
     Inject::Subquery,
     [
         Lit::part("INSERT INTO audit (order_id) SELECT id FROM "),
-        From::part(ORDERS, AliasRule::NodeName, None),
+        From::part(Target::Item(0), AliasRule::NodeName, None),
     ],
     items = [ORDERS]
 );
@@ -55,7 +56,7 @@ root!(Paid: Postgres = node!(
     5,
     Query,
     Inject::Subquery,
-    [Lit::part("SELECT * FROM "), From::part(PAYMENTS, AliasRule::NodeName, None)],
+    [Lit::part("SELECT * FROM "), From::part(Target::Item(0), AliasRule::NodeName, None)],
     items = [PAYMENTS]
 ));
 

@@ -19,6 +19,7 @@ use static_typed_queries_core::part::from::rule::AliasRule;
 use static_typed_queries_core::part::ident::Ident;
 use static_typed_queries_core::part::lit::Lit;
 use static_typed_queries_core::part::param::Param;
+use static_typed_queries_core::part::target::Target;
 use static_typed_queries_core::sql::Sql;
 use static_typed_queries_core::statement::Statement;
 use static_typed_queries_core::statement::hook::Hook;
@@ -52,7 +53,7 @@ const ARCHIVE: &Node = node!(
     Inject::Subquery,
     [
         Lit::part("DELETE FROM "),
-        From::part(ORDERS, AliasRule::NodeName, None),
+        From::part(Target::Item(0), AliasRule::NodeName, None),
         Lit::part(" WHERE created_at < "),
         Param::part(0, "before", "i64"),
     ],
@@ -66,7 +67,7 @@ const ORDER_COUNT: &Node = node!(
     Inject::Subquery,
     [
         Lit::part("SELECT count(*) FROM "),
-        From::part(ORDERS, AliasRule::NodeName, None),
+        From::part(Target::Item(0), AliasRule::NodeName, None),
     ],
     items = [ORDERS]
 );
@@ -102,7 +103,7 @@ impl<T: Sql> Sql for CountOf<T> {
         inject: Inject::Subquery,
         parts: Parts(&[
             Lit::part("SELECT count(*) FROM "),
-            From::part(T::NODE, AliasRule::NodeName, None),
+            From::part(Target::Node(T::NODE), AliasRule::NodeName, None),
         ]),
         before: Hooks(&[]),
         after: Hooks(&[]),
@@ -121,10 +122,10 @@ impl Sql for Nightly {
         Transaction,
         Inject::Subquery,
         [
-            Expr::part(ARCHIVE),
-            Expr::part(<CountOf<Active> as Sql>::NODE),
-            Expr::part(ORDER_COUNT),
-            Expr::part(ARCHIVE),
+            Expr::part(Target::Item(0)),
+            Expr::part(Target::Item(1)),
+            Expr::part(Target::Item(3)),
+            Expr::part(Target::Item(0)),
         ],
         items = [
             ARCHIVE,
@@ -156,7 +157,7 @@ impl Sql for Report {
         9,
         Transaction,
         Inject::Subquery,
-        [Expr::part(ORDER_TOTAL)],
+        [Expr::part(Target::Item(0))],
         items = [ORDER_TOTAL]
     );
 }

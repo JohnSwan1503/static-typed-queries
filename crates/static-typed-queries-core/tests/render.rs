@@ -14,6 +14,7 @@ use static_typed_queries_core::part::from::rule::AliasRule;
 use static_typed_queries_core::part::ident::Ident;
 use static_typed_queries_core::part::lit::Lit;
 use static_typed_queries_core::part::param::Param;
+use static_typed_queries_core::part::target::Target;
 use static_typed_queries_core::sql::Sql;
 use static_typed_queries_core::statement::Statement;
 
@@ -39,7 +40,7 @@ impl Sql for ActiveUsers {
         Inject::Cte { recursive: false },
         [
             Lit::part("SELECT id, email FROM "),
-            From::part(Users::NODE, AliasRule::NodeName, None),
+            From::part(Target::Item(0), AliasRule::NodeName, None),
             Lit::part(" WHERE deleted_at IS NULL AND org_id = "),
             Param::part(0, "org_id", "i64"),
         ],
@@ -59,7 +60,7 @@ impl<T: Sql> Sql for CountOf<T> {
         Inject::Subquery,
         [
             Lit::part("SELECT count(*) FROM "),
-            From::part(T::NODE, AliasRule::NodeName, None),
+            From::part(Target::Node(T::NODE), AliasRule::NodeName, None),
         ]
     );
 }
@@ -76,9 +77,9 @@ impl Sql for UserReport {
         Inject::Subquery,
         [
             Lit::part("SELECT u.email, "),
-            Expr::part(CountOf::<ActiveUsers>::NODE),
+            Expr::part(Target::Item(0)),
             Lit::part(" AS total FROM "),
-            From::part(ActiveUsers::NODE, AliasRule::Given, None),
+            From::part(Target::Item(1), AliasRule::Given, None),
             Lit::part(" u WHERE u.id = "),
             Param::part(0, "id", "i64"),
         ],
@@ -136,9 +137,9 @@ const TWICE: &Node = node!(
     Inject::Subquery,
     [
         Lit::part("SELECT * FROM t WHERE id IN "),
-        Expr::part(BETWEEN),
+        Expr::part(Target::Item(0)),
         Lit::part(" OR id IN "),
-        Expr::part(BETWEEN),
+        Expr::part(Target::Item(0)),
         Lit::part(" LIMIT "),
         Param::part(0, "limit", "i64"),
     ],
@@ -172,9 +173,9 @@ root!(Inlined: Postgres = node!(
     Inject::Subquery,
     [
         Lit::part("SELECT * FROM "),
-        From::part(ActiveUsers::NODE, AliasRule::NodeName, Some(Inject::Subquery)),
+        From::part(Target::Item(0), AliasRule::NodeName, Some(Inject::Subquery)),
         Lit::part(" JOIN "),
-        From::part(ActiveUsers::NODE, AliasRule::Given, Some(Inject::Subquery)),
+        From::part(Target::Item(0), AliasRule::Given, Some(Inject::Subquery)),
         Lit::part(" a USING (id)"),
     ],
     items = [ActiveUsers::NODE]
@@ -195,7 +196,7 @@ const VIPS: &Node = node!(
     Inject::Cte { recursive: false },
     [
         Lit::part("SELECT id FROM "),
-        From::part(ActiveUsers::NODE, AliasRule::NodeName, None),
+        From::part(Target::Item(0), AliasRule::NodeName, None),
         Lit::part(" WHERE vip")
     ],
     items = [ActiveUsers::NODE]
@@ -208,9 +209,9 @@ root!(VipCount: Postgres = node!(
     Inject::Subquery,
     [
         Lit::part("SELECT count(*) FROM "),
-        From::part(VIPS, AliasRule::NodeName, None),
+        From::part(Target::Item(0), AliasRule::NodeName, None),
         Lit::part(" JOIN "),
-        From::part(ActiveUsers::NODE, AliasRule::Given, None),
+        From::part(Target::Item(1), AliasRule::Given, None),
         Lit::part(" a USING (id)"),
     ],
     items = [VIPS, ActiveUsers::NODE]
@@ -243,7 +244,7 @@ root!(Subtree: Postgres = node!(
     41,
     Query,
     Inject::Subquery,
-    [Lit::part("SELECT id FROM "), From::part(TREE, AliasRule::NodeName, None)],
+    [Lit::part("SELECT id FROM "), From::part(Target::Item(0), AliasRule::NodeName, None)],
     items = [TREE]
 ));
 
@@ -262,7 +263,7 @@ const ARCHIVED: &Node = node!(
     Inject::Cte { recursive: false },
     [
         Lit::part("DELETE FROM "),
-        From::part(Users::NODE, AliasRule::NodeName, None),
+        From::part(Target::Item(0), AliasRule::NodeName, None),
         Lit::part(" WHERE deleted_at < now() RETURNING id"),
     ],
     items = [Users::NODE]
@@ -273,7 +274,7 @@ root!(ArchiveCount: Postgres = node!(
     51,
     Query,
     Inject::Subquery,
-    [Lit::part("SELECT count(*) FROM "), From::part(ARCHIVED, AliasRule::NodeName, None)],
+    [Lit::part("SELECT count(*) FROM "), From::part(Target::Item(0), AliasRule::NodeName, None)],
     items = [ARCHIVED]
 ));
 

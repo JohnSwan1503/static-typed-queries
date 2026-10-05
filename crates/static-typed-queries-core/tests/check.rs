@@ -12,6 +12,7 @@ use static_typed_queries_core::part::from::rule::AliasRule;
 use static_typed_queries_core::part::ident::Ident;
 use static_typed_queries_core::part::lit::Lit;
 use static_typed_queries_core::part::param::Param;
+use static_typed_queries_core::part::target::Target;
 
 const MEMBERS: &Node = node!(
     "members",
@@ -60,7 +61,7 @@ root!(UsesHooked: Postgres = node!(
     5,
     Query,
     Inject::Subquery,
-    [Lit::part("SELECT * FROM "), From::part(HOOKED, AliasRule::NodeName, None)],
+    [Lit::part("SELECT * FROM "), From::part(Target::Item(0), AliasRule::NodeName, None)],
     items = [HOOKED]
 ));
 

@@ -2,6 +2,7 @@ use crate::dialect::Dialect;
 use crate::node::Node;
 use crate::node::kind::Kind;
 use crate::part::Part;
+use crate::part::target::Target;
 use crate::render::error::fail;
 use crate::statement::bind::path::Path;
 
@@ -9,7 +10,34 @@ use super::Renderer;
 use super::names::same_node;
 
 impl<'a, D: Dialect> Renderer<'a, D> {
-    pub(super) const fn child_path(&self, path: Path, child: &'static Node) -> Path {
+    // The node a part refers to from `node`, and the path to its values.
+    pub(super) const fn resolve(
+        &self,
+        node: &'static Node,
+        path: Path,
+        target: Target,
+    ) -> (&'static Node, Path) {
+        match target {
+            Target::Item(index) => match path.child(index) {
+                Some(path) => (node.items.0[index as usize], path),
+                None => fail(&["items can't be nested more than 16 deep"]),
+            },
+            Target::Node(child) => (child, self.child_path(path, child)),
+        }
+    }
+
+    // An embedded item, looking through a statement wrapper to the statement it names.
+    pub(super) const fn embedded(
+        &self,
+        node: &'static Node,
+        path: Path,
+        target: Target,
+    ) -> (&'static Node, Path) {
+        let (child, path) = self.resolve(node, path, target);
+        unwrap(child, path)
+    }
+
+    const fn child_path(&self, path: Path, child: &'static Node) -> Path {
         let root = match self.root {
             Some(root) => root,
             None => panic!("rendering started without a root"),
@@ -32,6 +60,14 @@ impl<'a, D: Dialect> Renderer<'a, D> {
             ]);
         }
         path
+    }
+}
+
+// The node a part refers to from `node`, with statement wrappers unwrapped.
+pub(super) const fn resolve_node(node: &'static Node, target: Target) -> &'static Node {
+    match target {
+        Target::Item(index) => unwrap_scope(node.items.0[index as usize]),
+        Target::Node(child) => child,
     }
 }
 
@@ -76,11 +112,16 @@ pub(super) const fn instance_path(node: &'static Node, path: Path) -> Path {
     if has_params(node) { path } else { Path::ROOT }
 }
 
-pub(super) const fn target(node: &'static Node, path: Path) -> (&'static Node, Path) {
-    let (node, path) = match (node.kind, path.child(0)) {
+const fn unwrap(node: &'static Node, path: Path) -> (&'static Node, Path) {
+    match (node.kind, path.child(0)) {
         (Kind::Scope, Some(path)) => (node.items.0[0], path),
+        (Kind::Scope, None) => fail(&["items can't be nested more than 16 deep"]),
         _ => (node, path),
-    };
+    }
+}
+
+pub(super) const fn target(node: &'static Node, path: Path) -> (&'static Node, Path) {
+    let (node, path) = unwrap(node, path);
     match node.kind {
         Kind::Table => fail(&["`", node.name.as_str(), "` is a table, not a statement"]),
         Kind::Transaction => fail(&[
@@ -106,8 +147,8 @@ const fn has_params(node: &'static Node) -> bool {
     while i < parts.len() {
         let found = match parts[i] {
             Part::Param(_) => true,
-            Part::Expr(expr) => has_params(expr.as_ref()),
-            Part::From(from) => has_params(from.node()),
+            Part::Expr(expr) => has_params(resolve_node(node, expr.target())),
+            Part::From(from) => has_params(resolve_node(node, from.target())),
             Part::Lit(_) | Part::Ident(_) => false,
         };
         if found {

@@ -30,20 +30,20 @@ impl<'a, D: Dialect> Renderer<'a, D> {
                 Part::Ident(ident) => self.quoted(ident.0, 0),
                 Part::Param(param) => self.param(node, path, param),
                 Part::Expr(expr) => {
+                    let (child, child_path) = self.embedded(node, path, expr.target());
                     self.push("(");
-                    self.body(expr.as_ref(), self.child_path(path, expr.as_ref()));
+                    self.body(child, child_path);
                     self.push(")");
                 }
-                Part::From(from) => self.from(path, from),
+                Part::From(from) => self.from(node, path, from),
             }
             i += 1;
         }
     }
 
-    const fn from(&mut self, path: Path, from: From) {
-        let child = from.node();
-        let child_path = self.child_path(path, child);
-        match placement::<D>(from) {
+    const fn from(&mut self, node: &'static Node, path: Path, from: From) {
+        let (child, child_path) = self.embedded(node, path, from.target());
+        match placement::<D>(from, child) {
             Inject::Ident => self.body(child, child_path),
             Inject::Cte { .. } => match self.cte_suffix(child, instance_path(child, child_path)) {
                 Some(suffix) => self.quoted(child.name.as_str(), suffix),

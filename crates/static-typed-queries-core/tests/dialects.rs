@@ -10,6 +10,7 @@ use static_typed_queries_core::part::from::rule::AliasRule;
 use static_typed_queries_core::part::ident::Ident;
 use static_typed_queries_core::part::lit::Lit;
 use static_typed_queries_core::part::param::Param;
+use static_typed_queries_core::part::target::Target;
 
 const RECENT: &Node = node!(
     "recent",
@@ -33,7 +34,7 @@ const RECENT_COUNT: &Node = node!(
     Inject::Subquery,
     [
         Lit::part("SELECT count(*) FROM "),
-        From::part(RECENT, AliasRule::NodeName, None),
+        From::part(Target::Item(0), AliasRule::NodeName, None),
         Lit::part(" WHERE id > "),
         Param::part(0, "min_id", "i64"),
     ],

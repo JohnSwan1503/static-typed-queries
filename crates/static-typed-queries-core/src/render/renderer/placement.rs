@@ -5,10 +5,10 @@ use crate::node::kind::Kind;
 use crate::part::from::From;
 use crate::render::error::fail;
 
-pub(super) const fn placement<D: Dialect>(from: From) -> Inject {
-    let inject = from.inject();
-    let name = from.node().name.as_str();
-    match (from.node().kind, inject) {
+pub(super) const fn placement<D: Dialect>(from: From, node: &'static Node) -> Inject {
+    let inject = from.inject(node);
+    let name = node.name.as_str();
+    match (node.kind, inject) {
         (Kind::Table, Inject::Ident) | (Kind::Query, Inject::Cte { .. } | Inject::Subquery) => {}
         (Kind::Table, _) => fail(&["table `", name, "` can only be referenced by name"]),
         (_, Inject::Ident) => fail(&[

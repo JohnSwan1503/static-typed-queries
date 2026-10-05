@@ -17,6 +17,7 @@ pub use crate::part::from::rule::AliasRule;
 pub use crate::part::ident::Ident;
 pub use crate::part::lit::Lit;
 pub use crate::part::param::Param;
+pub use crate::part::target::Target;
 pub use crate::render::{Render, check_hooks};
 pub use crate::sql::Sql;
 pub use crate::statement::{Rows, Statement};

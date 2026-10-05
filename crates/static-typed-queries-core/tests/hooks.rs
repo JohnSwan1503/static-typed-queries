@@ -10,6 +10,7 @@ use static_typed_queries_core::part::from::rule::AliasRule;
 use static_typed_queries_core::part::ident::Ident;
 use static_typed_queries_core::part::lit::Lit;
 use static_typed_queries_core::part::param::Param;
+use static_typed_queries_core::part::target::Target;
 use static_typed_queries_core::statement::Statement;
 
 const SET_TENANT: &Node = node!(
@@ -41,7 +42,7 @@ const PURGE: &Node = node!(
     Inject::Subquery,
     [
         Lit::part("DELETE FROM carts USING "),
-        From::part(STALE, AliasRule::NodeName, None),
+        From::part(Target::Item(0), AliasRule::NodeName, None),
         Lit::part(" WHERE carts.id = open_orders.id"),
     ],
     items = [STALE]
@@ -64,7 +65,7 @@ const OPEN_ORDERS: &Node = node!(
     Inject::cte(false),
     [
         Lit::part("SELECT id FROM "),
-        From::part(ORDERS, AliasRule::NodeName, None),
+        From::part(Target::Item(0), AliasRule::NodeName, None),
         Lit::part(" WHERE status = "),
         Param::part(0, "status", "String"),
     ],
@@ -78,11 +79,11 @@ const ORDER_BY_ID: &Node = node!(
     Inject::Subquery,
     [
         Lit::part("SELECT * FROM "),
-        From::part(ORDERS, AliasRule::NodeName, None),
+        From::part(Target::Item(0), AliasRule::NodeName, None),
         Lit::part(" WHERE id = "),
         Param::part(0, "id", "i64"),
         Lit::part(" OR parent_id IN (SELECT id FROM "),
-        From::part(ORDERS, AliasRule::NodeName, None),
+        From::part(Target::Item(0), AliasRule::NodeName, None),
         Lit::part(")"),
     ],
     items = [ORDERS]
@@ -98,9 +99,9 @@ root!(BigOpenOrders: Postgres = node!(
     Inject::Subquery,
     [
         Lit::part("SELECT * FROM "),
-        From::part(OPEN_ORDERS, AliasRule::NodeName, None),
+        From::part(Target::Item(0), AliasRule::NodeName, None),
         Lit::part(" JOIN "),
-        From::part(ORDERS, AliasRule::Given, None),
+        From::part(Target::Item(1), AliasRule::Given, None),
         Lit::part(" o USING (id) WHERE o.total > "),
         Param::part(0, "total", "i64"),
     ],

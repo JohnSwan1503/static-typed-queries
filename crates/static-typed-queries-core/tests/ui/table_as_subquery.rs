@@ -9,6 +9,7 @@ use static_typed_queries_core::part::from::From;
 use static_typed_queries_core::part::from::rule::AliasRule;
 use static_typed_queries_core::part::ident::Ident;
 use static_typed_queries_core::part::lit::Lit;
+use static_typed_queries_core::part::target::Target;
 
 const USERS: &Node = node!("users", 1, Table, Inject::Ident, [Ident::part("users")]);
 
@@ -17,7 +18,7 @@ root!(Derived: Postgres = node!(
     2,
     Query,
     Inject::Subquery,
-    [Lit::part("SELECT * FROM "), From::part(USERS, AliasRule::NodeName, Some(Inject::Subquery))],
+    [Lit::part("SELECT * FROM "), From::part(Target::Item(0), AliasRule::NodeName, Some(Inject::Subquery))],
     items = [USERS]
 ));
 

@@ -17,8 +17,8 @@ note: inside `static_typed_queries::__private::render::renderer::Renderer::<'_, 
 note: inside `static_typed_queries::__private::render::renderer::Renderer::<'_, static_typed_queries::dialect::Postgres>::transaction`
  --> $WORKSPACE/crates/static-typed-queries-core/src/render/renderer.rs
   |
-  |                     let (node, path) = target(step, self.child_path(Path::ROOT, step));
-  |                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |                     let (node, path) = target(step, path);
+  |                                        ^^^^^^^^^^^^^^^^^^
 note: inside `static_typed_queries::__private::render::renderer::paths::target`
  --> $WORKSPACE/crates/static-typed-queries-core/src/render/renderer/paths.rs
   |

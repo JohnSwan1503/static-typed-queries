@@ -5,6 +5,7 @@ use syn::{Ident, ItemStruct, Type};
 use crate::args::Placement;
 use crate::emit::krate;
 use crate::model::item::Item;
+use crate::naming::type_key;
 use crate::sql::analyze::Analysis;
 use crate::sql::template::{Segment, Template};
 
@@ -55,7 +56,28 @@ pub(crate) fn placement(placement: Placement) -> TokenStream {
     }
 }
 
-pub(crate) fn parts(template: &Template, analysis: &Analysis, item: &Item) -> Vec<TokenStream> {
+// A reference to a listed item points at its index; a bare type parameter has no entry, so it is
+// referenced by node and resolved by the queries that name it.
+pub(crate) fn target(ty: &Type, items: &[(Type, Type)]) -> TokenStream {
+    let krate = krate();
+    match items
+        .iter()
+        .position(|(_, named)| type_key(named) == type_key(ty))
+    {
+        Some(index) => {
+            let index = Literal::u16_unsuffixed(index as u16);
+            quote!(#krate::Target::Item(#index))
+        }
+        None => quote!(#krate::Target::Node(<#ty as #krate::Sql>::NODE)),
+    }
+}
+
+pub(crate) fn parts(
+    template: &Template,
+    analysis: &Analysis,
+    item: &Item,
+    items: &[(Type, Type)],
+) -> Vec<TokenStream> {
     let krate = krate();
     let mut positions = analysis.refs.iter();
     template
@@ -70,8 +92,7 @@ pub(crate) fn parts(template: &Template, analysis: &Analysis, item: &Item) -> Ve
             }
             Segment::Ref(item) => {
                 let position = positions.next().expect("a position for every reference");
-                let ty = &item.ty;
-                let node = quote!(<#ty as #krate::Sql>::NODE);
+                let node = target(&item.ty, items);
                 if !position.from {
                     return quote!(#krate::Expr::part(#node));
                 }

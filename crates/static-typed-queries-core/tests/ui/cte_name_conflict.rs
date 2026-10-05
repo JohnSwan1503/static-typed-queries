@@ -8,6 +8,7 @@ use static_typed_queries_core::node::inject::Inject;
 use static_typed_queries_core::part::from::From;
 use static_typed_queries_core::part::from::rule::AliasRule;
 use static_typed_queries_core::part::lit::Lit;
+use static_typed_queries_core::part::target::Target;
 
 const FIRST: &Node = node!(
     "recent",
@@ -31,9 +32,9 @@ root!(Both: Postgres = node!(
     Inject::Subquery,
     [
         Lit::part("SELECT * FROM "),
-        From::part(FIRST, AliasRule::NodeName, None),
+        From::part(Target::Item(0), AliasRule::NodeName, None),
         Lit::part(", "),
-        From::part(SECOND, AliasRule::NodeName, None),
+        From::part(Target::Item(1), AliasRule::NodeName, None),
     ],
     items = [FIRST, SECOND]
 ));

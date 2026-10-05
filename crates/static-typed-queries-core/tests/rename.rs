@@ -16,6 +16,7 @@ use static_typed_queries_core::part::from::From;
 use static_typed_queries_core::part::from::rule::AliasRule;
 use static_typed_queries_core::part::ident::Ident;
 use static_typed_queries_core::part::lit::Lit;
+use static_typed_queries_core::part::target::Target;
 use static_typed_queries_core::sql::Sql;
 use static_typed_queries_core::statement::Statement;
 
@@ -47,7 +48,7 @@ impl<T: Sql> Sql for Recent<T> {
         inject: Inject::cte(false),
         parts: Parts(&[
             Lit::part("SELECT id FROM "),
-            From::part(T::NODE, AliasRule::NodeName, None),
+            From::part(Target::Node(T::NODE), AliasRule::NodeName, None),
             Lit::part(" WHERE created_at > now() - interval '1 day'"),
         ]),
         before: Hooks(&[]),
@@ -71,13 +72,13 @@ root!(Activity: Postgres = node!(
     Inject::Subquery,
     [
         Lit::part("SELECT * FROM "),
-        From::part(Recent::<Users>::NODE, AliasRule::Given, None),
+        From::part(Target::Item(0), AliasRule::Given, None),
         Lit::part(" u JOIN "),
-        From::part(Recent::<Orders>::NODE, AliasRule::Given, None),
+        From::part(Target::Item(1), AliasRule::Given, None),
         Lit::part(" o USING (id) JOIN "),
-        From::part(RECENT_2, AliasRule::Given, None),
+        From::part(Target::Item(2), AliasRule::Given, None),
         Lit::part(" r USING (id) WHERE u.id IN (SELECT id FROM "),
-        From::part(Recent::<Users>::NODE, AliasRule::NodeName, None),
+        From::part(Target::Item(0), AliasRule::NodeName, None),
         Lit::part(")"),
     ],
     items = [Recent::<Users>::NODE, Recent::<Orders>::NODE, RECENT_2]

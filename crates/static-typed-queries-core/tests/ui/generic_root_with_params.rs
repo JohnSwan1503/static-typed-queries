@@ -11,6 +11,7 @@ use static_typed_queries_core::part::from::From;
 use static_typed_queries_core::part::from::rule::AliasRule;
 use static_typed_queries_core::part::lit::Lit;
 use static_typed_queries_core::part::param::Param;
+use static_typed_queries_core::part::target::Target;
 use static_typed_queries_core::sql::Sql;
 
 pub struct ActiveUsers;
@@ -37,7 +38,7 @@ impl<T: Sql> Sql for CountOf<T> {
         2,
         Query,
         Inject::Subquery,
-        [Lit::part("SELECT count(*) FROM "), From::part(T::NODE, AliasRule::NodeName, None)]
+        [Lit::part("SELECT count(*) FROM "), From::part(Target::Node(T::NODE), AliasRule::NodeName, None)]
     );
 }
 

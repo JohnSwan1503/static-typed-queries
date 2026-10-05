@@ -3,6 +3,7 @@ pub mod from;
 pub mod ident;
 pub mod lit;
 pub mod param;
+pub mod target;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Part {
