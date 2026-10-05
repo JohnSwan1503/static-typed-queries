@@ -65,6 +65,7 @@ pub(crate) enum Fetch {
     Default,
     One,
     Optional,
+    Cte,
 }
 
 pub(crate) enum Step {
@@ -80,13 +81,35 @@ impl Step {
         }
     }
 
-    pub(crate) fn flatten<'a>(steps: &'a [Step], out: &mut Vec<&'a Type>) {
+    pub(crate) fn flatten<'a>(steps: &'a [Step], out: &mut Vec<(&'a Type, Fetch)>) {
         for step in steps {
             match step {
-                Step::Run(ty, _) => out.push(ty),
+                Step::Run(ty, fetch) => out.push((ty, *fetch)),
                 Step::Savepoint(_, steps) => Step::flatten(steps, out),
             }
         }
+    }
+
+    pub(crate) fn check_ctes(steps: &[Step]) -> syn::Result<()> {
+        for (i, step) in steps.iter().enumerate() {
+            match (step, steps.get(i + 1)) {
+                (Step::Run(ty, Fetch::Cte), None) => {
+                    return Err(syn::Error::new(
+                        ty.span(),
+                        "`as cte` attaches this step to the next one, so another step must follow it",
+                    ));
+                }
+                (Step::Run(ty, Fetch::Cte), Some(Step::Savepoint(..))) => {
+                    return Err(syn::Error::new(
+                        ty.span(),
+                        "`as cte` attaches this step to the next one, which can't be a savepoint",
+                    ));
+                }
+                (Step::Savepoint(_, steps), _) => Step::check_ctes(steps)?,
+                _ => {}
+            }
+        }
+        Ok(())
     }
 }
 
@@ -119,10 +142,11 @@ impl Parse for Step {
         let fetch = match fetch.to_string().as_str() {
             "one" => Fetch::One,
             "optional" => Fetch::Optional,
+            "cte" => Fetch::Cte,
             _ => {
                 return Err(syn::Error::new(
                     fetch.span(),
-                    "expected `one` or `optional`",
+                    "expected `one`, `optional` or `cte`",
                 ));
             }
         };

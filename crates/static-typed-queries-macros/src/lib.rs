@@ -483,6 +483,11 @@ pub fn sql(args: TokenStream, item: TokenStream) -> TokenStream {
 /// `sqlx::Error::RowNotFound` when there's none, and `Type as optional` reads
 /// an `Option` of one. Both need a step with a row type.
 ///
+/// `Type as cte` attaches a step to the next one: it runs in that step's
+/// `WITH` clause, under its name, as part of the same statement, and has no
+/// element of its own in the output. A step that modifies data can only be
+/// attached in dialects that allow that in a CTE, such as PostgreSQL.
+///
 /// `savepoint(A, B)` among the steps runs a group in a nested transaction. If
 /// one of its steps fails, only the group rolls back, and the steps after it
 /// still run and commit. The group's element in the output is a `Result`

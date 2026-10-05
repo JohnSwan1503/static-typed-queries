@@ -799,10 +799,11 @@ pub(crate) fn transaction(args: Args, item: ItemStruct) -> syn::Result<TokenStre
     };
     let ident = &item.ident;
     let dialect = &args.dialect;
+    Step::check_ctes(steps)?;
     let mut flat = Vec::new();
     Step::flatten(steps, &mut flat);
     let mut items = Vec::new();
-    for step in &flat {
+    for (step, _) in &flat {
         add_item(step, &item.generics, &[], &mut items);
     }
     let fields: Vec<Type> = items.iter().map(|(ty, _)| ty.clone()).collect();
@@ -824,7 +825,19 @@ pub(crate) fn transaction(args: Args, item: ItemStruct) -> syn::Result<TokenStre
     params.steps = Some(steps);
     let parts = flat
         .iter()
-        .map(|step| quote!(#krate::part::expr::Expr::part(<#step as #krate::sql::Sql>::NODE)))
+        .map(|(step, fetch)| {
+            let node = quote!(<#step as #krate::sql::Sql>::NODE);
+            match fetch {
+                Fetch::Cte => quote! {
+                    #krate::part::from::From::part(
+                        #node,
+                        #krate::part::from::rule::AliasRule::NodeName,
+                        ::core::option::Option::Some(#krate::node::inject::Inject::cte(false)),
+                    )
+                },
+                _ => quote!(#krate::part::expr::Expr::part(#node)),
+            }
+        })
         .collect();
     let node = node(
         &snake_case(&ident.to_string()),
@@ -836,7 +849,7 @@ pub(crate) fn transaction(args: Args, item: ItemStruct) -> syn::Result<TokenStre
         [&[], &[]],
     );
     let mut referenced: Vec<&Type> = Vec::new();
-    for step in flat {
+    for (step, _) in flat {
         if !referenced
             .iter()
             .any(|other| type_key(other) == type_key(step))
@@ -1728,6 +1741,7 @@ impl<'a> Params<'a> {
                 Step::Run(ty, Fetch::Default) => self.link(ty),
                 Step::Run(ty, Fetch::One) => format!("{} as one", self.link(ty)),
                 Step::Run(ty, Fetch::Optional) => format!("{} as optional", self.link(ty)),
+                Step::Run(ty, Fetch::Cte) => format!("{} as cte", self.link(ty)),
                 Step::Savepoint(_, steps) => format!("savepoint({})", self.describe_steps(steps)),
             })
             .collect();
@@ -1750,6 +1764,7 @@ impl<'a> Params<'a> {
         let mut outputs = Vec::new();
         for step in steps {
             match step {
+                Step::Run(_, Fetch::Cte) => {}
                 Step::Run(ty, fetch) => {
                     let name = format_ident!("__step{}", counts.0);
                     let index = Literal::usize_unsuffixed(counts.0);
@@ -1765,6 +1780,7 @@ impl<'a> Params<'a> {
                             quote!(#run::Optional<#row>),
                             quote!(::core::option::Option<#row>),
                         ),
+                        Fetch::Cte => unreachable!("CTE steps run as part of the next step"),
                     };
                     if !matches!(step, Step::Run(_, Fetch::Default)) {
                         statements.push(quote!(const _: () = #run::rows::<#ty>();));

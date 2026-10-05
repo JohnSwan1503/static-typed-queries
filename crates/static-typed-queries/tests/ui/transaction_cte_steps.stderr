@@ -1,0 +1,11 @@
+error: `as cte` attaches this step to the next one, so another step must follow it
+ --> tests/ui/transaction_cte_steps.rs:9:31
+  |
+9 | #[transaction(Postgres, steps(Purge as cte))]
+  |                               ^^^^^
+
+error: `as cte` attaches this step to the next one, which can't be a savepoint
+  --> tests/ui/transaction_cte_steps.rs:12:31
+   |
+12 | #[transaction(Postgres, steps(Purge as cte, savepoint(Purge)))]
+   |                               ^^^^^

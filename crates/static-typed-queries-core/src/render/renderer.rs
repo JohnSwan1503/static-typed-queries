@@ -34,6 +34,12 @@ struct Hook {
 }
 
 #[derive(Clone, Copy)]
+struct Attached {
+    node: &'static Node,
+    path: Path,
+}
+
+#[derive(Clone, Copy)]
 struct Numbered {
     path: Path,
     slot: Slot,
@@ -51,6 +57,8 @@ pub(super) struct Renderer<'a, D> {
     ctes: [Option<Cte>; MAX_CTES],
     cte_count: usize,
     recursive: bool,
+    attached: [Option<Attached>; MAX_CTES],
+    attached_count: usize,
     numbered: [Option<Numbered>; MAX_NUMBERED],
     numbered_count: usize,
     dialect: PhantomData<D>,
@@ -80,6 +88,8 @@ impl<'a, D: Dialect> Renderer<'a, D> {
             ctes: [None; MAX_CTES],
             cte_count: 0,
             recursive: false,
+            attached: [None; MAX_CTES],
+            attached_count: 0,
             numbered: [None; MAX_NUMBERED],
             numbered_count: 0,
             dialect: PhantomData,
@@ -109,14 +119,32 @@ impl<'a, D: Dialect> Renderer<'a, D> {
         let parts = root.parts.0;
         let mut i = 0;
         while i < parts.len() {
-            if let Part::Expr(step) = parts[i] {
-                self.root = Some(root);
-                let step = step.as_ref();
-                let (node, path) = target(step, self.child_path(Path::ROOT, step));
-                self.single(root, step, node, path);
-                self.size.steps += 1;
+            self.root = Some(root);
+            match parts[i] {
+                Part::From(from) => {
+                    let step = from.node();
+                    let (node, path) = target(step, self.child_path(Path::ROOT, step));
+                    attachable::<D>(node);
+                    if self.attached_count == MAX_CTES {
+                        fail(&["a step can't have more than 64 CTE steps attached"]);
+                    }
+                    self.attached[self.attached_count] = Some(Attached { node, path });
+                    self.attached_count += 1;
+                }
+                Part::Expr(step) => {
+                    let step = step.as_ref();
+                    let (node, path) = target(step, self.child_path(Path::ROOT, step));
+                    self.single(root, step, node, path);
+                    self.attached = [None; MAX_CTES];
+                    self.attached_count = 0;
+                    self.size.steps += 1;
+                }
+                Part::Lit(_) | Part::Ident(_) | Part::Param(_) => {}
             }
             i += 1;
+        }
+        if self.attached_count > 0 {
+            fail(&["a CTE step needs a step after it to attach to"]);
         }
         self.render_hooks(true);
     }
@@ -204,6 +232,14 @@ impl<'a, D: Dialect> Renderer<'a, D> {
         self.numbered = [None; MAX_NUMBERED];
         self.numbered_count = 0;
         self.first_bind = self.size.binds;
+        let mut i = 0;
+        while i < self.attached_count {
+            if let Some(attached) = self.attached[i] {
+                self.collect(attached.node, attached.path);
+                self.add_cte(attached.node, attached.path, false);
+            }
+            i += 1;
+        }
         self.collect(node, path);
         self.with_clause();
         self.body(node, path);
@@ -541,6 +577,22 @@ const fn placement<D: Dialect>(from: From) -> Inject {
         (Kind::Transaction, _) => fail(&["`", name, "` is a transaction, so it can't be embedded"]),
     }
     inject
+}
+
+const fn attachable<D: Dialect>(node: &'static Node) {
+    let name = node.name.as_str();
+    match node.kind {
+        Kind::Query => {}
+        Kind::Dml if D::DML_IN_CTE => {}
+        Kind::Dml => fail(&[
+            "`",
+            name,
+            "` modifies data, which ",
+            D::NAME.as_str(),
+            " doesn't allow in a CTE",
+        ]),
+        _ => fail(&["`", name, "` can't run as a CTE"]),
+    }
 }
 
 const fn frame(root: &'static Node, path: Path, depth: usize) -> &'static Node {

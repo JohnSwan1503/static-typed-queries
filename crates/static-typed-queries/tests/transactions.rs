@@ -30,6 +30,21 @@ pub struct OrderCount;
 )]
 pub struct Nightly;
 
+#[query(
+    Postgres,
+    sql = "DELETE FROM {Orders} WHERE created_at < {before: i64} RETURNING id"
+)]
+pub struct ArchiveIds;
+
+#[query(Postgres, sql = "SELECT count(*) FROM archive_ids")]
+pub struct Archived;
+
+#[transaction(
+    Postgres,
+    steps(ArchiveIds as cte, CustomerOrders as cte, Archived, OrderCount)
+)]
+pub struct Sweep;
+
 #[test]
 fn steps_render_in_order() {
     let steps: Vec<(&str, &str)> = Nightly::STEPS
@@ -311,4 +326,38 @@ async fn steps_can_read_one_row_or_an_optional_row() -> sqlx::Result<()> {
     let error = lookup(&mut conn, 9, 10).await.unwrap_err();
     assert!(matches!(error, sqlx::Error::RowNotFound), "{error}");
     Ok(())
+}
+
+#[test]
+fn cte_steps_attach_to_the_next_step() {
+    assert_eq!(Sweep::STEPS.len(), 2);
+    assert_eq!(Sweep::STEPS[0].name().as_str(), "archived");
+    assert_eq!(
+        Sweep::STEPS[0].sql(),
+        r#"WITH "archive_ids" AS (DELETE FROM "orders" WHERE created_at < $1 RETURNING id), "customer_orders" AS (SELECT id FROM "orders" WHERE customer_id = $2) SELECT count(*) FROM archive_ids"#
+    );
+    let paths: Vec<Vec<u16>> = Sweep::STEPS[0]
+        .binds()
+        .iter()
+        .map(|bind| bind.path().steps().to_vec())
+        .collect();
+    assert_eq!(paths, [vec![0], vec![1]]);
+    assert_eq!(Sweep::STEPS[1].sql(), OrderCount::SQL);
+    let params = Sweep::builder()
+        .archive_ids()
+        .before(5)
+        .customer_orders()
+        .customer_id(7)
+        .build();
+    assert_eq!(params.archive_ids.before, 5);
+}
+
+async fn _sweep(conn: &mut sqlx::PgConnection) -> sqlx::Result<(u64, u64)> {
+    Sweep::builder()
+        .archive_ids()
+        .before(5)
+        .customer_orders()
+        .customer_id(7)
+        .run(conn)
+        .await
 }

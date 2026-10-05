@@ -1,4 +1,4 @@
-error: expected `one` or `optional`
+error: expected `one`, `optional` or `cte`
   --> tests/ui/transaction_step_fetch.rs:12:40
    |
 12 | #[transaction(Postgres, steps(Purge as many))]
