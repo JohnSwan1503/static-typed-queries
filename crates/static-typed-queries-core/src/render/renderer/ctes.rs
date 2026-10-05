@@ -7,10 +7,10 @@ use crate::part::target::Target;
 use crate::render::error::fail;
 use crate::statement::bind::path::Path;
 
+use super::Renderer;
 use super::names::{same_node, suffixed_eq};
 use super::paths::{embedded, instance_path, resolve, target};
 use super::placement::{attachable, placement};
-use super::{MAX_CTES, Renderer};
 
 #[derive(Clone, Copy)]
 pub(super) struct Cte {
@@ -30,20 +30,17 @@ impl<'a, D: Dialect> Renderer<'a, D> {
         let (node, path) = resolve(root, Path::ROOT, step);
         let (node, path) = target(node, path);
         attachable::<D>(node);
-        if self.attached_count == MAX_CTES {
-            fail(&["a step can't have more than 64 CTE steps attached"]);
-        }
-        self.attached[self.attached_count] = Some(Attached { node, path });
-        self.attached_count += 1;
+        self.attached.push(
+            Attached { node, path },
+            "a step can't have more than 64 CTE steps attached",
+        );
     }
 
     pub(super) const fn collect_attached(&mut self) {
         let mut i = 0;
-        while i < self.attached_count {
-            if let Some(attached) = self.attached[i] {
-                self.collect(attached.node, attached.path);
-                self.add_cte(attached.node, attached.path, false);
-            }
+        while let Some(attached) = self.attached.get(i) {
+            self.collect(attached.node, attached.path);
+            self.add_cte(attached.node, attached.path, false);
             i += 1;
         }
     }
@@ -105,19 +102,16 @@ impl<'a, D: Dialect> Renderer<'a, D> {
                 "`, and the second one is recursive, so it can't be renamed",
             ]);
         }
-        if self.cte_count == MAX_CTES {
-            fail(&["a statement can't have more than 64 CTEs"]);
-        }
-        self.ctes[self.cte_count] = Some(Cte { node, path, suffix });
-        self.cte_count += 1;
+        self.ctes.push(
+            Cte { node, path, suffix },
+            "a statement can't have more than 64 CTEs",
+        );
     }
 
     const fn has_cte(&self, node: &'static Node) -> bool {
         let mut i = 0;
-        while i < self.cte_count {
-            if let Some(cte) = self.ctes[i]
-                && same_node(cte.node, node)
-            {
+        while let Some(cte) = self.ctes.get(i) {
+            if same_node(cte.node, node) {
                 return true;
             }
             i += 1;
@@ -127,11 +121,8 @@ impl<'a, D: Dialect> Renderer<'a, D> {
 
     pub(super) const fn cte_suffix(&self, node: &'static Node, path: Path) -> Option<u16> {
         let mut i = 0;
-        while i < self.cte_count {
-            if let Some(cte) = self.ctes[i]
-                && same_node(cte.node, node)
-                && cte.path.same(&path)
-            {
+        while let Some(cte) = self.ctes.get(i) {
+            if same_node(cte.node, node) && cte.path.same(&path) {
                 return Some(cte.suffix);
             }
             i += 1;
@@ -141,10 +132,8 @@ impl<'a, D: Dialect> Renderer<'a, D> {
 
     const fn cte_name_taken(&self, name: &str, suffix: u16) -> bool {
         let mut i = 0;
-        while i < self.cte_count {
-            if let Some(cte) = self.ctes[i]
-                && suffixed_eq(cte.node.name.as_str(), cte.suffix, name, suffix)
-            {
+        while let Some(cte) = self.ctes.get(i) {
+            if suffixed_eq(cte.node.name.as_str(), cte.suffix, name, suffix) {
                 return true;
             }
             i += 1;
@@ -153,7 +142,7 @@ impl<'a, D: Dialect> Renderer<'a, D> {
     }
 
     pub(super) const fn with_clause(&mut self) {
-        if self.cte_count == 0 {
+        if self.ctes.is_empty() {
             return;
         }
         self.push(if self.recursive {
@@ -162,16 +151,14 @@ impl<'a, D: Dialect> Renderer<'a, D> {
             "WITH "
         });
         let mut i = 0;
-        while i < self.cte_count {
-            if let Some(cte) = self.ctes[i] {
-                if i > 0 {
-                    self.push(", ");
-                }
-                self.quoted(cte.node.name.as_str(), cte.suffix);
-                self.push(" AS (");
-                self.body(cte.node, cte.path);
-                self.push(")");
+        while let Some(cte) = self.ctes.get(i) {
+            if i > 0 {
+                self.push(", ");
             }
+            self.quoted(cte.node.name.as_str(), cte.suffix);
+            self.push(" AS (");
+            self.body(cte.node, cte.path);
+            self.push(")");
             i += 1;
         }
         self.push(" ");

@@ -1,5 +1,6 @@
 mod ctes;
 mod hooks;
+mod list;
 mod names;
 mod paths;
 mod placement;
@@ -17,6 +18,7 @@ use crate::statement::bind::Bind;
 use crate::statement::bind::path::Path;
 use ctes::{Attached, Cte};
 use hooks::Hook;
+use list::List;
 use paths::{resolve, target};
 use text::Numbered;
 
@@ -33,14 +35,11 @@ pub(super) struct Renderer<'a, D> {
     size: Size,
     rendered: usize,
     first_bind: usize,
-    hooks: [Option<Hook>; MAX_HOOKS],
-    ctes: [Option<Cte>; MAX_CTES],
-    cte_count: usize,
+    hooks: List<Hook, MAX_HOOKS>,
+    ctes: List<Cte, MAX_CTES>,
     recursive: bool,
-    attached: [Option<Attached>; MAX_CTES],
-    attached_count: usize,
-    numbered: [Option<Numbered>; MAX_NUMBERED],
-    numbered_count: usize,
+    attached: List<Attached, MAX_CTES>,
+    numbered: List<Numbered, MAX_NUMBERED>,
     dialect: PhantomData<D>,
 }
 
@@ -63,14 +62,11 @@ impl<'a, D: Dialect> Renderer<'a, D> {
             },
             rendered: 0,
             first_bind: 0,
-            hooks: [None; MAX_HOOKS],
-            ctes: [None; MAX_CTES],
-            cte_count: 0,
+            hooks: List::new(),
+            ctes: List::new(),
             recursive: false,
-            attached: [None; MAX_CTES],
-            attached_count: 0,
-            numbered: [None; MAX_NUMBERED],
-            numbered_count: 0,
+            attached: List::new(),
+            numbered: List::new(),
             dialect: PhantomData,
         }
     }
@@ -104,26 +100,23 @@ impl<'a, D: Dialect> Renderer<'a, D> {
                     let (step, path) = resolve(root, Path::ROOT, step.target());
                     let (node, path) = target(step, path);
                     self.single(step, node, path);
-                    self.attached = [None; MAX_CTES];
-                    self.attached_count = 0;
+                    self.attached.clear();
                     self.size.steps += 1;
                 }
                 Part::Lit(_) | Part::Ident(_) | Part::Param(_) => {}
             }
             i += 1;
         }
-        if self.attached_count > 0 {
+        if !self.attached.is_empty() {
             fail(&["a CTE step needs a step after it to attach to"]);
         }
         self.render_hooks(true);
     }
 
     const fn single(&mut self, named: &'static Node, node: &'static Node, path: Path) {
-        self.ctes = [None; MAX_CTES];
-        self.cte_count = 0;
+        self.ctes.clear();
         self.recursive = false;
-        self.numbered = [None; MAX_NUMBERED];
-        self.numbered_count = 0;
+        self.numbered.clear();
         self.first_bind = self.size.binds;
         self.collect_attached();
         self.collect(node, path);

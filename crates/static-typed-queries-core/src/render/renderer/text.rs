@@ -10,9 +10,10 @@ use crate::statement::bind::Bind;
 use crate::statement::bind::path::Path;
 use crate::statement::bind::slot::Slot;
 
+use super::Renderer;
+use super::names::digits;
 use super::paths::{embedded, instance_path};
 use super::placement::placement;
-use super::{MAX_NUMBERED, Renderer};
 
 #[derive(Clone, Copy)]
 pub(super) struct Numbered {
@@ -71,13 +72,12 @@ impl<'a, D: Dialect> Renderer<'a, D> {
         let number = match self.number_of(path, slot) {
             Some(number) => number,
             None => {
-                if self.numbered_count == MAX_NUMBERED {
-                    fail(&["a statement can't have more than 1024 distinct parameters"]);
-                }
-                self.numbered[self.numbered_count] = Some(Numbered { path, slot });
-                self.numbered_count += 1;
+                self.numbered.push(
+                    Numbered { path, slot },
+                    "a statement can't have more than 1024 distinct parameters",
+                );
                 self.bind(node, path, param);
-                self.numbered_count as u16
+                self.numbered.len() as u16
             }
         };
         self.number(number);
@@ -85,11 +85,8 @@ impl<'a, D: Dialect> Renderer<'a, D> {
 
     const fn number_of(&self, path: Path, slot: Slot) -> Option<u16> {
         let mut i = 0;
-        while i < self.numbered_count {
-            if let Some(numbered) = self.numbered[i]
-                && numbered.slot.inner() == slot.inner()
-                && numbered.path.same(&path)
-            {
+        while let Some(numbered) = self.numbered.get(i) {
+            if numbered.slot.inner() == slot.inner() && numbered.path.same(&path) {
                 return Some(i as u16 + 1);
             }
             i += 1;
@@ -108,20 +105,11 @@ impl<'a, D: Dialect> Renderer<'a, D> {
     }
 
     const fn number(&mut self, n: u16) {
-        let mut digits = [0; 5];
-        let mut count = 0;
-        let mut rest = n;
-        loop {
-            digits[count] = b'0' + (rest % 10) as u8;
-            count += 1;
-            rest /= 10;
-            if rest == 0 {
-                break;
-            }
-        }
-        while count > 0 {
-            count -= 1;
-            self.byte(digits[count]);
+        let (digits, len) = digits(n);
+        let mut i = 0;
+        while i < len {
+            self.byte(digits[i]);
+            i += 1;
         }
     }
 

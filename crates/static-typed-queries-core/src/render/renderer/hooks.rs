@@ -4,9 +4,9 @@ use crate::node::kind::Kind;
 use crate::render::error::fail;
 use crate::statement::bind::path::Path;
 
+use super::Renderer;
 use super::names::same_node;
 use super::paths::{Probe, has, resolve_node, target, unwrap_scope};
-use super::{MAX_HOOKS, Renderer};
 
 #[derive(Clone, Copy)]
 pub(super) struct Hook {
@@ -38,16 +38,15 @@ impl<'a, D: Dialect> Renderer<'a, D> {
             let root = hooks[i];
             let (node, path) = hook(owner, root, Path::ROOT);
             if !self.has_hook(root, after) {
-                let count = self.size.before + self.size.after;
-                if count == MAX_HOOKS {
-                    fail(&["a statement can't have more than 64 hooks"]);
-                }
-                self.hooks[count] = Some(Hook {
-                    root,
-                    node,
-                    path,
-                    after,
-                });
+                self.hooks.push(
+                    Hook {
+                        root,
+                        node,
+                        path,
+                        after,
+                    },
+                    "a statement can't have more than 64 hooks",
+                );
                 if after {
                     self.size.after += 1;
                 } else {
@@ -60,11 +59,8 @@ impl<'a, D: Dialect> Renderer<'a, D> {
 
     const fn has_hook(&self, root: &'static Node, after: bool) -> bool {
         let mut i = 0;
-        while i < self.size.before + self.size.after {
-            if let Some(hook) = self.hooks[i]
-                && hook.after == after
-                && same_node(hook.root, root)
-            {
+        while let Some(hook) = self.hooks.get(i) {
+            if hook.after == after && same_node(hook.root, root) {
                 return true;
             }
             i += 1;
@@ -74,10 +70,8 @@ impl<'a, D: Dialect> Renderer<'a, D> {
 
     pub(super) const fn render_hooks(&mut self, after: bool) {
         let mut i = 0;
-        while i < self.size.before + self.size.after {
-            if let Some(hook) = self.hooks[i]
-                && hook.after == after
-            {
+        while let Some(hook) = self.hooks.get(i) {
+            if hook.after == after {
                 self.single(hook.root, hook.node, hook.path);
             }
             i += 1;

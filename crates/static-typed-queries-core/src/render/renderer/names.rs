@@ -23,7 +23,7 @@ const fn suffixed_len(name: &str, suffix: u16) -> usize {
     if suffix == 0 {
         name.len()
     } else {
-        name.len() + 1 + digit_count(suffix)
+        name.len() + 1 + digits(suffix).1
     }
 }
 
@@ -35,21 +35,21 @@ const fn suffixed_byte(name: &str, suffix: u16, i: usize) -> u8 {
     if i == bytes.len() {
         return b'_';
     }
-    let mut rest = suffix;
-    let mut skip = digit_count(suffix) - (i - bytes.len());
-    while skip > 0 {
-        rest /= 10;
-        skip -= 1;
-    }
-    b'0' + (rest % 10) as u8
+    digits(suffix).0[i - bytes.len() - 1]
 }
 
-const fn digit_count(n: u16) -> usize {
-    let mut count = 1;
-    let mut rest = n / 10;
-    while rest > 0 {
-        count += 1;
+// The decimal digits of `n`, most significant first, and how many there are.
+pub(super) const fn digits(n: u16) -> ([u8; 5], usize) {
+    let len = match n.checked_ilog10() {
+        Some(log) => log as usize + 1,
+        None => 1,
+    };
+    let mut digits = [0; 5];
+    let (mut rest, mut i) = (n, len);
+    while i > 0 {
+        i -= 1;
+        digits[i] = b'0' + (rest % 10) as u8;
         rest /= 10;
     }
-    count
+    (digits, len)
 }
