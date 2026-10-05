@@ -40,6 +40,6 @@ pub use crate::statement::run;
 #[cfg(feature = "sqlx")]
 pub use crate::statement::{query, query_as};
 #[cfg(feature = "sqlx")]
-pub use crate::with::{Run, With};
+pub use crate::with::{Run, Running, With};
 #[cfg(feature = "sqlx")]
 pub use sqlx;

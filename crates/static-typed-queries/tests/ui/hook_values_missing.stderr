@@ -25,79 +25,9 @@ note: required by a bound in `With::<S, V>::run`
    |
    | impl<S, V> With<S, V> {
 ...
-   |     pub async fn run<'c, I, A>(self, conn: A) -> Result<S::Output, sqlx::Error>
+   |     pub fn run<'c, I, A>(self, conn: A) -> Running<'c, S::Output>
    |     where
-   |         S: Run + HookNeeds<V, I>,
-   |                  ^^^^^^^^^^^^^^^ required by this bound in `With::<S, V>::run`
-   = note: this error originates in the attribute macro `query` which comes from the expansion of the attribute macro `table` (in Nightly builds, run with -Z macro-backtrace for more info)
-
-error[E0277]: no values for the hook `Note`
-  --> tests/ui/hook_values_missing.rs:30:5
-   |
-30 | /     Pricey { price: 10 }
-31 | |         .with(Bump {
-32 | |             name: "reads".to_owned(),
-33 | |         })
-34 | |         .run(conn)
-   | |__________________^ `Note` has values
-   |
-   = help: the trait `Provides<Note, _>` is not implemented for `(HookValues<Bump>, ())`
-   = note: give them with `.with(Note { .. })`
-help: the trait `HookNeeds<__V, (__I0,)>` is conditionally implemented for `Pricey`
-  --> tests/ui/hook_values_missing.rs:18:1
-   |
-18 | #[query(Sqlite, sql = "SELECT id FROM {Items} WHERE price > {price}")]
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unsatisfied requirement introduced here: `Items: HookNeeds<_, _>`
-note: required for `Items` to implement `HookNeeds<(HookValues<Bump>, ()), (Here, _)>`
-  --> tests/ui/hook_values_missing.rs:15:1
-   |
-15 | #[table(Sqlite, name = "items", before(Bump), after(Note))]
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unsatisfied trait bound introduced here
-16 | pub struct Items;
-   |            ^^^^^
-   = note: 1 redundant requirement hidden
-   = note: required for `Pricey` to implement `HookNeeds<(HookValues<Bump>, ()), ((Here, _),)>`
-note: required by a bound in `With::<S, V>::run`
-  --> $WORKSPACE/crates/static-typed-queries-core/src/with.rs
-   |
-   | impl<S, V> With<S, V> {
-...
-   |     pub async fn run<'c, I, A>(self, conn: A) -> Result<S::Output, sqlx::Error>
-   |     where
-   |         S: Run + HookNeeds<V, I>,
-   |                  ^^^^^^^^^^^^^^^ required by this bound in `With::<S, V>::run`
-   = note: this error originates in the attribute macro `query` which comes from the expansion of the attribute macro `table` (in Nightly builds, run with -Z macro-backtrace for more info)
-
-error[E0277]: no values for the hook `Note`
-  --> tests/ui/hook_values_missing.rs:35:10
-   |
-35 |         .await
-   |          ^^^^^ `Note` has values
-   |
-   = help: the trait `Provides<Note, _>` is not implemented for `(HookValues<Bump>, ())`
-   = note: give them with `.with(Note { .. })`
-help: the trait `HookNeeds<__V, (__I0,)>` is conditionally implemented for `Pricey`
-  --> tests/ui/hook_values_missing.rs:18:1
-   |
-18 | #[query(Sqlite, sql = "SELECT id FROM {Items} WHERE price > {price}")]
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unsatisfied requirement introduced here: `Items: HookNeeds<_, _>`
-note: required for `Items` to implement `HookNeeds<(HookValues<Bump>, ()), (Here, _)>`
-  --> tests/ui/hook_values_missing.rs:15:1
-   |
-15 | #[table(Sqlite, name = "items", before(Bump), after(Note))]
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unsatisfied trait bound introduced here
-16 | pub struct Items;
-   |            ^^^^^
-   = note: 1 redundant requirement hidden
-   = note: required for `Pricey` to implement `HookNeeds<(HookValues<Bump>, ()), ((Here, _),)>`
-note: required by a bound in `With::<S, V>::run`
-  --> $WORKSPACE/crates/static-typed-queries-core/src/with.rs
-   |
-   | impl<S, V> With<S, V> {
-...
-   |     pub async fn run<'c, I, A>(self, conn: A) -> Result<S::Output, sqlx::Error>
-   |     where
-   |         S: Run + HookNeeds<V, I>,
+   |         S: Run + HookNeeds<V, I> + Send + Sync + 'c,
    |                  ^^^^^^^^^^^^^^^ required by this bound in `With::<S, V>::run`
    = note: this error originates in the attribute macro `query` which comes from the expansion of the attribute macro `table` (in Nightly builds, run with -Z macro-backtrace for more info)
 
@@ -106,64 +36,6 @@ error[E0277]: no values for the hook `Bump`
    |
 39 |     ItemCount.run_as(conn).await
    |               ^^^^^^ `Bump` has values
-   |
-   = help: the trait `Provides<Bump, _>` is not implemented for `()`
-   = note: give them with `.with(Bump { .. })`
-help: the trait `HookNeeds<__V, (__I0,)>` is conditionally implemented for `ItemCount`
-  --> tests/ui/hook_values_missing.rs:26:1
-   |
-26 | #[statement(CountOf<Items>)]
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unsatisfied requirement introduced here: `CountOf<Items>: HookNeeds<_, _>`
-note: required for `Items` to implement `HookNeeds<(), (_, _)>`
-  --> tests/ui/hook_values_missing.rs:15:1
-   |
-15 | #[table(Sqlite, name = "items", before(Bump), after(Note))]
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unsatisfied trait bound introduced here
-16 | pub struct Items;
-   |            ^^^^^
-   = note: 2 redundant requirements hidden
-   = note: required for `ItemCount` to implement `HookNeeds<(), (((_, _),),)>`
-note: required by a bound in `_::<impl ItemCount>::run_as`
-  --> tests/ui/hook_values_missing.rs:26:1
-   |
-26 | #[statement(CountOf<Items>)]
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `_::<impl ItemCount>::run_as`
-   = note: this error originates in the attribute macro `statement` (in Nightly builds, run with -Z macro-backtrace for more info)
-
-error[E0277]: no values for the hook `Bump`
-  --> tests/ui/hook_values_missing.rs:39:5
-   |
-39 |     ItemCount.run_as(conn).await
-   |     ^^^^^^^^^^^^^^^^^^^^^^ `Bump` has values
-   |
-   = help: the trait `Provides<Bump, _>` is not implemented for `()`
-   = note: give them with `.with(Bump { .. })`
-help: the trait `HookNeeds<__V, (__I0,)>` is conditionally implemented for `ItemCount`
-  --> tests/ui/hook_values_missing.rs:26:1
-   |
-26 | #[statement(CountOf<Items>)]
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unsatisfied requirement introduced here: `CountOf<Items>: HookNeeds<_, _>`
-note: required for `Items` to implement `HookNeeds<(), (_, _)>`
-  --> tests/ui/hook_values_missing.rs:15:1
-   |
-15 | #[table(Sqlite, name = "items", before(Bump), after(Note))]
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unsatisfied trait bound introduced here
-16 | pub struct Items;
-   |            ^^^^^
-   = note: 2 redundant requirements hidden
-   = note: required for `ItemCount` to implement `HookNeeds<(), (((_, _),),)>`
-note: required by a bound in `_::<impl ItemCount>::run_as`
-  --> tests/ui/hook_values_missing.rs:26:1
-   |
-26 | #[statement(CountOf<Items>)]
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `_::<impl ItemCount>::run_as`
-   = note: this error originates in the attribute macro `statement` (in Nightly builds, run with -Z macro-backtrace for more info)
-
-error[E0277]: no values for the hook `Bump`
-  --> tests/ui/hook_values_missing.rs:39:28
-   |
-39 |     ItemCount.run_as(conn).await
-   |                            ^^^^^ `Bump` has values
    |
    = help: the trait `Provides<Bump, _>` is not implemented for `()`
    = note: give them with `.with(Bump { .. })`

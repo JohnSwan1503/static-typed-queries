@@ -15,41 +15,6 @@ note: required by a bound in `_::<impl ByStatus>::run`
    = note: this error originates in the attribute macro `query` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error[E0277]: this statement has no hooks, so it runs as a single query
-  --> tests/ui/unhooked_run.rs:17:5
-   |
-17 | /     ByStatus {
-18 | |         status: "open".to_owned(),
-19 | |     }
-20 | |     .run(conn)
-   | |______________^ has no hooks
-   |
-   = help: the trait `HasHooks` is not implemented for `NoHooks`
-   = note: bind it with `query` instead of `run`
-   = note: required for `ByStatus` to implement `Hooked`
-note: required by a bound in `_::<impl ByStatus>::run`
-  --> tests/ui/unhooked_run.rs:11:1
-   |
-11 | #[query(Postgres, sql = "SELECT id FROM {Orders} WHERE status = {status}")]
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `_::<impl ByStatus>::run`
-   = note: this error originates in the attribute macro `query` (in Nightly builds, run with -Z macro-backtrace for more info)
-
-error[E0277]: this statement has no hooks, so it runs as a single query
-  --> tests/ui/unhooked_run.rs:21:6
-   |
-21 |     .await
-   |      ^^^^^ has no hooks
-   |
-   = help: the trait `HasHooks` is not implemented for `NoHooks`
-   = note: bind it with `query` instead of `run`
-   = note: required for `ByStatus` to implement `Hooked`
-note: required by a bound in `_::<impl ByStatus>::run`
-  --> tests/ui/unhooked_run.rs:11:1
-   |
-11 | #[query(Postgres, sql = "SELECT id FROM {Orders} WHERE status = {status}")]
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `_::<impl ByStatus>::run`
-   = note: this error originates in the attribute macro `query` (in Nightly builds, run with -Z macro-backtrace for more info)
-
-error[E0277]: this statement has no hooks, so it runs as a single query
   --> tests/ui/unhooked_run.rs:28:6
    |
 28 |     .with(SetTenant {

@@ -6,7 +6,7 @@ pub use static_typed_queries_core::statement::{Rows, Statement};
 pub use static_typed_queries_core::transaction::Transaction;
 pub use static_typed_queries_core::values::{Valueless, Values};
 #[cfg(any(feature = "mysql", feature = "postgres", feature = "sqlite"))]
-pub use static_typed_queries_core::with::{Run, With};
+pub use static_typed_queries_core::with::{Run, Running, With};
 pub use static_typed_queries_macros::{query, sql, statement, table, transaction};
 
 #[doc(hidden)]

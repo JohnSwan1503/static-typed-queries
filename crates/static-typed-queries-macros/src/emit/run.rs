@@ -91,7 +91,7 @@ fn statement_api(dialect: &Type, row: Option<&Type>, receiver: &Receiver) -> Tok
     let driver = quote!(#krate::driver);
     let sqlx = quote!(#krate::sqlx);
     let error = quote!(#sqlx::Error);
-    let acquire = quote!(impl #sqlx::Acquire<'c, Database = #driver::Database<#dialect>>);
+    let acquire = quote!(impl #sqlx::Acquire<'c, Database = #driver::Database<#dialect>> + ::core::marker::Send + 'c);
     let subject = receiver.subject();
     let (borrowed, statement) = receiver.borrowed();
     let owned = receiver.owned();
@@ -164,28 +164,29 @@ fn statement_api(dialect: &Type, row: Option<&Type>, receiver: &Receiver) -> Tok
         }
 
         #run_doc
-        pub async fn run<'c, __G, __I>(
+        pub fn run<'c, __G, __I>(
             self,
             conn: #acquire,
-        ) -> ::core::result::Result<#output, #error>
+        ) -> #krate::Running<'c, #output>
         where
             #subject: #krate::Hooked<__G> + #krate::HookNeeds<(), __I>,
         {
-            #krate::With::new(#owned).run(conn).await
+            #krate::With::new(#owned).run(conn)
         }
 
         /// Runs the statement and its hooks in one transaction, and reads each row of the statement as `O`.
-        pub async fn run_as<'c, O, __G, __I>(
+        pub fn run_as<'c, O, __G, __I>(
             self,
             conn: #acquire,
-        ) -> ::core::result::Result<::std::vec::Vec<O>, #error>
+        ) -> #krate::Running<'c, ::std::vec::Vec<O>>
         where
             O: for<'r> #sqlx::FromRow<'r, #driver::Row<#dialect>>
                 + ::core::marker::Send
-                + ::core::marker::Unpin,
+                + ::core::marker::Unpin
+                + 'c,
             #subject: #krate::Hooked<__G> + #krate::HookNeeds<(), __I>,
         {
-            #krate::With::new(#owned).run_as(conn).await
+            #krate::With::new(#owned).run_as(conn)
         }
     }
 }
@@ -249,14 +250,14 @@ fn transaction_api(dialect: &Type, output: &TokenStream, receiver: &Receiver) ->
         }
 
         /// Runs the steps in order in one transaction, with each hook once around them, and returns the output of each step.
-        pub async fn run<'c, __I>(
+        pub fn run<'c, __I>(
             self,
-            conn: impl #sqlx::Acquire<'c, Database = #driver::Database<#dialect>>,
-        ) -> ::core::result::Result<#output, #sqlx::Error>
+            conn: impl #sqlx::Acquire<'c, Database = #driver::Database<#dialect>> + ::core::marker::Send + 'c,
+        ) -> #krate::Running<'c, #output>
         where
             #subject: #krate::HookNeeds<(), __I>,
         {
-            #krate::With::new(#owned).run(conn).await
+            #krate::With::new(#owned).run(conn)
         }
     }
 }

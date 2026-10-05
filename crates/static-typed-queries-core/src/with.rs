@@ -1,3 +1,5 @@
+use core::pin::Pin;
+
 use sqlx::{Acquire, FromRow};
 
 use crate::builder::Finish;
@@ -9,6 +11,10 @@ use crate::statement::Statement;
 use crate::statement::params::{BindHooks, BindParams};
 use crate::statement::run::{self, AllRows, Fetch, Step, hooks, step};
 use crate::values::Values;
+
+// `run` returns this rather than an `impl Future`, which carries the method's bounds and has a
+// missing hook value reported three times: at the call, the method and the `.await`.
+pub type Running<'c, T> = Pin<Box<dyn Future<Output = Result<T, sqlx::Error>> + Send + 'c>>;
 
 // A statement or transaction together with the values of its hooks, which `with` adds one hook
 // at a time; `run` needs every reachable hook with values to be present.
@@ -39,29 +45,34 @@ impl<S, V> With<S, V> {
         }
     }
 
-    pub async fn run<'c, I, A>(self, conn: A) -> Result<S::Output, sqlx::Error>
+    pub fn run<'c, I, A>(self, conn: A) -> Running<'c, S::Output>
     where
-        S: Run + HookNeeds<V, I>,
+        S: Run + HookNeeds<V, I> + Send + Sync + 'c,
         S::Dialect: Driver,
-        V: BindHooks<Database<S::Dialect>>,
-        A: Acquire<'c, Database = Database<S::Dialect>>,
+        S::Output: Send,
+        V: BindHooks<Database<S::Dialect>> + Send + Sync + 'c,
+        A: Acquire<'c, Database = Database<S::Dialect>> + Send + 'c,
     {
-        self.transaction(conn, async |statement, conn| statement.run(conn).await)
-            .await
+        Box::pin(self.transaction(conn, async |statement, conn| statement.run(conn).await))
     }
 
-    pub async fn run_as<'c, O, I, A>(self, conn: A) -> Result<Vec<O>, sqlx::Error>
+    pub fn run_as<'c, O, I, A>(self, conn: A) -> Running<'c, Vec<O>>
     where
-        S: Statement + Render + HookNeeds<V, I> + BindParams<Database<S::Dialect>>,
+        S: Statement
+            + Render
+            + HookNeeds<V, I>
+            + BindParams<Database<S::Dialect>>
+            + Send
+            + Sync
+            + 'c,
         S::Dialect: Driver,
-        O: for<'r> FromRow<'r, Row<S::Dialect>> + Send + Unpin,
-        V: BindHooks<Database<S::Dialect>>,
-        A: Acquire<'c, Database = Database<S::Dialect>>,
+        O: for<'r> FromRow<'r, Row<S::Dialect>> + Send + Unpin + 'c,
+        V: BindHooks<Database<S::Dialect>> + Send + Sync + 'c,
+        A: Acquire<'c, Database = Database<S::Dialect>> + Send + 'c,
     {
-        self.transaction(conn, async |statement, conn| {
+        Box::pin(self.transaction(conn, async |statement, conn| {
             step::<S::Dialect, AllRows<O>, _>(&statement, &S::OUTPUT.main(), conn).await
-        })
-        .await
+        }))
     }
 
     // Everything runs in one transaction: the hooks before, the statement or steps, the hooks
@@ -95,12 +106,12 @@ where
     fn run(
         self,
         conn: &mut Connection<Self::Dialect>,
-    ) -> impl Future<Output = Result<Self::Output, sqlx::Error>>;
+    ) -> impl Future<Output = Result<Self::Output, sqlx::Error>> + Send;
 }
 
 impl<S> Run for S
 where
-    S: Statement + Render + Step + BindParams<Database<S::Dialect>>,
+    S: Statement + Render + Step + BindParams<Database<S::Dialect>> + Send + Sync,
     S::Dialect: Driver,
     S::Fetch: Fetch<S::Dialect>,
 {

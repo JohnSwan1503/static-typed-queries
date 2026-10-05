@@ -45,7 +45,7 @@ pub trait Fetch<D: Driver> {
         values: &P,
         statement: &Command,
         conn: &mut Connection<D>,
-    ) -> impl Future<Output = Result<Self::Output, sqlx::Error>>;
+    ) -> impl Future<Output = Result<Self::Output, sqlx::Error>> + Send;
 }
 
 impl<D: Driver> Fetch<D> for Affected {
@@ -55,7 +55,7 @@ impl<D: Driver> Fetch<D> for Affected {
         values: &P,
         statement: &Command,
         conn: &mut Connection<D>,
-    ) -> impl Future<Output = Result<u64, sqlx::Error>> {
+    ) -> impl Future<Output = Result<u64, sqlx::Error>> + Send {
         let query = query::<D, P>(values, statement);
         async move { Ok(D::rows_affected(&query?.execute(D::executor(conn)).await?)) }
     }
@@ -72,7 +72,7 @@ where
         values: &P,
         statement: &Command,
         conn: &mut Connection<D>,
-    ) -> impl Future<Output = Result<Vec<T>, sqlx::Error>> {
+    ) -> impl Future<Output = Result<Vec<T>, sqlx::Error>> + Send {
         let query = query_as::<D, T, P>(values, statement);
         async move { query?.fetch_all(D::executor(conn)).await }
     }
@@ -91,7 +91,7 @@ where
         values: &P,
         statement: &Command,
         conn: &mut Connection<D>,
-    ) -> impl Future<Output = Result<T, sqlx::Error>> {
+    ) -> impl Future<Output = Result<T, sqlx::Error>> + Send {
         let query = query_as::<D, T, P>(values, statement);
         async move { query?.fetch_one(D::executor(conn)).await }
     }
@@ -110,7 +110,7 @@ where
         values: &P,
         statement: &Command,
         conn: &mut Connection<D>,
-    ) -> impl Future<Output = Result<Option<T>, sqlx::Error>> {
+    ) -> impl Future<Output = Result<Option<T>, sqlx::Error>> + Send {
         let query = query_as::<D, T, P>(values, statement);
         async move { query?.fetch_optional(D::executor(conn)).await }
     }
