@@ -42,9 +42,10 @@ generic query, or the type of one that holds no values, such as
 ## Running
 
 `run(conn)` takes anything that implements `sqlx::Acquire`, runs the
-steps in order in one transaction and commits them together. If a step outside a savepoint fails, every step rolls back.
-It returns a tuple with one element per step: a `Vec` of the step's row
-type when it has one, and otherwise the number of rows the step affected.
+steps in order in one transaction and commits them together. If a step
+outside a savepoint fails, every step rolls back. It returns a tuple with
+one element per step: a `Vec` of the step's row type when it has one, and
+otherwise the number of rows the step affected.
 `Type as one` reads exactly one row instead, failing with
 `sqlx::Error::RowNotFound` when there's none, and `Type as optional` reads
 an `Option` of one. Both need a step with a row type.
