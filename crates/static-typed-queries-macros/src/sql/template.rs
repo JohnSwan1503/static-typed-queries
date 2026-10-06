@@ -149,28 +149,32 @@ pub(crate) fn parse(sql: &LitStr, fields: &[Field]) -> syn::Result<Template> {
                     at,
                 ));
             }
-            Raw::Name(name) if let Some(index) = fields::find(fields, name) => {
-                used[index] = true;
-                let field = &fields[index];
-                let slot = fields::slot(fields, index);
-                segments.push(match field.kind {
-                    Kind::Value => Segment::Param(slot),
-                    Kind::Item(placement) => {
-                        reference(&raw, i, field.ty.clone(), Some(slot), placement)
-                    }
-                });
-            }
-            Raw::Name(name) if name.to_string().starts_with(|c: char| c.is_lowercase()) => {
-                return Err(error(
-                    format!("there is no field named `{name}`; parameters are the struct's fields"),
-                    at,
-                ));
-            }
-            Raw::Name(name) => {
-                let ty = syn::parse_quote!(#name);
-                push_unique(&mut types, &ty);
-                segments.push(reference(&raw, i, ty, None, None));
-            }
+            Raw::Name(name) => match fields::find(fields, name) {
+                Some(index) => {
+                    used[index] = true;
+                    let field = &fields[index];
+                    let slot = fields::slot(fields, index);
+                    segments.push(match field.kind {
+                        Kind::Value => Segment::Param(slot),
+                        Kind::Item(placement) => {
+                            reference(&raw, i, field.ty.clone(), Some(slot), placement)
+                        }
+                    });
+                }
+                None if name.to_string().starts_with(|c: char| c.is_lowercase()) => {
+                    return Err(error(
+                        format!(
+                            "there is no field named `{name}`; parameters are the struct's fields"
+                        ),
+                        at,
+                    ));
+                }
+                None => {
+                    let ty = syn::parse_quote!(#name);
+                    push_unique(&mut types, &ty);
+                    segments.push(reference(&raw, i, ty, None, None));
+                }
+            },
             Raw::Ref(syntax) => {
                 if let Type::Path(path) = &syntax.ty
                     && let Some(name) = path.path.get_ident()

@@ -3,6 +3,7 @@ name = "static-typed-queries"
 description = "Composable SQL statements for sqlx, checked and rendered at compile time"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 readme = "../../README.md"

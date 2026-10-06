@@ -3,6 +3,7 @@ name = "static-typed-queries-macros"
 description = "Attribute macros of static-typed-queries; depend on that crate instead"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 readme = "README.md"
