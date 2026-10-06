@@ -16,6 +16,6 @@ sqlx = { workspace = true, optional = true }
 
 [dev-dependencies]
 static-typed-queries-core = { path = ".", features = ["mysql", "postgres", "sqlite", "parse-check"] }
-sqlx = { workspace = true, features = ["runtime-tokio"] }
+sqlx = { workspace = true, features = ["macros", "runtime-tokio"] }
 tokio.workspace = true
 trybuild.workspace = true

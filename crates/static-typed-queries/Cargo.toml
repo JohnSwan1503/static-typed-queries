@@ -17,6 +17,6 @@ static-typed-queries-macros = { path = "../static-typed-queries-macros" }
 
 [dev-dependencies]
 static-typed-queries = { path = ".", features = ["mysql", "postgres", "sqlite", "parse-check"] }
-sqlx = { workspace = true, features = ["runtime-tokio", "sqlite"] }
+sqlx = { workspace = true, features = ["macros", "runtime-tokio", "sqlite"] }
 tokio.workspace = true
 trybuild.workspace = true

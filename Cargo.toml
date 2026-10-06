@@ -10,7 +10,7 @@ resolver = "3"
 [workspace.dependencies]
 
 # Compile-time SQL Validation, Sanitization, Interface
-sqlx = "0.9.0"
+sqlx = { version = "0.9.0", default-features = false }
 
 # Compile-fail Tests
 trybuild = "1.0.121"
