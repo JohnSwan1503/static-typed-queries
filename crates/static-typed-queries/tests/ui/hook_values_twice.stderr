@@ -12,9 +12,8 @@ error[E0283]: type annotations needed
 note: required by a bound in `With::<S, V>::with`
   --> $WORKSPACE/crates/static-typed-queries-core/src/with.rs
    |
-   | impl<S, V> With<S, V> {
-...
    |     pub fn with<B, H, I>(self, values: B) -> With<S, (HookValues<H>, V)>
+   |            ---- required by a bound in this associated function
 ...
    |         (HookValues<H>, V): Provides<H, I>,
    |                             ^^^^^^^^^^^^^^ required by this bound in `With::<S, V>::with`

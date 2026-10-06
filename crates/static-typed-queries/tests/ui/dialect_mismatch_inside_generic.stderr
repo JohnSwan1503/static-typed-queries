@@ -9,7 +9,7 @@ help: the trait `Checked` is conditionally implemented for `JoinUsers<T>`
   --> tests/ui/dialect_mismatch_inside_generic.rs:11:1
    |
 11 | #[query(T::Dialect, sql = "SELECT count(*) FROM {T} JOIN {Users} USING (id)")]
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unsatisfied requirement introduced here: `<Users as static_typed_queries::Sql>::Dialect: EmbedsIn<<_ as static_typed_queries::Sql>::Dialect>`
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unsatisfied requirement introduced here: `<Users as static_typed_queries::Sql>::Dialect: EmbedsIn<<Events as static_typed_queries::Sql>::Dialect>`
 note: required for `JoinUsers<Events>` to implement `Checked`
   --> tests/ui/dialect_mismatch_inside_generic.rs:11:1
    |

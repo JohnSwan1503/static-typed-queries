@@ -33,7 +33,7 @@ help: the trait `Checked` is conditionally implemented for `CountOf<T>`
   --> tests/ui/item_holds_values.rs:16:1
    |
 16 | #[query(T::Dialect, sql = "SELECT count(*) FROM {T}")]
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unsatisfied requirement introduced here: `_: Valueless`
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unsatisfied requirement introduced here: `ActiveUsers: Valueless`
 note: required for `CountOf<ActiveUsers>` to implement `Checked`
   --> tests/ui/item_holds_values.rs:16:1
    |

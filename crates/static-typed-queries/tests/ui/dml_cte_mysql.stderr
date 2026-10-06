@@ -51,7 +51,7 @@ help: the trait `Checked` is conditionally implemented for `CountOf<T>`
   --> tests/ui/dml_cte_mysql.rs:18:1
    |
 18 | #[query(T::Dialect, sql = "SELECT count(*) FROM {of}")]
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unsatisfied requirement introduced here: `_: CteIn<<_ as static_typed_queries::Sql>::Dialect>`
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unsatisfied requirement introduced here: `Purged: CteIn<<Purged as static_typed_queries::Sql>::Dialect>`
 note: required for `CountOf<Purged>` to implement `Checked`
   --> tests/ui/dml_cte_mysql.rs:18:1
    |

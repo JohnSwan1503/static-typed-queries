@@ -16,14 +16,13 @@ help: the trait `Spent` is conditionally implemented for `(HookValues<H>, Rest)`
    | impl<H: Unreached, Rest: Spent> Spent for (HookValues<H>, Rest) {}
    | ^^^^^^^^---------^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    |         |
-   |         unsatisfied requirement introduced here: `_: Unreached`
+   |         unsatisfied requirement introduced here: `SetUser: Unreached`
    = note: required for `(HookValues<SetUser>, (Used<SetTenant>, ()))` to implement `Spent`
 note: required by a bound in `With::<S, V>::run`
   --> $WORKSPACE/crates/static-typed-queries-core/src/with.rs
    |
-   | impl<S, V> With<S, V> {
-...
    |     pub fn run<'c, I, W>(
+   |            --- required by a bound in this associated function
 ...
    |         W: Spent,
    |            ^^^^^ required by this bound in `With::<S, V>::run`

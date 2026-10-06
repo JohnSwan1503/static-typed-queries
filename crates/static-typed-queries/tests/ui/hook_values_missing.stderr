@@ -1,20 +1,20 @@
 error[E0277]: no values for the hook `Note`
-  --> tests/ui/hook_values_missing.rs:34:10
+  --> tests/ui/hook_values_missing.rs:30:5
    |
-34 |         .run(conn)
-   |          ^^^ `Note` has values
+30 | /     Pricey { price: 10 }
+31 | |         .with(Bump {
+32 | |             name: "reads".to_owned(),
+33 | |         })
+   | |__________^ `Note` has values
    |
-   = help: the trait `Provides<Note, _>` is not implemented for `(Used<Bump>, ())`
+   = help: the trait `Provides<Note, Free>` is not implemented for `()`
    = note: give them with `.with(Note { .. })`
 help: the trait `HookNeeds<__V0, (__I0,)>` is conditionally implemented for `Pricey`
   --> tests/ui/hook_values_missing.rs:18:1
    |
 18 | #[query(Sqlite, sql = "SELECT id FROM {Items} WHERE price > {price}")]
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-   | |
-   | unsatisfied requirement introduced here: `<Items as HookNeeds<_, _>>::Out == _`
-   | unsatisfied requirement introduced here: `Items: HookNeeds<_, _>`
-note: required for `Items` to implement `HookNeeds<(HookValues<Bump>, ()), (Here, _)>`
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unsatisfied requirement introduced here: `<Items as HookNeeds<(HookValues<Bump>, ()), (Here, There<Free>)>>::Out == _`
+note: required for `Items` to implement `HookNeeds<(HookValues<Bump>, ()), (Here, There<Free>)>`
   --> tests/ui/hook_values_missing.rs:15:1
    |
 15 | #[table(Sqlite, name = "items", before(Bump), after(Note))]
@@ -22,13 +22,12 @@ note: required for `Items` to implement `HookNeeds<(HookValues<Bump>, ()), (Here
 16 | pub struct Items;
    |            ^^^^^
    = note: 1 redundant requirement hidden
-   = note: required for `Pricey` to implement `HookNeeds<(HookValues<Bump>, ()), ((Here, _),)>`
+   = note: required for `Pricey` to implement `HookNeeds<(HookValues<Bump>, ()), ((Here, There<Free>),)>`
 note: required by a bound in `With::<S, V>::run`
   --> $WORKSPACE/crates/static-typed-queries-core/src/with.rs
    |
-   | impl<S, V> With<S, V> {
-...
    |     pub fn run<'c, I, W>(
+   |            --- required by a bound in this associated function
 ...
    |         S: Run + HookNeeds<V, I, Out = W> + Send + Sync + 'c,
    |                  ^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `With::<S, V>::run`
@@ -40,7 +39,7 @@ error[E0277]: no values for the hook `Bump`
 39 |     ItemCount.run_as(conn).await
    |               ^^^^^^ `Bump` has values
    |
-   = help: the trait `Provides<Bump, _>` is not implemented for `()`
+   = help: the trait `Provides<Bump, Free>` is not implemented for `()`
    = note: give them with `.with(Bump { .. })`
 help: the trait `HookNeeds<__V0, (__I0,)>` is conditionally implemented for `ItemCount`
   --> tests/ui/hook_values_missing.rs:26:1
@@ -48,9 +47,9 @@ help: the trait `HookNeeds<__V0, (__I0,)>` is conditionally implemented for `Ite
 26 | #[statement(CountOf<Items>)]
    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    | |
-   | unsatisfied requirement introduced here: `<CountOf<Items> as HookNeeds<_, _>>::Out == _`
-   | unsatisfied requirement introduced here: `CountOf<Items>: HookNeeds<_, _>`
-note: required for `Items` to implement `HookNeeds<(), (_, _)>`
+   | unsatisfied requirement introduced here: `<CountOf<Items> as HookNeeds<(), ((Free, Free),)>>::Out == _`
+   | unsatisfied requirement introduced here: `<CountOf<Items> as HookNeeds<(), ((Free, Free),)>>::Out == _`
+note: required for `Items` to implement `HookNeeds<(), (Free, Free)>`
   --> tests/ui/hook_values_missing.rs:15:1
    |
 15 | #[table(Sqlite, name = "items", before(Bump), after(Note))]
@@ -58,7 +57,39 @@ note: required for `Items` to implement `HookNeeds<(), (_, _)>`
 16 | pub struct Items;
    |            ^^^^^
    = note: 2 redundant requirements hidden
-   = note: required for `ItemCount` to implement `HookNeeds<(), (((_, _),),)>`
+   = note: required for `ItemCount` to implement `HookNeeds<(), (((Free, Free),),)>`
+note: required by a bound in `_::<impl ItemCount>::run_as`
+  --> tests/ui/hook_values_missing.rs:26:1
+   |
+26 | #[statement(CountOf<Items>)]
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `_::<impl ItemCount>::run_as`
+   = note: this error originates in the attribute macro `statement` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0277]: no values for the hook `Note`
+  --> tests/ui/hook_values_missing.rs:39:15
+   |
+39 |     ItemCount.run_as(conn).await
+   |               ^^^^^^ `Note` has values
+   |
+   = help: the trait `Provides<Note, Free>` is not implemented for `()`
+   = note: give them with `.with(Note { .. })`
+help: the trait `HookNeeds<__V0, (__I0,)>` is conditionally implemented for `ItemCount`
+  --> tests/ui/hook_values_missing.rs:26:1
+   |
+26 | #[statement(CountOf<Items>)]
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   | |
+   | unsatisfied requirement introduced here: `<CountOf<Items> as HookNeeds<(), ((Free, Free),)>>::Out == _`
+   | unsatisfied requirement introduced here: `<CountOf<Items> as HookNeeds<(), ((Free, Free),)>>::Out == _`
+note: required for `Items` to implement `HookNeeds<(), (Free, Free)>`
+  --> tests/ui/hook_values_missing.rs:15:1
+   |
+15 | #[table(Sqlite, name = "items", before(Bump), after(Note))]
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unsatisfied trait bound introduced here
+16 | pub struct Items;
+   |            ^^^^^
+   = note: 2 redundant requirements hidden
+   = note: required for `ItemCount` to implement `HookNeeds<(), (((Free, Free),),)>`
 note: required by a bound in `_::<impl ItemCount>::run_as`
   --> tests/ui/hook_values_missing.rs:26:1
    |
