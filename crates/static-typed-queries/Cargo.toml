@@ -1,6 +1,6 @@
 [package]
 name = "static-typed-queries"
-version = "0.0.0"
+version.workspace = true
 edition = "2024"
 
 [features]
@@ -12,8 +12,8 @@ sqlite = ["static-typed-queries-core/sqlite"]
 parse-check = ["static-typed-queries-core/parse-check"]
 
 [dependencies]
-static-typed-queries-core = { path = "../static-typed-queries-core" }
-static-typed-queries-macros = { path = "../static-typed-queries-macros" }
+static-typed-queries-core.workspace = true
+static-typed-queries-macros.workspace = true
 
 [dev-dependencies]
 static-typed-queries = { path = ".", features = ["mysql", "postgres", "sqlite", "parse-check"] }

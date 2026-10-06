@@ -1145,7 +1145,7 @@ dependencies = [
 
 [[package]]
 name = "static-typed-queries"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "sqlx",
  "static-typed-queries",
@@ -1157,7 +1157,7 @@ dependencies = [
 
 [[package]]
 name = "static-typed-queries-core"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "sqlparser",
  "sqlx",
@@ -1168,7 +1168,7 @@ dependencies = [
 
 [[package]]
 name = "static-typed-queries-macros"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "proc-macro2",
  "quote",
