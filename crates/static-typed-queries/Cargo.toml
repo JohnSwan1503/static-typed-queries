@@ -1,7 +1,13 @@
 [package]
 name = "static-typed-queries"
+description = "Composable SQL statements for sqlx, checked and rendered at compile time"
 version.workspace = true
-edition = "2024"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+readme = "../../README.md"
+keywords = ["sql", "sqlx", "query-builder", "compile-time", "database"]
+categories = ["database"]
 
 [features]
 default = []
@@ -10,6 +16,9 @@ mysql = ["static-typed-queries-core/mysql"]
 postgres = ["static-typed-queries-core/postgres"]
 sqlite = ["static-typed-queries-core/sqlite"]
 parse-check = ["static-typed-queries-core/parse-check"]
+
+[package.metadata.docs.rs]
+features = ["all", "parse-check"]
 
 [dependencies]
 static-typed-queries-core.workspace = true
