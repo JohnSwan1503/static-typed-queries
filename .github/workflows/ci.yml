@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --all --check
+      - run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      # Warnings from the projects trybuild builds don't fail the run on their own.
+      - name: cargo test
+        shell: bash
+        run: |
+          cargo test --workspace --locked 2>&1 | tee test.log
+          if grep -q '^warning' test.log; then
+            echo "::error::the tests built with warnings"
+            exit 1
+          fi
+      - run: cargo doc -p static-typed-queries --no-deps --features all,parse-check --locked
+        env:
+          RUSTDOCFLAGS: -D warnings
+
+  features:
+    name: Each feature
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: Swatinem/rust-cache@v2
+      - shell: bash
+        run: |
+          for features in "" mysql postgres sqlite parse-check all; do
+            cargo clippy -p static-typed-queries --locked --no-default-features ${features:+--features $features} -- -D warnings
+          done
+
+  msrv:
+    name: Rust 1.94
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: rustup toolchain install 1.94.0 --profile minimal
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo +1.94.0 check --workspace --all-features --all-targets --locked
+        env:
+          RUSTFLAGS: -D warnings
+
+  package:
+    name: Package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo package --workspace --exclude downstream-tests --locked
