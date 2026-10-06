@@ -234,9 +234,11 @@ fn reference(
     }))
 }
 
+type Spanned<T> = (T, Range<usize>);
+
 // Each piece with the chars it was read from. A literal also keeps where each of its own chars
 // came from, since whitespace is collapsed and `--` comments are dropped.
-fn scan(text: &str) -> Result<Vec<(Raw, Range<usize>)>, (String, Range<usize>)> {
+fn scan(text: &str) -> Result<Vec<Spanned<Raw>>, Spanned<String>> {
     let chars: Vec<char> = text.chars().collect();
     let mut raw = Vec::new();
     let mut lit = String::new();

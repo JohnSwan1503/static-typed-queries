@@ -57,7 +57,7 @@ pub(crate) enum Fetch {
 }
 
 pub(crate) enum Step {
-    Run(Type, Fetch),
+    Run(Box<Type>, Fetch),
     Savepoint(Vec<Step>),
 }
 
@@ -111,7 +111,7 @@ impl Parse for Step {
         }
         let ty = input.parse()?;
         if input.parse::<Option<Token![as]>>()?.is_none() {
-            return Ok(Step::Run(ty, Fetch::Default));
+            return Ok(Step::Run(Box::new(ty), Fetch::Default));
         }
         let fetch: Ident = input.parse()?;
         let fetch = match fetch.to_string().as_str() {
@@ -125,7 +125,7 @@ impl Parse for Step {
                 ));
             }
         };
-        Ok(Step::Run(ty, fetch))
+        Ok(Step::Run(Box::new(ty), fetch))
     }
 }
 

@@ -166,7 +166,7 @@ fn typed(steps: &[Step], fields: &[Field]) -> Vec<Step> {
         .map(|step| match step {
             Step::Run(ty, fetch) => Step::Run(
                 fields::resolve(ty, fields)
-                    .map_or_else(|| ty.clone(), |(_, field)| field.ty.clone()),
+                    .map_or_else(|| ty.clone(), |(_, field)| Box::new(field.ty.clone())),
                 *fetch,
             ),
             Step::Savepoint(steps) => Step::Savepoint(typed(steps, fields)),
