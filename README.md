@@ -13,7 +13,7 @@ so at run time a query only binds its values. Statements run through
 
 ```toml
 [dependencies]
-static-typed-queries = { git = "https://github.com/JohnSwan1503/static-typed-queries", features = ["sqlite"] }
+static-typed-queries = { version = "0.1", features = ["sqlite"] }
 sqlx = { version = "0.9", features = ["runtime-tokio", "sqlite"] }
 tokio = { version = "1", features = ["macros", "rt"] }
 ```
@@ -87,11 +87,29 @@ At compile time:
 | `all` | all three dialects |
 | `parse-check` | a `#[test]` per statement that parses its rendered SQL with the dialect's grammar; enable it under `[dev-dependencies]` |
 
+## Compatibility
+
+- Rust 1.94 or newer, the oldest release sqlx 0.9 supports. Crates on
+  edition 2018 or later can use the attributes.
+- Statements run through sqlx 0.9, so depend on the same sqlx version. The
+  runtime, TLS and type features of sqlx are yours to choose.
+- A renamed dependency, or one reached through another crate's re-export,
+  works when each attribute is given its path, as in `crate = stq`.
+
+## Versioning
+
+The three crates are released together at the same version, and only
+`static-typed-queries` is meant to be depended on. Until 1.0, a release that
+breaks the API raises the minor version. Items hidden from the docs, such as
+`__private`, exist for the generated code and can change in any release.
+[CHANGELOG.md](CHANGELOG.md) lists what changed.
+
 ## Documentation
 
-`cargo doc --open -p static-typed-queries` builds the crate's docs: a tour
-of tables, queries, statements, transactions, hooks and dialects, and a
-reference for each attribute.
+[docs.rs](https://docs.rs/static-typed-queries) has the crate's docs: a
+tour of tables, queries, statements, transactions, hooks and dialects, and
+a reference for each attribute. `cargo doc --open -p static-typed-queries`
+builds them locally.
 
 ## License
 
