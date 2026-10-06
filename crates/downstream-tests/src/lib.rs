@@ -19,6 +19,8 @@
     clippy::pedantic
 )]
 
+pub mod shadowed;
+
 use std::marker::PhantomData;
 
 use stq::prelude::*;
