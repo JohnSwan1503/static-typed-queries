@@ -167,6 +167,25 @@ in a dialect that runs one, such as PostgreSQL.
 `sql = NAME`, for instance one query per dialect. `sql_file = "path"` reads
 a template from a file instead.
 
+# Renaming the dependency
+
+The generated code names this crate `::static_typed_queries`. When the
+dependency is renamed in `Cargo.toml`, or reached through another crate's
+re-export, each attribute takes the path to it as `crate = path`:
+
+```
+mod db {
+    pub use static_typed_queries as stq;
+}
+
+use db::stq::prelude::*;
+
+#[query(Postgres, crate = db::stq, sql = "SELECT 1")]
+pub struct One;
+
+assert_eq!(One::SQL, "SELECT 1");
+```
+
 # Feature flags
 
 - `postgres`, `mysql`, `sqlite`: the dialect, and running its statements

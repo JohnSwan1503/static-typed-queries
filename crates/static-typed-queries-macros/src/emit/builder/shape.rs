@@ -3,7 +3,7 @@ use quote::{ToTokens, quote};
 use syn::parse_quote;
 
 use super::Builder;
-use crate::emit::{docs, krate_path};
+use crate::emit::docs;
 
 impl Builder<'_> {
     pub(super) fn markers(&self) -> TokenStream {
@@ -39,7 +39,7 @@ impl Builder<'_> {
     }
 
     pub(super) fn definition(&self) -> TokenStream {
-        let path = krate_path();
+        let path = &self.path;
         let ident = &self.input.ident;
         let name = &self.name;
         let vis = &self.input.vis;

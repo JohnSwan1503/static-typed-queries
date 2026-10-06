@@ -36,6 +36,7 @@ statements to run, in order. A step is a field of the struct, which holds
 the values of a [`query`], a [`statement`] or an instantiation of a
 generic query, or the type of one that holds no values, such as
 `CountOf<Orders>`. Listing a field twice runs the same values twice.
+`crate = path` gives the path to this crate, as for [`query`].
 
 ## Running
 

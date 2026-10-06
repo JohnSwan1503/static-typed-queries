@@ -1,7 +1,7 @@
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
 use syn::parse::{Parse, ParseStream};
-use syn::{Fields, Ident, ItemStruct, LitStr, Type, parse_quote};
+use syn::{Fields, Ident, ItemStruct, LitStr, Path, Type, parse_quote};
 
 use crate::args::{self, Keys};
 use crate::emit::builder::builder;
@@ -20,14 +20,22 @@ pub(crate) struct TableArgs {
     after: Vec<Type>,
     display: Option<Ident>,
     debug: Option<Ident>,
+    krate: Option<Path>,
 }
 
-const KEYS: Keys = &[&["name"], &["before"], &["after"], &["display"], &["debug"]];
+const KEYS: Keys = &[
+    &["name"],
+    &["before"],
+    &["after"],
+    &["display"],
+    &["debug"],
+    &["crate"],
+];
 
 impl Parse for TableArgs {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let dialect = input.parse()?;
-        let (mut name, mut display, mut debug) = (None, None, None);
+        let (mut name, mut display, mut debug, mut krate) = (None, None, None, None);
         let (mut before, mut after) = (Vec::new(), Vec::new());
         args::parse_keys(input, KEYS, |key, input| {
             let error = |message: &str| syn::Error::new(key.span(), message);
@@ -37,6 +45,7 @@ impl Parse for TableArgs {
                 "after" => after = args::list(input)?,
                 "display" => display = Some(args::value(input)?),
                 "debug" => debug = Some(args::value(input)?),
+                "crate" => krate = Some(args::value(input)?),
                 "sql" | "sql_file" => {
                     return Err(error(&format!("tables take `name`, not `{key}`")));
                 }
@@ -61,12 +70,14 @@ impl Parse for TableArgs {
             after,
             display,
             debug,
+            krate,
         })
     }
 }
 
 pub(crate) fn expand(args: TableArgs, input: ItemStruct) -> syn::Result<TokenStream> {
     let krate = krate();
+    let facade = emit::facade(args.krate.as_ref());
     if !input.generics.params.is_empty() {
         return Err(syn::Error::new_spanned(
             &input.generics,
@@ -117,7 +128,7 @@ pub(crate) fn expand(args: TableArgs, input: ItemStruct) -> syn::Result<TokenStr
         parse_quote!(#from: #krate::Provides<#hook, #index, Out = #to>)
     });
     let values = values(&input, false);
-    let (_, built) = builder(&input, &[], TokenStream::new());
+    let (_, built) = builder(&input, &[], TokenStream::new(), &facade);
     let step = step_impl(&input, None);
     let fmt = fmt(args.display.as_ref(), args.debug.as_ref(), &input, false)?;
     let mut documented = input.clone();
@@ -129,7 +140,7 @@ pub(crate) fn expand(args: TableArgs, input: ItemStruct) -> syn::Result<TokenStr
         },
     ));
 
-    let impls = emit::scoped(quote! {
+    let impls = quote! {
         impl #krate::Sql for #ident {
             type Dialect = #dialect;
             const NODE: &'static #krate::Node = #node;
@@ -143,7 +154,8 @@ pub(crate) fn expand(args: TableArgs, input: ItemStruct) -> syn::Result<TokenStr
         #hook_needs
         #step
         #fmt
-    });
+    };
+    let impls = emit::scoped(&facade, impls);
     Ok(quote! {
         #documented
         #impls

@@ -30,6 +30,7 @@ pub(crate) struct QueryArgs {
     pub(crate) parse_check: Option<LitBool>,
     pub(crate) grammar: Option<Ident>,
     pub(crate) row: Option<Type>,
+    pub(crate) krate: Option<Path>,
 }
 
 const KEYS: Keys = &[
@@ -41,6 +42,7 @@ const KEYS: Keys = &[
     &["parse_check"],
     &["grammar"],
     &["row"],
+    &["crate"],
 ];
 
 impl Parse for QueryArgs {
@@ -55,6 +57,7 @@ impl Parse for QueryArgs {
             parse_check: None,
             grammar: None,
             row: None,
+            krate: None,
         };
         args::parse_keys(input, KEYS, |key, input| {
             match key.to_string().as_str() {
@@ -66,6 +69,7 @@ impl Parse for QueryArgs {
                 "parse_check" => args.parse_check = Some(args::value(input)?),
                 "grammar" => args.grammar = Some(args::value(input)?),
                 "row" => args.row = Some(args::value(input)?),
+                "crate" => args.krate = Some(args::value(input)?),
                 "cte" | "subquery" => {
                     return Err(syn::Error::new(
                         key.span(),
@@ -103,6 +107,7 @@ impl Parse for NamedQuery {
 
 pub(crate) fn expand(args: QueryArgs, mut input: ItemStruct) -> syn::Result<TokenStream> {
     let krate = krate();
+    let facade = emit::facade(args.krate.as_ref());
     if let Some(param) = input
         .generics
         .params
@@ -209,11 +214,11 @@ pub(crate) fn expand(args: QueryArgs, mut input: ItemStruct) -> syn::Result<Toke
     let values = values(&input, !fields.is_empty());
     let bind = bind_impl(&input, &fields);
     let (statement, methods, test) = if input.generics.params.is_empty() {
-        statement(&input, dialect, row, args.parse_check.as_ref())
+        statement(&input, dialect, row, args.parse_check.as_ref(), &facade)
     } else {
         Default::default()
     };
-    let (definitions, builder) = builder(&input, &fields, methods);
+    let (definitions, builder) = builder(&input, &fields, methods, &facade);
     let fmt = fmt(args.display.as_ref(), args.debug.as_ref(), &input, true)?;
     let step = step_impl(&input, row);
     let mut documented = input.clone();
@@ -221,7 +226,7 @@ pub(crate) fn expand(args: QueryArgs, mut input: ItemStruct) -> syn::Result<Toke
         .attrs
         .extend(item_docs(&input, Role::Query { sql }));
 
-    let impls = emit::scoped(quote! {
+    let impls = quote! {
         impl #impl_generics #krate::Sql for #ident #ty_generics #where_clause {
             type Dialect = #dialect;
             const NODE: &'static #krate::Node = #node;
@@ -237,7 +242,8 @@ pub(crate) fn expand(args: QueryArgs, mut input: ItemStruct) -> syn::Result<Toke
         #step
         #fmt
         #track
-    });
+    };
+    let impls = emit::scoped(&facade, impls);
     Ok(quote! {
         #documented
         #definitions
@@ -274,8 +280,14 @@ fn template_file(file: &LitStr) -> syn::Result<(LitStr, TokenStream)> {
     ))
 }
 
-pub(crate) fn named(name: &Path, args: TokenStream, input: &ItemStruct) -> TokenStream {
-    quote!(#name! { (#args) #input })
+pub(crate) fn named(
+    name: &Path,
+    krate: Option<&Path>,
+    args: TokenStream,
+    input: &ItemStruct,
+) -> TokenStream {
+    let facade = emit::facade(krate);
+    quote!(#name! { [#facade] (#args) #input })
 }
 
 pub(crate) fn named_query(named: NamedQuery) -> syn::Result<TokenStream> {

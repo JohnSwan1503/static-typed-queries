@@ -1,4 +1,4 @@
-error: expected one of `sql`, `sql_file`, `name`, `display`, `debug`, `parse_check`, `grammar` or `row`
+error: expected one of `sql`, `sql_file`, `name`, `display`, `debug`, `parse_check`, `grammar`, `row` or `crate`
  --> tests/ui/unknown_argument.rs:3:19
   |
 3 | #[query(Postgres, sqll = "SELECT 1")]

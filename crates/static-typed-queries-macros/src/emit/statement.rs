@@ -13,6 +13,7 @@ pub(crate) fn statement(
     dialect: &Type,
     row: Option<&Type>,
     parse_check: Option<&LitBool>,
+    facade: &TokenStream,
 ) -> (TokenStream, TokenStream, Option<TokenStream>) {
     let krate = krate();
     let ident = &input.ident;
@@ -34,5 +35,5 @@ pub(crate) fn statement(
             pub const SQL: &'static str = <Self as #krate::Statement>::SQL;
         }
     };
-    (impls, delegates, parse_test(ident, parse_check))
+    (impls, delegates, parse_test(ident, parse_check, facade))
 }

@@ -3,6 +3,7 @@ members = [
     "crates/static-typed-queries",
     "crates/static-typed-queries-macros",
     "crates/static-typed-queries-core",
+    "crates/downstream-tests",
 ]
 resolver = "3"
 

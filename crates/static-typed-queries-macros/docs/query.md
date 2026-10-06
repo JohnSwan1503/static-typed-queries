@@ -67,6 +67,9 @@ The dialect type comes first, followed by any of these in any order:
   `run()` a `Vec` of it. Only queries and statements with `RETURNING` take
   it. Every statement also has `query_as::<T>()`, or `run_as(conn)`, for
   reading rows as some other type.
+- `crate = path`: the path to this crate, for a dependency renamed in
+  `Cargo.toml` or reached through another crate's re-export, such as
+  `crate = stq`. Defaults to `::static_typed_queries`.
 
 The template is parsed with the grammar of the dialect, which is picked by
 the last segment of the dialect path: `Postgres`, `MySql` or `Sqlite`. Any

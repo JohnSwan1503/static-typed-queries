@@ -25,6 +25,7 @@ order:
   before and after every statement that uses the table.
 - `display = name`: implements `Display`, writing the unqualified table name.
 - `debug = tree`: implements `Debug`, writing the table's node tree.
+- `crate = path`: the path to this crate, as for [`query`].
 
 ## Hooks
 

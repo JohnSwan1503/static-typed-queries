@@ -7,7 +7,7 @@ use proc_macro2::{Span, TokenStream};
 use quote::{ToTokens, format_ident, quote};
 use syn::{Fields, GenericParam, Generics, Ident, ItemStruct};
 
-use crate::emit::krate;
+use crate::emit::{krate, krate_path};
 use crate::model::fields::{self, Field};
 use crate::naming::{camel, snake_case, unique};
 
@@ -18,6 +18,7 @@ pub(crate) struct Builder<'a> {
     input: &'a ItemStruct,
     fields: &'a [Field],
     krate: TokenStream,
+    path: TokenStream,
     name: Ident,
     module: Ident,
     slots: Vec<Slot>,
@@ -40,15 +41,16 @@ pub(crate) fn builder(
     input: &ItemStruct,
     fields: &[Field],
     methods: TokenStream,
+    facade: &TokenStream,
 ) -> (TokenStream, TokenStream) {
     if fields.is_empty() {
         return (TokenStream::new(), built(input));
     }
-    Builder::new(input, fields).emit(methods)
+    Builder::new(input, fields, facade).emit(methods)
 }
 
 impl<'a> Builder<'a> {
-    fn new(input: &'a ItemStruct, fields: &'a [Field]) -> Self {
+    fn new(input: &'a ItemStruct, fields: &'a [Field], facade: &TokenStream) -> Self {
         let mut taken: Vec<String> = Vec::new();
         let slots = fields
             .iter()
@@ -82,6 +84,7 @@ impl<'a> Builder<'a> {
             input,
             fields,
             krate: krate(),
+            path: krate_path(facade),
             name: format_ident!("{}Builder", input.ident),
             module: format_ident!("__{}_builder", snake_case(&input.ident.to_string())),
             slots,

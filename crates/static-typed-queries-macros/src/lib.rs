@@ -25,7 +25,7 @@ pub fn query(args: TokenStream, item: TokenStream) -> TokenStream {
     let args = parse_macro_input!(args as attr::query::QueryArgs);
     let item = parse_macro_input!(item as ItemStruct);
     if let Some(args::Sql::Named(name)) = &args.sql {
-        return attr::query::named(name, tokens, &item).into();
+        return attr::query::named(name, args.krate.as_ref(), tokens, &item).into();
     }
     attr::query::expand(args, item)
         .unwrap_or_else(|error| error.to_compile_error())

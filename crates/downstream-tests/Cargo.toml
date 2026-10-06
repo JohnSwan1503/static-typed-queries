@@ -1,0 +1,12 @@
+[package]
+name = "downstream-tests"
+edition = "2021"
+publish = false
+
+[dependencies]
+stq = { package = "static-typed-queries", path = "../static-typed-queries", features = ["all", "parse-check"] }
+sqlx = { workspace = true, features = ["macros"] }
+
+[dev-dependencies]
+sqlx = { workspace = true, features = ["macros", "runtime-tokio", "sqlite"] }
+tokio.workspace = true

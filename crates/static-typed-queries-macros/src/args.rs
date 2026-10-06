@@ -1,3 +1,4 @@
+use syn::ext::IdentExt;
 use syn::parse::{Parse, ParseStream};
 use syn::spanned::Spanned;
 use syn::{Ident, LitStr, Path, Token, Type, parenthesized};
@@ -143,7 +144,7 @@ pub(crate) fn parse_keys(
         if input.is_empty() {
             break;
         }
-        let key: Ident = input.fork().parse()?;
+        let key = input.fork().call(Ident::parse_any)?;
         let group = keys
             .iter()
             .position(|group| group.iter().any(|name| key == name));
@@ -200,7 +201,7 @@ pub(crate) fn list<T: Parse>(input: ParseStream) -> syn::Result<Vec<T>> {
 }
 
 pub(crate) fn value<T: Parse>(input: ParseStream) -> syn::Result<T> {
-    input.parse::<Ident>()?;
+    input.call(Ident::parse_any)?;
     input.parse::<Token![=]>()?;
     input.parse()
 }

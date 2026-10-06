@@ -1,7 +1,7 @@
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
 use syn::parse::{Parse, ParseStream};
-use syn::{ItemStruct, Type, parse_quote};
+use syn::{ItemStruct, Path, Type, parse_quote};
 
 use crate::args::{self, Fetch, Keys, Step};
 use crate::emit::bind::bind_impl;
@@ -18,17 +18,19 @@ use crate::naming::{push_unique, snake_case};
 pub(crate) struct TransactionArgs {
     dialect: Type,
     steps: Vec<Step>,
+    krate: Option<Path>,
 }
 
-const KEYS: Keys = &[&["steps"]];
+const KEYS: Keys = &[&["steps"], &["crate"]];
 
 impl Parse for TransactionArgs {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let dialect = input.parse()?;
-        let mut steps = Vec::new();
+        let (mut steps, mut krate) = (Vec::new(), None);
         args::parse_keys(input, KEYS, |key, input| {
             match key.to_string().as_str() {
                 "steps" => steps = args::list(input)?,
+                "crate" => krate = Some(args::value(input)?),
                 "before" | "after" => return Err(args::only_tables(key)),
                 "sql" | "sql_file" | "name" | "cte" | "subquery" | "display" | "debug"
                 | "parse_check" | "grammar" | "row" => {
@@ -47,12 +49,17 @@ impl Parse for TransactionArgs {
                 "transactions need `steps(Type, ...)`",
             ));
         }
-        Ok(TransactionArgs { dialect, steps })
+        Ok(TransactionArgs {
+            dialect,
+            steps,
+            krate,
+        })
     }
 }
 
 pub(crate) fn expand(args: TransactionArgs, mut input: ItemStruct) -> syn::Result<TokenStream> {
     let krate = krate();
+    let facade = emit::facade(args.krate.as_ref());
     if !input.generics.params.is_empty() {
         return Err(syn::Error::new_spanned(
             &input.generics,
@@ -130,12 +137,12 @@ pub(crate) fn expand(args: TransactionArgs, mut input: ItemStruct) -> syn::Resul
     let values = values(&input, !fields.is_empty());
     let bind = bind_impl(&input, &fields);
     let (methods, delegates) = transaction_methods(&input, dialect, &typed(steps, &fields));
-    let (definitions, builder) = builder(&input, &fields, delegates);
+    let (definitions, builder) = builder(&input, &fields, delegates, &facade);
     let mut documented = input.clone();
     documented
         .attrs
         .extend(item_docs(&input, Role::Transaction { steps }));
-    let impls = emit::scoped(quote! {
+    let impls = quote! {
         impl #krate::Sql for #ident {
             type Dialect = #dialect;
             const NODE: &'static #krate::Node = #node;
@@ -151,7 +158,8 @@ pub(crate) fn expand(args: TransactionArgs, mut input: ItemStruct) -> syn::Resul
 
         #krate::impl_transaction!(#ident);
         #methods
-    });
+    };
+    let impls = emit::scoped(&facade, impls);
     Ok(quote! {
         #documented
         #definitions

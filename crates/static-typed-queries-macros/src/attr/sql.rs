@@ -46,8 +46,8 @@ pub(crate) fn expand(args: TokenStream, item: ItemConst) -> syn::Result<TokenStr
         #[doc(hidden)]
         #[allow(unused_macros)]
         macro_rules! #hidden {
-            ($($tokens:tt)*) => {
-                ::static_typed_queries::__query_sql! { #sql $($tokens)* }
+            ([$($krate:tt)*] $($tokens:tt)*) => {
+                $($krate)*::__query_sql! { #sql $($tokens)* }
             };
         }
 

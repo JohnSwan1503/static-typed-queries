@@ -183,8 +183,12 @@ pub(crate) fn hook_needs(
     }
 }
 
-pub(crate) fn parse_test(ident: &Ident, parse_check: Option<&LitBool>) -> Option<TokenStream> {
-    let krate = krate_path();
+pub(crate) fn parse_test(
+    ident: &Ident,
+    parse_check: Option<&LitBool>,
+    facade: &TokenStream,
+) -> Option<TokenStream> {
+    let krate = krate_path(facade);
     let test = format_ident!("{}_sql_parses", snake_case(&ident.to_string()));
     parse_check.is_none_or(|check| check.value).then(|| {
         quote! {

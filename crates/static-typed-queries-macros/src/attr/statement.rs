@@ -1,7 +1,7 @@
 use proc_macro2::TokenStream;
 use quote::quote;
 use syn::parse::{Parse, ParseStream};
-use syn::{Ident, ItemStruct, LitBool, Type, parse_quote};
+use syn::{Ident, ItemStruct, LitBool, Path, Type, parse_quote};
 
 use crate::args::{self, Keys};
 use crate::emit::bind::bind_impl;
@@ -22,9 +22,16 @@ pub(crate) struct StatementArgs {
     debug: Option<Ident>,
     row: Option<Type>,
     parse_check: Option<LitBool>,
+    krate: Option<Path>,
 }
 
-const KEYS: Keys = &[&["display"], &["debug"], &["row"], &["parse_check"]];
+const KEYS: Keys = &[
+    &["display"],
+    &["debug"],
+    &["row"],
+    &["parse_check"],
+    &["crate"],
+];
 
 impl Parse for StatementArgs {
     fn parse(input: ParseStream) -> syn::Result<Self> {
@@ -34,6 +41,7 @@ impl Parse for StatementArgs {
             debug: None,
             row: None,
             parse_check: None,
+            krate: None,
         };
         let target = docs::type_string(&args.target);
         args::parse_keys(input, KEYS, |key, input| {
@@ -42,6 +50,7 @@ impl Parse for StatementArgs {
                 "debug" => args.debug = Some(args::value(input)?),
                 "row" => args.row = Some(args::value(input)?),
                 "parse_check" => args.parse_check = Some(args::value(input)?),
+                "crate" => args.krate = Some(args::value(input)?),
                 "sql" | "sql_file" | "name" | "cte" | "subquery" | "grammar" => {
                     return Err(syn::Error::new(
                         key.span(),
@@ -62,6 +71,7 @@ impl Parse for StatementArgs {
 
 pub(crate) fn expand(args: StatementArgs, mut input: ItemStruct) -> syn::Result<TokenStream> {
     let krate = krate();
+    let facade = emit::facade(args.krate.as_ref());
     if !input.generics.params.is_empty() {
         return Err(syn::Error::new_spanned(
             &input.generics,
@@ -110,15 +120,16 @@ pub(crate) fn expand(args: StatementArgs, mut input: ItemStruct) -> syn::Result<
     let values = values(&input, !fields.is_empty());
     let bind = bind_impl(&input, &fields);
     let row = args.row.as_ref();
-    let (statement, methods, test) = statement(&input, &dialect, row, args.parse_check.as_ref());
-    let (definitions, builder) = builder(&input, &fields, methods);
+    let (statement, methods, test) =
+        statement(&input, &dialect, row, args.parse_check.as_ref(), &facade);
+    let (definitions, builder) = builder(&input, &fields, methods, &facade);
     let step = step_impl(&input, row);
     let fmt = fmt(args.display.as_ref(), args.debug.as_ref(), &input, true)?;
     let mut documented = input.clone();
     documented
         .attrs
         .extend(item_docs(&input, Role::Statement { target }));
-    let impls = emit::scoped(quote! {
+    let impls = quote! {
         impl #krate::Sql for #ident {
             type Dialect = #dialect;
             const NODE: &'static #krate::Node = #node;
@@ -133,7 +144,8 @@ pub(crate) fn expand(args: StatementArgs, mut input: ItemStruct) -> syn::Result<
         #statement
         #step
         #fmt
-    });
+    };
+    let impls = emit::scoped(&facade, impls);
     Ok(quote! {
         #documented
         #definitions
